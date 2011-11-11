@@ -3,8 +3,8 @@ package main
 import (
 	"exp/sql"
 	"fmt"
-	"os"
 	_ "github.com/mattn/go-sqlite3"
+	"os"
 )
 
 func main() {
@@ -16,11 +16,11 @@ func main() {
 		return
 	}
 
-	sqls := []string {
+	sqls := []string{
 		"create table foo (id integer not null primary key, name text)",
 		"delete from foo",
 	}
-	for _, sql := range(sqls) {
+	for _, sql := range sqls {
 		_, err = db.Exec(sql)
 		if err != nil {
 			fmt.Printf("%q: %s\n", err, sql)
