@@ -31,6 +31,7 @@ func init() {
 }
 
 type SQLiteDriver struct {
+
 }
 
 type SQLiteConn struct {
@@ -131,7 +132,7 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (s *SQLiteStmt) Close() error {
-	rv := C.sqlite3_finalize(s.s);
+	rv := C.sqlite3_finalize(s.s)
 	if rv != C.SQLITE_OK {
 		return errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
 	}
@@ -144,12 +145,12 @@ func (s *SQLiteStmt) NumInput() int {
 
 func (s *SQLiteStmt) bind(args []interface{}) error {
 	rv := C.sqlite3_reset(s.s)
-	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv!= C.SQLITE_DONE {
+	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
 	}
 
 	for i, v := range args {
-		n := C.int(i+1)
+		n := C.int(i + 1)
 		switch v := v.(type) {
 		case nil:
 			rv = C.sqlite3_bind_null(s.s, n)
@@ -198,15 +199,15 @@ func (s *SQLiteStmt) Exec(args []interface{}) (driver.Result, error) {
 		return nil, err
 	}
 	rv := C.sqlite3_step(s.s)
-	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv!= C.SQLITE_DONE {
+	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
 	}
 	return driver.DDLSuccess, nil
 }
 
 type SQLiteRows struct {
-	s *SQLiteStmt
-	nc int
+	s    *SQLiteStmt
+	nc   int
 	cols []string
 }
 
@@ -234,19 +235,19 @@ func (rc *SQLiteRows) Next(dest []interface{}) error {
 		return errors.New(C.GoString(C.sqlite3_errmsg(rc.s.c.db)))
 	}
 	for i := range dest {
-		switch (C.sqlite3_column_type(rc.s.s, C.int(i))) {
-			case C.SQLITE_INTEGER:
-				dest[i] = int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
-			case C.SQLITE_FLOAT:
-				dest[i] = float64(C.sqlite3_column_double(rc.s.s, C.int(i)))
-			case C.SQLITE_BLOB:
-				n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
-				p := C.sqlite3_column_blob(rc.s.s, C.int(i))
-				dest[i] = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
-			case C.SQLITE_NULL:
-				dest[i] = nil
-			case C.SQLITE_TEXT:
-				dest[i] = C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
+		switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
+		case C.SQLITE_INTEGER:
+			dest[i] = int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
+		case C.SQLITE_FLOAT:
+			dest[i] = float64(C.sqlite3_column_double(rc.s.s, C.int(i)))
+		case C.SQLITE_BLOB:
+			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
+			p := C.sqlite3_column_blob(rc.s.s, C.int(i))
+			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
+		case C.SQLITE_NULL:
+			dest[i] = nil
+		case C.SQLITE_TEXT:
+			dest[i] = C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
 		}
 	}
 	return nil
