@@ -28,7 +28,12 @@ func main() {
 		}
 	}
 
-	stmt, err := db.Prepare("insert into foo(id, name) values(?, ?)")
+	tx, err := db.Begin()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	stmt, err := tx.Prepare("insert into foo(id, name) values(?, ?)")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -42,6 +47,7 @@ func main() {
 			return
 		}
 	}
+	tx.Commit()
 
 	rows, err := db.Query("select id, name from foo")
 	if err != nil {
@@ -56,5 +62,4 @@ func main() {
 		rows.Scan(&id, &name)
 		println(id, name)
 	}
-
 }
