@@ -193,6 +193,18 @@ func (s *SQLiteStmt) Query(args []interface{}) (driver.Rows, error) {
 	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil}, nil
 }
 
+type SQLiteResult struct {
+	s *SQLiteStmt
+}
+
+func (r *SQLiteResult) LastInsertId() (int64, error) {
+	return int64(C.sqlite3_last_insert_rowid(r.s.s)), nil
+}
+
+func (r *SQLiteResult) RowsAffected() (int64, error) {
+	return int64(C.sqlite3_changes(r.s.s)), nil
+}
+
 func (s *SQLiteStmt) Exec(args []interface{}) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
@@ -201,7 +213,7 @@ func (s *SQLiteStmt) Exec(args []interface{}) (driver.Result, error) {
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
 	}
-	return driver.DDLSuccess, nil
+	return &SQLiteResult {s}, nil
 }
 
 type SQLiteRows struct {
