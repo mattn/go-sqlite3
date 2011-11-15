@@ -198,11 +198,11 @@ type SQLiteResult struct {
 }
 
 func (r *SQLiteResult) LastInsertId() (int64, error) {
-	return int64(C.sqlite3_last_insert_rowid(r.s.s)), nil
+	return int64(C.sqlite3_last_insert_rowid(r.s.c.db)), nil
 }
 
 func (r *SQLiteResult) RowsAffected() (int64, error) {
-	return int64(C.sqlite3_changes(r.s.s)), nil
+	return int64(C.sqlite3_changes(r.s.c.db)), nil
 }
 
 func (s *SQLiteStmt) Exec(args []interface{}) (driver.Result, error) {
