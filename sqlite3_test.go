@@ -15,9 +15,10 @@ func TestOpen(t *testing.T) {
 	}
 	defer os.Remove("./foo.db")
 
+	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to create table:", err)
 		return
 	}
 
@@ -34,15 +35,16 @@ func TestInsert(t *testing.T) {
 	}
 	defer os.Remove("./foo.db")
 
+	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to create table:", err)
 		return
 	}
 
 	_, err = db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to insert record:", err)
 		return
 	}
 
@@ -70,21 +72,22 @@ func TestUpdate(t *testing.T) {
 	}
 	defer os.Remove("./foo.db")
 
+	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to create table:", err)
 		return
 	}
 
 	_, err = db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to insert record:", err)
 		return
 	}
 
 	_, err = db.Exec("update foo set id = 234")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to update record:", err)
 		return
 	}
 
@@ -112,21 +115,22 @@ func TestDelete(t *testing.T) {
 	}
 	defer os.Remove("./foo.db")
 
+	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to create table:", err)
 		return
 	}
 
 	_, err = db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to insert record:", err)
 		return
 	}
 
 	_, err = db.Exec("delete from foo where id = 123")
 	if err != nil {
-		t.Errorf("Failed to create table")
+		t.Errorf("Failed to delete record:", err)
 		return
 	}
 
