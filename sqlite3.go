@@ -154,8 +154,13 @@ func (s *SQLiteStmt) bind(args []interface{}) error {
 		case nil:
 			rv = C.sqlite3_bind_null(s.s, n)
 		case string:
-			b := []byte(v)
-			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
+			if len(v) == 0 {
+				b := []byte{0}
+				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(0))
+			} else {
+				b := []byte(v)
+				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
+			}
 		case int:
 			rv = C.sqlite3_bind_int(s.s, n, C.int(v))
 		case int64:
@@ -213,7 +218,7 @@ func (s *SQLiteStmt) Exec(args []interface{}) (driver.Result, error) {
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
 	}
-	return &SQLiteResult {s}, nil
+	return &SQLiteResult{s}, nil
 }
 
 type SQLiteRows struct {
