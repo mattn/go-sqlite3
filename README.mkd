@@ -1,0 +1,12 @@
+go-sqlite3
+==========
+
+DESCRIPTION
+-----------
+
+sqlite3 driver for go that using exp/sql
+
+LICENSE
+-------
+
+MIT: http://mattn.mit-license.org/2011
