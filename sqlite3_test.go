@@ -1,9 +1,9 @@
 package sqlite
 
 import (
-	"testing"
 	"exp/sql"
 	"os"
+	"testing"
 )
 
 func TestOpen(t *testing.T) {
@@ -21,7 +21,7 @@ func TestOpen(t *testing.T) {
 		return
 	}
 
-	if stat, err := os.Stat("./foo.db"); err != nil || stat.IsDirectory() {
+	if stat, err := os.Stat("./foo.db"); err != nil || stat.IsDir() {
 		t.Errorf("Failed to create ./foo.db")
 	}
 }
