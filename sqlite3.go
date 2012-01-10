@@ -15,7 +15,7 @@ _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
   return sqlite3_bind_blob(stmt, n, p, np, SQLITE_TRANSIENT);
 }
 
-#cgo LDFLAGS: -lsqlite3
+#cgo pkg-config: sqlite3
 */
 import "C"
 import (
