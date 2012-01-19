@@ -228,10 +228,6 @@ type SQLiteRows struct {
 }
 
 func (rc *SQLiteRows) Close() error {
-	rv := C.sqlite3_finalize(rc.s.s)
-	if rv != C.SQLITE_OK {
-		return errors.New(C.GoString(C.sqlite3_errmsg(rc.s.c.db)))
-	}
 	return nil
 }
 
