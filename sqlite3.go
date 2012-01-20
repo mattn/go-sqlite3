@@ -20,8 +20,8 @@ _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
 import "C"
 import (
 	"errors"
-	"exp/sql"
-	"exp/sql/driver"
+	"database/sql"
+	"database/sql/driver"
 	"unsafe"
 )
 
