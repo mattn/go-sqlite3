@@ -4,7 +4,7 @@ go-sqlite3
 DESCRIPTION
 -----------
 
-sqlite3 driver for go that using exp/sql
+sqlite3 driver for go that using database/sql
 
 LICENSE
 -------
