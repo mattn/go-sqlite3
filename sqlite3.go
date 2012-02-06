@@ -169,7 +169,7 @@ func (s *SQLiteStmt) bind(args []interface{}) error {
 			rv = C.sqlite3_bind_int(s.s, n, C.int(v))
 		case bool:
 			if bool(v) {
-				rv = C.sqlite3_bind_int(s.s, n, -1)
+				rv = C.sqlite3_bind_int(s.s, n, 1)
 			} else {
 				rv = C.sqlite3_bind_int(s.s, n, 0)
 			}
