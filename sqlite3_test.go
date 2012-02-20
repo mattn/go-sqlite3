@@ -247,7 +247,7 @@ func TestBooleanRoundtrip(t *testing.T) {
 		var id int
 		var value bool
 
-		if err := rows.Scan(&id, &value) ; err != nil {
+		if err := rows.Scan(&id, &value); err != nil {
 			t.Errorf("Unable to scan results:", err)
 			continue
 		}
