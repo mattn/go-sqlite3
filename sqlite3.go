@@ -19,9 +19,10 @@ _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
 */
 import "C"
 import (
-	"errors"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
+	"io"
 	"unsafe"
 )
 
@@ -247,6 +248,9 @@ func (rc *SQLiteRows) Columns() []string {
 
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	rv := C.sqlite3_step(rc.s.s)
+	if rv == C.SQLITE_DONE {
+		return io.EOF
+	}
 	if rv != C.SQLITE_ROW {
 		return errors.New(C.GoString(C.sqlite3_errmsg(rc.s.c.db)))
 	}
