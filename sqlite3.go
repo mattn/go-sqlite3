@@ -91,6 +91,12 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if db == nil {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
+
+	rv = C.sqlite3_busy_timeout(db, 500)
+	if rv != C.SQLITE_OK {
+		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
+	}
+
 	return &SQLiteConn{db}, nil
 }
 
@@ -174,7 +180,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			rv = C.sqlite3_bind_int(s.s, n, C.int(v))
 		case bool:
 			if bool(v) {
-				rv = C.sqlite3_bind_int(s.s, n, -1)
+				rv = C.sqlite3_bind_int(s.s, n, 1)
 			} else {
 				rv = C.sqlite3_bind_int(s.s, n, 0)
 			}
@@ -233,7 +239,11 @@ type SQLiteRows struct {
 }
 
 func (rc *SQLiteRows) Close() error {
-	return rc.s.Close()
+	rv := C.sqlite3_reset(rc.s.s)
+	if rv != C.SQLITE_OK {
+		return errors.New(C.GoString(C.sqlite3_errmsg(rc.s.c.db)))
+	}
+	return nil
 }
 
 func (rc *SQLiteRows) Columns() []string {
