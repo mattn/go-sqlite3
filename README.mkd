@@ -6,7 +6,15 @@ DESCRIPTION
 
 sqlite3 driver for go that using database/sql
 
+INSTALLATION
+------------
+
+It require `pkg-config`. And need to be possible to get information with `pkg-config --cflags --libs sqlite3`.
+If you are using Windows, you can get pkg-config from below.
+
+http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/
+
 LICENSE
 -------
 
-MIT: http://mattn.mit-license.org/2011
+MIT: http://mattn.mit-license.org/2012
