@@ -14,6 +14,8 @@ If you are using Windows, you can get pkg-config from below.
 
 http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/
 
+Go does not support static linkage for external C library. So you should build sqlite3 with shared library. If it run on windows, it need dll.
+
 LICENSE
 -------
 
