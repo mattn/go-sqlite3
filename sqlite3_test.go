@@ -3,7 +3,9 @@ package sqlite
 import (
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestOpen(t *testing.T) {
@@ -213,7 +215,7 @@ func TestDelete(t *testing.T) {
 func TestBooleanRoundtrip(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Errorf("Tailed to open database:", err)
+		t.Errorf("Failed to open database:", err)
 		return
 	}
 	defer os.Remove("./foo.db")
@@ -258,5 +260,82 @@ func TestBooleanRoundtrip(t *testing.T) {
 		} else if id == 2 && value {
 			t.Errorf("Value for id 2 should be false, not true")
 		}
+	}
+}
+
+func TestTimestamp(t *testing.T) {
+	db, err := sql.Open("sqlite3", "./foo.db")
+	if err != nil {
+		t.Errorf("Failed to open database:", err)
+		return
+	}
+	defer os.Remove("./foo.db")
+
+	_, err = db.Exec("DROP TABLE foo")
+	_, err = db.Exec("CREATE TABLE foo(id INTEGER, ts timeSTAMP)")
+	if err != nil {
+		t.Errorf("Failed to create table:", err)
+		return
+	}
+
+	timestamp1 := time.Date(2012, time.April, 6, 22, 50, 0, 0, time.UTC)
+	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(1, ?)", timestamp1)
+	if err != nil {
+		t.Errorf("Failed to insert timestamp:", err)
+		return
+	}
+
+	timestamp2 := time.Date(2012, time.April, 6, 23, 22, 0, 0, time.UTC)
+	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(2, ?)", timestamp2.Unix())
+	if err != nil {
+		t.Errorf("Failed to insert timestamp:", err)
+		return
+	}
+
+	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(3, ?)", "nonsense")
+	if err != nil {
+		t.Errorf("Failed to insert nonsense:", err)
+		return
+	}
+
+	rows, err := db.Query("SELECT id, ts FROM foo ORDER BY id ASC")
+	if err != nil {
+		t.Errorf("Unable to query foo table:", err)
+		return
+	}
+
+	seen := 0
+	for rows.Next() {
+		var id int
+		var ts time.Time
+
+		if err := rows.Scan(&id, &ts); err != nil {
+			t.Errorf("Unable to scan results:", err)
+			continue
+		}
+
+		if id == 1 {
+			seen += 1
+			if !timestamp1.Equal(ts) {
+				t.Errorf("Value for id 1 should be %v, not %v", timestamp1, ts)
+			}
+		}
+
+		if id == 2 {
+			seen += 1
+			if !timestamp2.Equal(ts) {
+				t.Errorf("Value for id 2 should be %v, not %v", timestamp2, ts)
+			}
+		}
+	}
+
+	if seen != 2 {
+		t.Errorf("Expected to see two valid timestamps")
+	}
+
+	// make sure "nonsense" triggered an error
+	err = rows.Err()
+	if err == nil || !strings.Contains(err.Error(), "cannot parse \"nonsense\"") {
+		t.Errorf("Expected error from \"nonsense\" timestamp")
 	}
 }
