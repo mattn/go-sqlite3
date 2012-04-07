@@ -213,7 +213,7 @@ func TestDelete(t *testing.T) {
 func TestBooleanRoundtrip(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Errorf("Tailed to open database:", err)
+		t.Errorf("Failed to open database:", err)
 		return
 	}
 	defer os.Remove("./foo.db")
