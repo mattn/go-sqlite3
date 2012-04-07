@@ -96,7 +96,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
 
-	rv = C.sqlite3_busy_timeout(db, 500)
+	rv = C.sqlite3_busy_timeout(db, 5000)
 	if rv != C.SQLITE_OK {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
 	}
