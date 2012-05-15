@@ -23,8 +23,12 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"strings"
+	"time"
 	"unsafe"
 )
+
+const SQLiteTimestampFormat = "2006-01-02 15:04:05"
 
 func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
@@ -92,7 +96,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
 
-	rv = C.sqlite3_busy_timeout(db, 500)
+	rv = C.sqlite3_busy_timeout(db, 5000)
 	if rv != C.SQLITE_OK {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
 	}
@@ -194,6 +198,9 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 				p = &v[0]
 			}
 			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(p), C.int(len(v)))
+		case time.Time:
+			b := []byte(v.Format(SQLiteTimestampFormat))
+			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 		}
 		if rv != C.SQLITE_OK {
 			return errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
@@ -206,7 +213,7 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
-	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil}, nil
+	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil}, nil
 }
 
 type SQLiteResult struct {
@@ -233,9 +240,10 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 }
 
 type SQLiteRows struct {
-	s    *SQLiteStmt
-	nc   int
-	cols []string
+	s        *SQLiteStmt
+	nc       int
+	cols     []string
+	decltype []string
 }
 
 func (rc *SQLiteRows) Close() error {
@@ -264,10 +272,23 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	if rv != C.SQLITE_ROW {
 		return errors.New(C.GoString(C.sqlite3_errmsg(rc.s.c.db)))
 	}
+
+	if rc.decltype == nil {
+		rc.decltype = make([]string, rc.nc)
+		for i := 0; i < rc.nc; i++ {
+			rc.decltype[i] = strings.ToLower(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
+		}
+	}
+
 	for i := range dest {
 		switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
 		case C.SQLITE_INTEGER:
-			dest[i] = int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
+			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
+			if rc.decltype[i] == "timestamp" {
+				dest[i] = time.Unix(val, 0)
+			} else {
+				dest[i] = val
+			}
 		case C.SQLITE_FLOAT:
 			dest[i] = float64(C.sqlite3_column_double(rc.s.s, C.int(i)))
 		case C.SQLITE_BLOB:
@@ -277,7 +298,16 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_NULL:
 			dest[i] = nil
 		case C.SQLITE_TEXT:
-			dest[i] = C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
+			var err error
+			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
+			if rc.decltype[i] == "timestamp" {
+				dest[i], err = time.Parse(SQLiteTimestampFormat, s)
+				if err != nil {
+					return err
+				}
+			} else {
+				dest[i] = s
+			}
 		}
 	}
 	return nil
