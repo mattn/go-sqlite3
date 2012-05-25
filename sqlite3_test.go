@@ -339,3 +339,84 @@ func TestTimestamp(t *testing.T) {
 		t.Errorf("Expected error from \"nonsense\" timestamp")
 	}
 }
+
+
+func TestBoolean(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Errorf("Failed to open database:", err)
+		return
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE foo(id INTEGER, fbool BOOLEAN)")
+	if err != nil {
+		t.Errorf("Failed to create table:", err)
+		return
+	}
+	
+	bool1 := true
+	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(1, ?)", bool1)
+	if err != nil {
+		t.Errorf("Failed to insert boolean:", err)
+		return
+	}
+
+	bool2 := false
+	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(2, ?)", bool2)
+	if err != nil {
+		t.Errorf("Failed to insert boolean:", err)
+		return
+	}
+
+	bool3 := "nonsense"
+	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(3, ?)", bool3)
+	if err != nil {
+		t.Errorf("Failed to insert nonsense:", err)
+		return
+	}
+
+	rows, err := db.Query("SELECT id, fbool FROM foo where (fbool is ?) or (fbool is ?);", true, false)
+	if err != nil {
+		t.Errorf("Unable to query foo table:", err)
+		return
+	}
+
+	seen := 0
+	
+	var id int
+	var fbool bool
+
+	for rows.Next() {
+		if err := rows.Scan(&id, &fbool); err != nil {
+			t.Errorf("Unable to scan results:", err)
+			continue
+		}
+
+		if id == 1 && fbool != bool1 {
+			t.Errorf("Value for id 1 should be %v, not %v", bool1, fbool)
+		}
+
+		if id == 2 && fbool != bool2 {
+			t.Errorf("Value for id 2 should be %v, not %v", bool2, fbool)
+		}
+		seen ++
+	}
+
+	if seen != 2 {
+		t.Errorf("Expected to see two bool")
+	}
+
+	// make sure "nonsense" triggered an error
+	rows, err = db.Query("SELECT id, fbool FROM foo where id=?;", 3)
+	if err != nil {
+		t.Errorf("Unable to query foo table:", err)
+		return
+	}
+
+	rows.Next()
+	err = rows.Scan(&id, &fbool)
+	if err == nil {
+		t.Errorf("Expected error from \"nonsense\" bool")
+	}
+}
