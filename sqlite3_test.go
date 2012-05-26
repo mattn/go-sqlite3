@@ -349,7 +349,6 @@ func TestBoolean(t *testing.T) {
 	}
 	
 	defer os.Remove("./foo.db")
-	defer db.Close()
 
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, fbool BOOLEAN)")
 	if err != nil {
