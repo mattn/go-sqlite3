@@ -339,3 +339,110 @@ func TestTimestamp(t *testing.T) {
 		t.Errorf("Expected error from \"nonsense\" timestamp")
 	}
 }
+
+
+func TestBoolean(t *testing.T) {
+	db, err := sql.Open("sqlite3", "./foo.db")
+	if err != nil {
+		t.Errorf("Failed to open database:", err)
+		return
+	}
+	
+	defer os.Remove("./foo.db")
+
+	_, err = db.Exec("CREATE TABLE foo(id INTEGER, fbool BOOLEAN)")
+	if err != nil {
+		t.Errorf("Failed to create table:", err)
+		return
+	}
+	
+	bool1 := true
+	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(1, ?)", bool1)
+	if err != nil {
+		t.Errorf("Failed to insert boolean:", err)
+		return
+	}
+
+	bool2 := false
+	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(2, ?)", bool2)
+	if err != nil {
+		t.Errorf("Failed to insert boolean:", err)
+		return
+	}
+
+	bool3 := "nonsense"
+	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(3, ?)", bool3)
+	if err != nil {
+		t.Errorf("Failed to insert nonsense:", err)
+		return
+	}
+
+	rows, err := db.Query("SELECT id, fbool FROM foo where fbool is ?", bool1)
+	if err != nil {
+		t.Errorf("Unable to query foo table:", err)
+		return
+	}
+	counter := 0
+	
+	var id int
+	var fbool bool
+	
+	for rows.Next(){
+		if err := rows.Scan(&id, &fbool); err != nil {
+			t.Errorf("Unable to scan results:", err)
+			return 
+		}
+		counter ++
+	}
+			
+	if counter != 1{
+		t.Errorf("Expected 1 row but %v", counter)
+		return 	
+	}
+	
+	if id!=1 && fbool != true {
+		t.Errorf("Value for id 1 should be %v, not %v", bool1, fbool)
+		return
+	} 
+	
+				
+	rows, err = db.Query("SELECT id, fbool FROM foo where fbool is ?", bool2)
+	if err != nil {
+		t.Errorf("Unable to query foo table:", err)
+		return
+	}
+	
+	counter = 0
+
+	for rows.Next(){
+		if err := rows.Scan(&id, &fbool); err != nil {
+			t.Errorf("Unable to scan results:", err)
+			return 
+		}
+		counter ++
+	}
+			
+	if counter != 1{
+		t.Errorf("Expected 1 row but %v", counter)
+		return 	
+	}
+	
+	if id != 2 && fbool != false {
+		t.Errorf("Value for id 2 should be %v, not %v", bool2, fbool)
+		return
+	}
+	
+
+	// make sure "nonsense" triggered an error
+	rows, err = db.Query("SELECT id, fbool FROM foo where id=?;", 3)
+	if err != nil {
+		t.Errorf("Unable to query foo table:", err)
+		return
+	}
+
+	rows.Next()
+	err = rows.Scan(&id, &fbool)
+	if err == nil {
+		t.Errorf("Expected error from \"nonsense\" bool")
+	}
+}
