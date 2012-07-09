@@ -4,17 +4,33 @@ go-sqlite3
 DESCRIPTION
 -----------
 
-sqlite3 driver for go that using database/sql
+sqlite3 driver conforming to the built-in database/sql interface
 
 INSTALLATION
 ------------
 
-It require `pkg-config`. And need to be possible to get information with `pkg-config --cflags --libs sqlite3`.
+It requires `pkg-config`.  You can also confirm that permissions and dependancies are setup by running `pkg-config --cflags --libs sqlite3`.
+
+If you are using MacPorts on Mac OS X, you can install with:
+
+    port install pkgconfig
+    port install sqlite3
+     
+If you are using Ubuntu, you can install with:
+
+    sudo apt-get install pkg-config
+	sudo apt-get install sqlite3  
+	sudo apt-get install libsqlite3-dev 
+	
 If you are using Windows, you can get pkg-config from below.
 
 http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/
 
-Go does not support static linkage for external C library. So you should build sqlite3 with shared library. If it run on windows, it need dll.
+Go does not support static linking for external C library; sqlite3 should be built as a shared library. If it runs on Windows, it needs dll.
+
+Finally, this package can be installed with the go get command:
+
+    go get github.com/mattn/go-sqlite3
 
 LICENSE
 -------
