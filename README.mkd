@@ -11,10 +11,10 @@ INSTALLATION
 
 It requires `pkg-config`.  You can also confirm that permissions and dependancies are setup by running `pkg-config --cflags --libs sqlite3`.
 
-If you are using MacPorts on Mac OS X, you can install with:
+If you are using [Homebrew](http://mxcl.github.com/homebrew/) on Mac OS X, you can install with:
 
-    port install pkgconfig
-    port install sqlite3
+    brew install pkgconfig
+    brew install sqlite3
      
 If you are using Ubuntu, you can install with:
 
