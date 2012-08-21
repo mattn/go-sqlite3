@@ -297,7 +297,14 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_BLOB:
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
 			p := C.sqlite3_column_blob(rc.s.s, C.int(i))
-			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
+			switch dest[i].(type) {
+			case sql.RawBytes:
+				dest[i] = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
+			default:
+				slice := make([]byte, n)
+				copy(slice[:], (*[1 << 30]byte)(unsafe.Pointer(p))[0:n])
+				dest[i] = slice
+			}
 		case C.SQLITE_NULL:
 			dest[i] = nil
 		case C.SQLITE_TEXT:
