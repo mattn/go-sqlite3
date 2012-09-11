@@ -11,8 +11,7 @@ import (
 func TestOpen(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Error("Failed to open database:", err)
-		return
+		t.Fatal("Failed to open database:", err)
 	}
 	defer os.Remove("./foo.db")
 	defer db.Close()
@@ -20,8 +19,7 @@ func TestOpen(t *testing.T) {
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Error("Failed to create table:", err)
-		return
+		t.Fatal("Failed to create table:", err)
 	}
 
 	if stat, err := os.Stat("./foo.db"); err != nil || stat.IsDir() {
@@ -32,8 +30,7 @@ func TestOpen(t *testing.T) {
 func TestInsert(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Error("Failed to open database:", err)
-		return
+		t.Fatal("Failed to open database:", err)
 	}
 	defer os.Remove("./foo.db")
 	defer db.Close()
@@ -41,25 +38,21 @@ func TestInsert(t *testing.T) {
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Error("Failed to create table:", err)
-		return
+		t.Fatal("Failed to create table:", err)
 	}
 
 	res, err := db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Error("Failed to insert record:", err)
-		return
+		t.Fatal("Failed to insert record:", err)
 	}
 	affected, _ := res.RowsAffected()
 	if affected != 1 {
-		t.Errorf("Expected %d for affected rows, but %d:", 1, affected)
-		return
+		t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
 	}
 
 	rows, err := db.Query("select id from foo")
 	if err != nil {
-		t.Error("Failed to select records:", err)
-		return
+		t.Fatal("Failed to select records:", err)
 	}
 	defer rows.Close()
 
@@ -75,8 +68,7 @@ func TestInsert(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Error("Failed to open database:", err)
-		return
+		t.Fatal("Failed to open database:", err)
 	}
 	defer os.Remove("./foo.db")
 	defer db.Close()
@@ -84,57 +76,47 @@ func TestUpdate(t *testing.T) {
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Error("Failed to create table:", err)
-		return
+		t.Fatal("Failed to create table:", err)
 	}
 
 	res, err := db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Error("Failed to insert record:", err)
-		return
+		t.Fatal("Failed to insert record:", err)
 	}
 	expected, err := res.LastInsertId()
 	if err != nil {
-		t.Error("Failed to get LastInsertId:", err)
-		return
+		t.Fatal("Failed to get LastInsertId:", err)
 	}
 	affected, _ := res.RowsAffected()
 	if err != nil {
-		t.Error("Failed to get RowsAffected:", err)
-		return
+		t.Fatal("Failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
-		t.Errorf("Expected %d for affected rows, but %d:", 1, affected)
-		return
+		t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
 	}
 
 	res, err = db.Exec("update foo set id = 234")
 	if err != nil {
-		t.Error("Failed to update record:", err)
-		return
+		t.Fatal("Failed to update record:", err)
 	}
 	lastId, err := res.LastInsertId()
 	if err != nil {
-		t.Error("Failed to get LastInsertId:", err)
-		return
+		t.Fatal("Failed to get LastInsertId:", err)
 	}
 	if expected != lastId {
 		t.Errorf("Expected %q for last Id, but %q:", expected, lastId)
 	}
 	affected, _ = res.RowsAffected()
 	if err != nil {
-		t.Error("Failed to get RowsAffected:", err)
-		return
+		t.Fatal("Failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
-		t.Errorf("Expected %d for affected rows, but %d:", 1, affected)
-		return
+		t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
 	}
 
 	rows, err := db.Query("select id from foo")
 	if err != nil {
-		t.Error("Failed to select records:", err)
-		return
+		t.Fatal("Failed to select records:", err)
 	}
 	defer rows.Close()
 
@@ -150,8 +132,7 @@ func TestUpdate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Error("Failed to open database:", err)
-		return
+		t.Fatal("Failed to open database:", err)
 	}
 	defer os.Remove("./foo.db")
 	defer db.Close()
@@ -159,24 +140,20 @@ func TestDelete(t *testing.T) {
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Error("Failed to create table:", err)
-		return
+		t.Fatal("Failed to create table:", err)
 	}
 
 	res, err := db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Error("Failed to insert record:", err)
-		return
+		t.Fatal("Failed to insert record:", err)
 	}
 	expected, err := res.LastInsertId()
 	if err != nil {
-		t.Error("Failed to get LastInsertId:", err)
-		return
+		t.Fatal("Failed to get LastInsertId:", err)
 	}
 	affected, err := res.RowsAffected()
 	if err != nil {
-		t.Error("Failed to get RowsAffected:", err)
-		return
+		t.Fatal("Failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
 		t.Errorf("Expected %d for cout of affected rows, but %q:", 1, affected)
@@ -184,21 +161,18 @@ func TestDelete(t *testing.T) {
 
 	res, err = db.Exec("delete from foo where id = 123")
 	if err != nil {
-		t.Error("Failed to delete record:", err)
-		return
+		t.Fatal("Failed to delete record:", err)
 	}
 	lastId, err := res.LastInsertId()
 	if err != nil {
-		t.Error("Failed to get LastInsertId:", err)
-		return
+		t.Fatal("Failed to get LastInsertId:", err)
 	}
 	if expected != lastId {
 		t.Errorf("Expected %q for last Id, but %q:", expected, lastId)
 	}
 	affected, err = res.RowsAffected()
 	if err != nil {
-		t.Error("Failed to get RowsAffected:", err)
-		return
+		t.Fatal("Failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
 		t.Errorf("Expected %d for cout of affected rows, but %q:", 1, affected)
@@ -206,8 +180,7 @@ func TestDelete(t *testing.T) {
 
 	rows, err := db.Query("select id from foo")
 	if err != nil {
-		t.Error("Failed to select records:", err)
-		return
+		t.Fatal("Failed to select records:", err)
 	}
 	defer rows.Close()
 
@@ -219,8 +192,7 @@ func TestDelete(t *testing.T) {
 func TestBooleanRoundtrip(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Error("Failed to open database:", err)
-		return
+		t.Fatal("Failed to open database:", err)
 	}
 	defer os.Remove("./foo.db")
 	defer db.Close()
@@ -228,26 +200,22 @@ func TestBooleanRoundtrip(t *testing.T) {
 	_, err = db.Exec("DROP TABLE foo")
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, value BOOL)")
 	if err != nil {
-		t.Error("Failed to create table:", err)
-		return
+		t.Fatal("Failed to create table:", err)
 	}
 
 	_, err = db.Exec("INSERT INTO foo(id, value) VALUES(1, ?)", true)
 	if err != nil {
-		t.Error("Failed to insert true value:", err)
-		return
+		t.Fatal("Failed to insert true value:", err)
 	}
 
 	_, err = db.Exec("INSERT INTO foo(id, value) VALUES(2, ?)", false)
 	if err != nil {
-		t.Error("Failed to insert false value:", err)
-		return
+		t.Fatal("Failed to insert false value:", err)
 	}
 
 	rows, err := db.Query("SELECT id, value FROM foo")
 	if err != nil {
-		t.Error("Unable to query foo table:", err)
-		return
+		t.Fatal("Unable to query foo table:", err)
 	}
 	defer rows.Close()
 
@@ -272,8 +240,7 @@ func TestBooleanRoundtrip(t *testing.T) {
 func TestTimestamp(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Error("Failed to open database:", err)
-		return
+		t.Fatal("Failed to open database:", err)
 	}
 	defer os.Remove("./foo.db")
 	defer db.Close()
@@ -281,34 +248,29 @@ func TestTimestamp(t *testing.T) {
 	_, err = db.Exec("DROP TABLE foo")
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, ts timeSTAMP)")
 	if err != nil {
-		t.Error("Failed to create table:", err)
-		return
+		t.Fatal("Failed to create table:", err)
 	}
 
 	timestamp1 := time.Date(2012, time.April, 6, 22, 50, 0, 0, time.UTC)
 	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(1, ?)", timestamp1)
 	if err != nil {
-		t.Error("Failed to insert timestamp:", err)
-		return
+		t.Fatal("Failed to insert timestamp:", err)
 	}
 
 	timestamp2 := time.Date(2012, time.April, 6, 23, 22, 0, 0, time.UTC)
 	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(2, ?)", timestamp2.Unix())
 	if err != nil {
-		t.Error("Failed to insert timestamp:", err)
-		return
+		t.Fatal("Failed to insert timestamp:", err)
 	}
 
 	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(3, ?)", "nonsense")
 	if err != nil {
-		t.Error("Failed to insert nonsense:", err)
-		return
+		t.Fatal("Failed to insert nonsense:", err)
 	}
 
 	rows, err := db.Query("SELECT id, ts FROM foo ORDER BY id ASC")
 	if err != nil {
-		t.Error("Unable to query foo table:", err)
-		return
+		t.Fatal("Unable to query foo table:", err)
 	}
 	defer rows.Close()
 
@@ -351,8 +313,7 @@ func TestTimestamp(t *testing.T) {
 func TestBoolean(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Error("Failed to open database:", err)
-		return
+		t.Fatal("Failed to open database:", err)
 	}
 
 	defer os.Remove("./foo.db")
@@ -360,35 +321,30 @@ func TestBoolean(t *testing.T) {
 
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, fbool BOOLEAN)")
 	if err != nil {
-		t.Error("Failed to create table:", err)
-		return
+		t.Fatal("Failed to create table:", err)
 	}
 
 	bool1 := true
 	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(1, ?)", bool1)
 	if err != nil {
-		t.Error("Failed to insert boolean:", err)
-		return
+		t.Fatal("Failed to insert boolean:", err)
 	}
 
 	bool2 := false
 	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(2, ?)", bool2)
 	if err != nil {
-		t.Error("Failed to insert boolean:", err)
-		return
+		t.Fatal("Failed to insert boolean:", err)
 	}
 
 	bool3 := "nonsense"
 	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(3, ?)", bool3)
 	if err != nil {
-		t.Error("Failed to insert nonsense:", err)
-		return
+		t.Fatal("Failed to insert nonsense:", err)
 	}
 
 	rows, err := db.Query("SELECT id, fbool FROM foo where fbool is ?", bool1)
 	if err != nil {
-		t.Error("Unable to query foo table:", err)
-		return
+		t.Fatal("Unable to query foo table:", err)
 	}
 	counter := 0
 
@@ -397,53 +353,45 @@ func TestBoolean(t *testing.T) {
 
 	for rows.Next() {
 		if err := rows.Scan(&id, &fbool); err != nil {
-			t.Error("Unable to scan results:", err)
-			return
+			t.Fatal("Unable to scan results:", err)
 		}
 		counter++
 	}
 
 	if counter != 1 {
-		t.Errorf("Expected 1 row but %v", counter)
-		return
+		t.Fatalf("Expected 1 row but %v", counter)
 	}
 
 	if id != 1 && fbool != true {
-		t.Errorf("Value for id 1 should be %v, not %v", bool1, fbool)
-		return
+		t.Fatalf("Value for id 1 should be %v, not %v", bool1, fbool)
 	}
 
 	rows, err = db.Query("SELECT id, fbool FROM foo where fbool is ?", bool2)
 	if err != nil {
-		t.Error("Unable to query foo table:", err)
-		return
+		t.Fatal("Unable to query foo table:", err)
 	}
 
 	counter = 0
 
 	for rows.Next() {
 		if err := rows.Scan(&id, &fbool); err != nil {
-			t.Error("Unable to scan results:", err)
-			return
+			t.Fatal("Unable to scan results:", err)
 		}
 		counter++
 	}
 
 	if counter != 1 {
-		t.Errorf("Expected 1 row but %v", counter)
-		return
+		t.Fatalf("Expected 1 row but %v", counter)
 	}
 
 	if id != 2 && fbool != false {
-		t.Errorf("Value for id 2 should be %v, not %v", bool2, fbool)
-		return
+		t.Fatalf("Value for id 2 should be %v, not %v", bool2, fbool)
 	}
 
 	// make sure "nonsense" triggered an error
 	rows, err = db.Query("SELECT id, fbool FROM foo where id=?;", 3)
 	if err != nil {
-		t.Error("Unable to query foo table:", err)
-		return
+		t.Fatal("Unable to query foo table:", err)
 	}
 
 	rows.Next()
