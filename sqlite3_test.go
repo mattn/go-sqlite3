@@ -15,6 +15,7 @@ func TestOpen(t *testing.T) {
 		return
 	}
 	defer os.Remove("./foo.db")
+	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
@@ -35,6 +36,7 @@ func TestInsert(t *testing.T) {
 		return
 	}
 	defer os.Remove("./foo.db")
+	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
@@ -77,6 +79,7 @@ func TestUpdate(t *testing.T) {
 		return
 	}
 	defer os.Remove("./foo.db")
+	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
@@ -151,6 +154,7 @@ func TestDelete(t *testing.T) {
 		return
 	}
 	defer os.Remove("./foo.db")
+	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
@@ -219,6 +223,7 @@ func TestBooleanRoundtrip(t *testing.T) {
 		return
 	}
 	defer os.Remove("./foo.db")
+	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, value BOOL)")
@@ -244,6 +249,7 @@ func TestBooleanRoundtrip(t *testing.T) {
 		t.Error("Unable to query foo table:", err)
 		return
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var id int
@@ -270,6 +276,7 @@ func TestTimestamp(t *testing.T) {
 		return
 	}
 	defer os.Remove("./foo.db")
+	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, ts timeSTAMP)")
@@ -303,6 +310,7 @@ func TestTimestamp(t *testing.T) {
 		t.Error("Unable to query foo table:", err)
 		return
 	}
+	defer rows.Close()
 
 	seen := 0
 	for rows.Next() {
@@ -348,6 +356,7 @@ func TestBoolean(t *testing.T) {
 	}
 
 	defer os.Remove("./foo.db")
+	defer db.Close()
 
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, fbool BOOLEAN)")
 	if err != nil {
