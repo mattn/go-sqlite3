@@ -147,7 +147,7 @@ func TestUpdate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		t.Error("Failed to select records:", err)
+		t.Error("Failed to open database:", err)
 		return
 	}
 	defer os.Remove("./foo.db")
