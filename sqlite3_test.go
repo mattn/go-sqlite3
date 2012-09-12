@@ -342,7 +342,7 @@ func TestBoolean(t *testing.T) {
 		t.Fatal("Failed to insert nonsense:", err)
 	}
 
-	rows, err := db.Query("SELECT id, fbool FROM foo where fbool is ?", bool1)
+	rows, err := db.Query("SELECT id, fbool FROM foo where fbool = ?", bool1)
 	if err != nil {
 		t.Fatal("Unable to query foo table:", err)
 	}
@@ -366,7 +366,7 @@ func TestBoolean(t *testing.T) {
 		t.Fatalf("Value for id 1 should be %v, not %v", bool1, fbool)
 	}
 
-	rows, err = db.Query("SELECT id, fbool FROM foo where fbool is ?", bool2)
+	rows, err = db.Query("SELECT id, fbool FROM foo where fbool = ?", bool2)
 	if err != nil {
 		t.Fatal("Unable to query foo table:", err)
 	}
