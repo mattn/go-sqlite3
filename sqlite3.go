@@ -221,7 +221,9 @@ type SQLiteResult struct {
 }
 
 func (r *SQLiteResult) LastInsertId() (int64, error) {
-	return int64(C.sqlite3_last_insert_rowid(r.s.c.db)), nil
+	var rr int64
+	rr = int64(C.sqlite3_last_insert_rowid(r.s.c.db))
+	return rr, nil
 }
 
 func (r *SQLiteResult) RowsAffected() (int64, error) {
