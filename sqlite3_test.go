@@ -400,3 +400,63 @@ func TestBoolean(t *testing.T) {
 		t.Error("Expected error from \"nonsense\" bool")
 	}
 }
+
+func TestDateOnlyTimestamp(t *testing.T) {
+	// make sure that timestamps without times are extractable. these are generated when
+	// e.g., you use the sqlite `DATE()` built-in.
+
+	db, er := sql.Open("sqlite3", "db.sqlite")
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer func() {
+		db.Close()
+		os.Remove("db.sqlite")
+	}()
+
+	_, er = db.Exec(`
+		CREATE TABLE test
+			( entry_id INTEGER PRIMARY KEY AUTOINCREMENT
+			, entry_published TIMESTAMP NOT NULL
+			)
+	`)
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	_, er = db.Exec(`
+		INSERT INTO test VALUES ( 1, '2012-11-04')
+	`)
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	rows, er := db.Query("SELECT entry_id, entry_published FROM test")
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if er := rows.Err() ; er != nil {
+			t.Fatal(er)
+		} else {
+			t.Fatalf("Unable to extract row containing date-only timestamp")
+		}
+	}
+
+	var entryId int64
+	var entryPublished time.Time
+
+	if er := rows.Scan(&entryId, &entryPublished) ; er != nil {
+		t.Fatal(er)
+	}
+
+	if entryId != 1 {
+		t.Errorf("EntryId does not match inserted value")
+	}
+
+	if entryPublished.Year() != 2012 || entryPublished.Month() != 11 || entryPublished.Day() != 4 {
+		t.Errorf("Extracted time does not match inserted value")
+	}
+}
