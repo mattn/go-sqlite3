@@ -438,7 +438,7 @@ func TestDateOnlyTimestamp(t *testing.T) {
 	defer rows.Close()
 
 	if !rows.Next() {
-		if er := rows.Err() ; er != nil {
+		if er := rows.Err(); er != nil {
 			t.Fatal(er)
 		} else {
 			t.Fatalf("Unable to extract row containing date-only timestamp")
@@ -448,7 +448,7 @@ func TestDateOnlyTimestamp(t *testing.T) {
 	var entryId int64
 	var entryPublished time.Time
 
-	if er := rows.Scan(&entryId, &entryPublished) ; er != nil {
+	if er := rows.Scan(&entryId, &entryPublished); er != nil {
 		t.Fatal(er)
 	}
 
@@ -459,4 +459,72 @@ func TestDateOnlyTimestamp(t *testing.T) {
 	if entryPublished.Year() != 2012 || entryPublished.Month() != 11 || entryPublished.Day() != 4 {
 		t.Errorf("Extracted time does not match inserted value")
 	}
+}
+
+func TestDatetime(t *testing.T) {
+	db, err := sql.Open("sqlite3", "./datetime.db")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+
+	defer func() {
+		db.Close()
+		os.Remove("./datetime.db")
+	}()
+
+	_, err = db.Exec("DROP TABLE datetimetest")
+	_, err = db.Exec(`
+        CREATE TABLE datetimetest
+            ( entry_id INTEGER
+            , my_datetime DATETIME
+            )
+    `)
+
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	datetime := "2006-01-02 15:04:05.003"
+	_, err = db.Exec(`
+        INSERT INTO datetimetest(entry_id, my_datetime) 
+        VALUES(1, ?)`, datetime)
+	if err != nil {
+		t.Fatal("Failed to insert datetime:", err)
+	}
+
+	rows, err := db.Query(
+		"SELECT entry_id, my_datetime FROM datetimetest ORDER BY entry_id ASC")
+	if err != nil {
+		t.Fatal("Unable to query datetimetest table:", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if er := rows.Err(); er != nil {
+			t.Fatal(er)
+		} else {
+			t.Fatalf("Unable to extract row containing datetime")
+		}
+	}
+
+	var entryId int
+	var myDatetime time.Time
+
+	if err := rows.Scan(&entryId, &myDatetime); err != nil {
+		t.Error("Unable to scan results:", err)
+	}
+
+	if entryId != 1 {
+		t.Errorf("EntryId does not match inserted value")
+	}
+
+	if myDatetime.Year() != 2006 ||
+		myDatetime.Month() != 1 ||
+		myDatetime.Day() != 2 ||
+		myDatetime.Hour() != 15 ||
+		myDatetime.Minute() != 4 ||
+		myDatetime.Second() != 5 ||
+		myDatetime.Nanosecond() != 3000000 {
+		t.Errorf("Extracted time does not match inserted value")
+	}
+
 }

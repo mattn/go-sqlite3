@@ -28,6 +28,7 @@ import (
 
 const SQLiteTimestampFormat = "2006-01-02 15:04:05"
 const SQLiteDateFormat = "2006-01-02"
+const SQLiteDatetimeFormat = "2006-01-02 15:04:05.000"
 
 func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
@@ -311,12 +312,15 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_TEXT:
 			var err error
 			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
-			if rc.decltype[i] == "timestamp" {
+			if rc.decltype[i] == "timestamp" || rc.decltype[i] == "datetime" {
 				dest[i], err = time.Parse(SQLiteTimestampFormat, s)
 				if err != nil {
 					dest[i], err = time.Parse(SQLiteDateFormat, s)
 					if err != nil {
-						return err
+						dest[i], err = time.Parse(SQLiteDatetimeFormat, s)
+						if err != nil {
+							return err
+						}
 					}
 				}
 			} else {
