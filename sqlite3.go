@@ -14,6 +14,20 @@ static int
 _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
   return sqlite3_bind_blob(stmt, n, p, np, SQLITE_TRANSIENT);
 }
+
+#include <stdio.h>
+#include <stdint.h>
+
+static long
+_sqlite3_last_insert_rowid(sqlite3* db) {
+  return (long) sqlite3_last_insert_rowid(db);
+}
+
+static long
+_sqlite3_changes(sqlite3* db) {
+  return (long) sqlite3_changes(db);
+}
+
 */
 import "C"
 import (
@@ -221,13 +235,11 @@ type SQLiteResult struct {
 }
 
 func (r *SQLiteResult) LastInsertId() (int64, error) {
-	var rr int64
-	rr = int64(C.sqlite3_last_insert_rowid(r.s.c.db))
-	return rr, nil
+	return int64(C._sqlite3_last_insert_rowid(r.s.c.db)), nil
 }
 
 func (r *SQLiteResult) RowsAffected() (int64, error) {
-	return int64(C.sqlite3_changes(r.s.c.db)), nil
+	return int64(C._sqlite3_changes(r.s.c.db)), nil
 }
 
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
