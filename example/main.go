@@ -59,7 +59,7 @@ func main() {
 		var id int
 		var name string
 		rows.Scan(&id, &name)
-		println(id, name)
+		fmt.Println(id, name)
 	}
 	rows.Close()
 
@@ -75,5 +75,5 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	println(name)
+	fmt.Println(name)
 }
