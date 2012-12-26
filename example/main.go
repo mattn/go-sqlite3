@@ -76,4 +76,31 @@ func main() {
 		return
 	}
 	fmt.Println(name)
+
+	_, err = db.Exec("delete from foo")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	_, err = db.Exec("insert into foo(id, name) values(1, 'foo'), (2, 'bar'), (3, 'baz')")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	rows, err = db.Query("select id, name from foo")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		var name string
+		rows.Scan(&id, &name)
+		fmt.Println(id, name)
+	}
+	rows.Close()
+
 }
