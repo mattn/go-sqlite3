@@ -324,20 +324,27 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_TEXT:
 			var err error
 			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
-			if rc.decltype[i] == "timestamp" || rc.decltype[i] == "datetime" {
-				dest[i], err = time.Parse(SQLiteTimestampFormat, s)
-				if err != nil {
-					dest[i], err = time.Parse(SQLiteDateFormat, s)
+
+			switch dest[i].(type) {
+			case *time.Time:
+				if rc.decltype[i] == "timestamp" || rc.decltype[i] == "datetime" {
+					dest[i], err = time.Parse(SQLiteTimestampFormat, s)
 					if err != nil {
-						dest[i], err = time.Parse(SQLiteDatetimeFormat, s)
+						dest[i], err = time.Parse(SQLiteDateFormat, s)
 						if err != nil {
-							dest[i] = s
+							dest[i], err = time.Parse(SQLiteDatetimeFormat, s)
+							if err != nil {
+								dest[i] = s
+							}
 						}
 					}
+				} else {
+					dest[i] = s
 				}
-			} else {
+			default:
 				dest[i] = s
 			}
+
 		}
 	}
 	return nil
