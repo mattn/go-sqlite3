@@ -331,7 +331,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 					if err != nil {
 						dest[i], err = time.Parse(SQLiteDatetimeFormat, s)
 						if err != nil {
-							return err
+							dest[i] = s
 						}
 					}
 				}
