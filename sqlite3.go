@@ -213,7 +213,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			}
 			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(p), C.int(len(v)))
 		case time.Time:
-			b := []byte(v.Format(SQLiteTimestampFormat))
+			b := []byte(v.UTC().Format(SQLiteTimestampFormat))
 			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 		}
 		if rv != C.SQLITE_OK {
