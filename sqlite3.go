@@ -299,7 +299,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_INTEGER:
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
-			case "timestamp":
+			case "timestamp", "datetime":
 				dest[i] = time.Unix(val, 0)
 			case "boolean":
 				dest[i] = val > 0
@@ -325,21 +325,21 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			var err error
 			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
 
-			switch dest[i].(type) {
-			case *time.Time:
-				if rc.decltype[i] == "timestamp" || rc.decltype[i] == "datetime" {
-					dest[i], err = time.Parse(SQLiteTimestampFormat, s)
-					if err != nil {
-						dest[i], err = time.Parse(SQLiteDateFormat, s)
-						if err != nil {
-							dest[i], err = time.Parse(SQLiteDatetimeFormat, s)
-							if err != nil {
-								dest[i] = s
-							}
-						}
+			switch rc.decltype[i] {
+			case "timestamp", "datetime":
+				for {
+					if dest[i], err = time.Parse(SQLiteTimestampFormat, s); err == nil {
+						break
 					}
-				} else {
-					dest[i] = s
+					if dest[i], err = time.Parse(SQLiteDateFormat, s); err == nil {
+						break
+					}
+					if dest[i], err = time.Parse(SQLiteDatetimeFormat, s); err == nil {
+						break
+					}
+					// The column is a time value, so return the zero time on parse failure.
+					dest[i] = time.Time{}
+					break
 				}
 			default:
 				dest[i] = s

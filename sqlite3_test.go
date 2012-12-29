@@ -3,7 +3,6 @@ package sqlite
 import (
 	"database/sql"
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -297,16 +296,17 @@ func TestTimestamp(t *testing.T) {
 				t.Errorf("Value for id 2 should be %v, not %v", timestamp2, ts)
 			}
 		}
+
+		if id == 3 {
+			seen += 1
+			if !ts.IsZero() {
+				t.Errorf("Value for id 3 should be the zero time, not %v", ts)
+			}
+		}
 	}
 
-	if seen != 2 {
-		t.Error("Expected to see two valid timestamps")
-	}
-
-	// make sure "nonsense" triggered an error
-	err = rows.Err()
-	if err == nil || !strings.Contains(err.Error(), "cannot parse \"nonsense\"") {
-		t.Error("Expected error from \"nonsense\" timestamp")
+	if seen != 3 {
+		t.Error("Expected to see three timestamps")
 	}
 }
 
