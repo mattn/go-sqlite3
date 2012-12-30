@@ -40,9 +40,15 @@ import (
 	"unsafe"
 )
 
-const SQLiteTimestampFormat = "2006-01-02 15:04:05"
-const SQLiteDateFormat = "2006-01-02"
-const SQLiteDatetimeFormat = "2006-01-02 15:04:05.000"
+// Timestamp formats understood by both this module and SQLite.
+// The first format in the slice will be used when saving time values
+// into the database. When parsing a string from a timestamp or
+// datetime column, the formats are tried in order.
+var SQLiteTimestampFormats = []string{
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+}
 
 func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
@@ -213,7 +219,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			}
 			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(p), C.int(len(v)))
 		case time.Time:
-			b := []byte(v.UTC().Format(SQLiteTimestampFormat))
+			b := []byte(v.UTC().Format(SQLiteTimestampFormats[0]))
 			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 		}
 		if rv != C.SQLITE_OK {
@@ -327,19 +333,14 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime":
-				for {
-					if dest[i], err = time.Parse(SQLiteTimestampFormat, s); err == nil {
+				for _, format := range SQLiteTimestampFormats {
+					if dest[i], err = time.Parse(format, s); err == nil {
 						break
 					}
-					if dest[i], err = time.Parse(SQLiteDateFormat, s); err == nil {
-						break
-					}
-					if dest[i], err = time.Parse(SQLiteDatetimeFormat, s); err == nil {
-						break
-					}
+				}
+				if err != nil {
 					// The column is a time value, so return the zero time on parse failure.
 					dest[i] = time.Time{}
-					break
 				}
 			default:
 				dest[i] = s

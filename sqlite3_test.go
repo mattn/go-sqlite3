@@ -251,7 +251,7 @@ func TestTimestamp(t *testing.T) {
 	}
 
 	timestamp1 := time.Date(2012, time.April, 6, 22, 50, 0, 0, time.UTC)
-	timestamp2 := time.Date(2006, time.January, 2, 15, 4, 5, 3000000, time.UTC)
+	timestamp2 := time.Date(2006, time.January, 2, 15, 4, 5, 123456789, time.UTC)
 	tests := []struct {
 		value    interface{}
 		expected time.Time
@@ -263,7 +263,7 @@ func TestTimestamp(t *testing.T) {
 		{timestamp1.In(time.FixedZone("TEST", -7*3600)), timestamp1},
 		{"2012-11-04", time.Date(2012, time.November, 4, 0, 0, 0, 0, time.UTC)},
 		{timestamp2, timestamp2},
-		{"2006-01-02 15:04:05.003", timestamp2},
+		{"2006-01-02 15:04:05.123456789", timestamp2},
 	}
 	for i := range tests {
 		_, err = db.Exec("INSERT INTO foo(id, ts, dt) VALUES(?, ?, ?)", i, tests[i].value, tests[i].value)
