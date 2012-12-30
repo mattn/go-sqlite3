@@ -252,18 +252,30 @@ func TestTimestamp(t *testing.T) {
 
 	timestamp1 := time.Date(2012, time.April, 6, 22, 50, 0, 0, time.UTC)
 	timestamp2 := time.Date(2006, time.January, 2, 15, 4, 5, 123456789, time.UTC)
+	timestamp3 := time.Date(2012, time.November, 4, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		value    interface{}
 		expected time.Time
 	}{
-		{timestamp1, timestamp1},
-		{timestamp1.Unix(), timestamp1},
 		{"nonsense", time.Time{}},
 		{"0000-00-00 00:00:00", time.Time{}},
+		{timestamp1, timestamp1},
+		{timestamp1.Unix(), timestamp1},
 		{timestamp1.In(time.FixedZone("TEST", -7*3600)), timestamp1},
-		{"2012-11-04", time.Date(2012, time.November, 4, 0, 0, 0, 0, time.UTC)},
+		{timestamp1.Format("2006-01-02 15:04:05.000"), timestamp1},
+		{timestamp1.Format("2006-01-02T15:04:05.000"), timestamp1},
+		{timestamp1.Format("2006-01-02 15:04:05"), timestamp1},
+		{timestamp1.Format("2006-01-02T15:04:05"), timestamp1},
 		{timestamp2, timestamp2},
 		{"2006-01-02 15:04:05.123456789", timestamp2},
+		{"2006-01-02T15:04:05.123456789", timestamp2},
+		{"2012-11-04", timestamp3},
+		{"2012-11-04 00:00", timestamp3},
+		{"2012-11-04 00:00:00", timestamp3},
+		{"2012-11-04 00:00:00.000", timestamp3},
+		{"2012-11-04T00:00", timestamp3},
+		{"2012-11-04T00:00:00", timestamp3},
+		{"2012-11-04T00:00:00.000", timestamp3},
 	}
 	for i := range tests {
 		_, err = db.Exec("INSERT INTO foo(id, ts, dt) VALUES(?, ?, ?)", i, tests[i].value, tests[i].value)
@@ -293,10 +305,10 @@ func TestTimestamp(t *testing.T) {
 		}
 		seen++
 		if !tests[id].expected.Equal(ts) {
-			t.Errorf("Timestamp value for id %v should be %v, not %v", id, tests[id].expected, ts)
+			t.Errorf("Timestamp value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt)
 		}
 		if !tests[id].expected.Equal(dt) {
-			t.Errorf("Datetime value for id %v should be %v, not %v", id, tests[id].expected, dt)
+			t.Errorf("Datetime value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt)
 		}
 	}
 
