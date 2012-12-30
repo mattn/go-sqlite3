@@ -3,7 +3,6 @@ package sqlite
 import (
 	"database/sql"
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -268,6 +267,12 @@ func TestTimestamp(t *testing.T) {
 		t.Fatal("Failed to insert nonsense:", err)
 	}
 
+	timestamp4 := time.Date(2012, time.April, 6, 23, 22, 0, 0, time.FixedZone("TEST", -7*3600))
+	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(4, ?)", timestamp4)
+	if err != nil {
+		t.Fatal("Failed to insert timestamp:", err)
+	}
+
 	rows, err := db.Query("SELECT id, ts FROM foo ORDER BY id ASC")
 	if err != nil {
 		t.Fatal("Unable to query foo table:", err)
@@ -297,16 +302,24 @@ func TestTimestamp(t *testing.T) {
 				t.Errorf("Value for id 2 should be %v, not %v", timestamp2, ts)
 			}
 		}
+
+		if id == 3 {
+			seen += 1
+			if !ts.IsZero() {
+				t.Errorf("Value for id 3 should be the zero time, not %v", ts)
+			}
+		}
+
+		if id == 4 {
+			seen += 1
+			if !timestamp4.Equal(ts) {
+				t.Errorf("Value for id 4 should be %v, not %v", timestamp4, ts)
+			}
+		}
 	}
 
-	if seen != 2 {
-		t.Error("Expected to see two valid timestamps")
-	}
-
-	// make sure "nonsense" triggered an error
-	err = rows.Err()
-	if err == nil || !strings.Contains(err.Error(), "cannot parse \"nonsense\"") {
-		t.Error("Expected error from \"nonsense\" timestamp")
+	if seen != 4 {
+		t.Error("Expected to see four timestamps")
 	}
 }
 
