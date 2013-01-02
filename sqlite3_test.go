@@ -245,35 +245,46 @@ func TestTimestamp(t *testing.T) {
 	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
-	_, err = db.Exec("CREATE TABLE foo(id INTEGER, ts timeSTAMP)")
+	_, err = db.Exec("CREATE TABLE foo(id INTEGER, ts timeSTAMP, dt DATETIME)")
 	if err != nil {
 		t.Fatal("Failed to create table:", err)
 	}
 
 	timestamp1 := time.Date(2012, time.April, 6, 22, 50, 0, 0, time.UTC)
-	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(1, ?)", timestamp1)
-	if err != nil {
-		t.Fatal("Failed to insert timestamp:", err)
+	timestamp2 := time.Date(2006, time.January, 2, 15, 4, 5, 123456789, time.UTC)
+	timestamp3 := time.Date(2012, time.November, 4, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		value    interface{}
+		expected time.Time
+	}{
+		{"nonsense", time.Time{}},
+		{"0000-00-00 00:00:00", time.Time{}},
+		{timestamp1, timestamp1},
+		{timestamp1.Unix(), timestamp1},
+		{timestamp1.In(time.FixedZone("TEST", -7*3600)), timestamp1},
+		{timestamp1.Format("2006-01-02 15:04:05.000"), timestamp1},
+		{timestamp1.Format("2006-01-02T15:04:05.000"), timestamp1},
+		{timestamp1.Format("2006-01-02 15:04:05"), timestamp1},
+		{timestamp1.Format("2006-01-02T15:04:05"), timestamp1},
+		{timestamp2, timestamp2},
+		{"2006-01-02 15:04:05.123456789", timestamp2},
+		{"2006-01-02T15:04:05.123456789", timestamp2},
+		{"2012-11-04", timestamp3},
+		{"2012-11-04 00:00", timestamp3},
+		{"2012-11-04 00:00:00", timestamp3},
+		{"2012-11-04 00:00:00.000", timestamp3},
+		{"2012-11-04T00:00", timestamp3},
+		{"2012-11-04T00:00:00", timestamp3},
+		{"2012-11-04T00:00:00.000", timestamp3},
+	}
+	for i := range tests {
+		_, err = db.Exec("INSERT INTO foo(id, ts, dt) VALUES(?, ?, ?)", i, tests[i].value, tests[i].value)
+		if err != nil {
+			t.Fatal("Failed to insert timestamp:", err)
+		}
 	}
 
-	timestamp2 := time.Date(2012, time.April, 6, 23, 22, 0, 0, time.UTC)
-	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(2, ?)", timestamp2.Unix())
-	if err != nil {
-		t.Fatal("Failed to insert timestamp:", err)
-	}
-
-	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(3, ?)", "nonsense")
-	if err != nil {
-		t.Fatal("Failed to insert nonsense:", err)
-	}
-
-	timestamp4 := time.Date(2012, time.April, 6, 23, 22, 0, 0, time.FixedZone("TEST", -7*3600))
-	_, err = db.Exec("INSERT INTO foo(id, ts) VALUES(4, ?)", timestamp4)
-	if err != nil {
-		t.Fatal("Failed to insert timestamp:", err)
-	}
-
-	rows, err := db.Query("SELECT id, ts FROM foo ORDER BY id ASC")
+	rows, err := db.Query("SELECT id, ts, dt FROM foo ORDER BY id ASC")
 	if err != nil {
 		t.Fatal("Unable to query foo table:", err)
 	}
@@ -282,44 +293,27 @@ func TestTimestamp(t *testing.T) {
 	seen := 0
 	for rows.Next() {
 		var id int
-		var ts time.Time
+		var ts, dt time.Time
 
-		if err := rows.Scan(&id, &ts); err != nil {
+		if err := rows.Scan(&id, &ts, &dt); err != nil {
 			t.Error("Unable to scan results:", err)
 			continue
 		}
-
-		if id == 1 {
-			seen += 1
-			if !timestamp1.Equal(ts) {
-				t.Errorf("Value for id 1 should be %v, not %v", timestamp1, ts)
-			}
+		if id < 0 || id >= len(tests) {
+			t.Error("Bad row id: ", id)
+			continue
 		}
-
-		if id == 2 {
-			seen += 1
-			if !timestamp2.Equal(ts) {
-				t.Errorf("Value for id 2 should be %v, not %v", timestamp2, ts)
-			}
+		seen++
+		if !tests[id].expected.Equal(ts) {
+			t.Errorf("Timestamp value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt)
 		}
-
-		if id == 3 {
-			seen += 1
-			if !ts.IsZero() {
-				t.Errorf("Value for id 3 should be the zero time, not %v", ts)
-			}
-		}
-
-		if id == 4 {
-			seen += 1
-			if !timestamp4.Equal(ts) {
-				t.Errorf("Value for id 4 should be %v, not %v", timestamp4, ts)
-			}
+		if !tests[id].expected.Equal(dt) {
+			t.Errorf("Datetime value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt)
 		}
 	}
 
-	if seen != 4 {
-		t.Error("Expected to see four timestamps")
+	if seen != len(tests) {
+		t.Errorf("Expected to see %d rows", len(tests))
 	}
 }
 
@@ -414,130 +408,3 @@ func TestBoolean(t *testing.T) {
 	}
 }
 
-func TestDateOnlyTimestamp(t *testing.T) {
-	// make sure that timestamps without times are extractable. these are generated when
-	// e.g., you use the sqlite `DATE()` built-in.
-
-	db, er := sql.Open("sqlite3", "db.sqlite")
-	if er != nil {
-		t.Fatal(er)
-	}
-	defer func() {
-		db.Close()
-		os.Remove("db.sqlite")
-	}()
-
-	_, er = db.Exec(`
-		CREATE TABLE test
-			( entry_id INTEGER PRIMARY KEY AUTOINCREMENT
-			, entry_published TIMESTAMP NOT NULL
-			)
-	`)
-	if er != nil {
-		t.Fatal(er)
-	}
-
-	_, er = db.Exec(`
-		INSERT INTO test VALUES ( 1, '2012-11-04')
-	`)
-	if er != nil {
-		t.Fatal(er)
-	}
-
-	rows, er := db.Query("SELECT entry_id, entry_published FROM test")
-	if er != nil {
-		t.Fatal(er)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		if er := rows.Err(); er != nil {
-			t.Fatal(er)
-		} else {
-			t.Fatalf("Unable to extract row containing date-only timestamp")
-		}
-	}
-
-	var entryId int64
-	var entryPublished time.Time
-
-	if er := rows.Scan(&entryId, &entryPublished); er != nil {
-		t.Fatal(er)
-	}
-
-	if entryId != 1 {
-		t.Errorf("EntryId does not match inserted value")
-	}
-
-	if entryPublished.Year() != 2012 || entryPublished.Month() != 11 || entryPublished.Day() != 4 {
-		t.Errorf("Extracted time does not match inserted value")
-	}
-}
-
-func TestDatetime(t *testing.T) {
-	db, err := sql.Open("sqlite3", "./datetime.db")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-
-	defer func() {
-		db.Close()
-		os.Remove("./datetime.db")
-	}()
-
-	_, err = db.Exec("DROP TABLE datetimetest")
-	_, err = db.Exec(`
-        CREATE TABLE datetimetest
-            ( entry_id INTEGER
-            , my_datetime DATETIME
-            )
-    `)
-
-	if err != nil {
-		t.Fatal("Failed to create table:", err)
-	}
-	datetime := "2006-01-02 15:04:05.003"
-	_, err = db.Exec(`
-        INSERT INTO datetimetest(entry_id, my_datetime) 
-        VALUES(1, ?)`, datetime)
-	if err != nil {
-		t.Fatal("Failed to insert datetime:", err)
-	}
-
-	rows, err := db.Query(
-		"SELECT entry_id, my_datetime FROM datetimetest ORDER BY entry_id ASC")
-	if err != nil {
-		t.Fatal("Unable to query datetimetest table:", err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		if er := rows.Err(); er != nil {
-			t.Fatal(er)
-		} else {
-			t.Fatalf("Unable to extract row containing datetime")
-		}
-	}
-
-	var entryId int
-	var myDatetime time.Time
-
-	if err := rows.Scan(&entryId, &myDatetime); err != nil {
-		t.Error("Unable to scan results:", err)
-	}
-
-	if entryId != 1 {
-		t.Errorf("EntryId does not match inserted value")
-	}
-
-	if myDatetime.Year() != 2006 ||
-		myDatetime.Month() != 1 ||
-		myDatetime.Day() != 2 ||
-		myDatetime.Hour() != 15 ||
-		myDatetime.Minute() != 4 ||
-		myDatetime.Second() != 5 ||
-		myDatetime.Nanosecond() != 3000000 {
-		t.Errorf("Extracted time does not match inserted value")
-	}
-
-}
