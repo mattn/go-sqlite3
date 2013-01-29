@@ -111,7 +111,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	rv := C.sqlite3_open_v2(name, &db,
 		C.SQLITE_OPEN_FULLMUTEX|
 			C.SQLITE_OPEN_READWRITE|
-			C.SQLITE_OPEN_CREATE,
+			C.SQLITE_OPEN_CREATE |
+			C.SQLITE_OPEN_URI,
 		nil)
 	if rv != 0 {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
