@@ -58,17 +58,42 @@ func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
 }
 
+// Driver struct.
 type SQLiteDriver struct {
 }
 
+// Conn struct.
 type SQLiteConn struct {
 	db *C.sqlite3
 }
 
+// Tx struct.
 type SQLiteTx struct {
 	c *SQLiteConn
 }
 
+// Stmt struct.
+type SQLiteStmt struct {
+	c      *SQLiteConn
+	s      *C.sqlite3_stmt
+	t      string
+	closed bool
+}
+
+// Result struct.
+type SQLiteResult struct {
+	s *SQLiteStmt
+}
+
+// Rows struct.
+type SQLiteRows struct {
+	s        *SQLiteStmt
+	nc       int
+	cols     []string
+	decltype []string
+}
+
+// Commit transaction.
 func (tx *SQLiteTx) Commit() error {
 	if err := tx.c.exec("COMMIT"); err != nil {
 		return err
@@ -76,6 +101,7 @@ func (tx *SQLiteTx) Commit() error {
 	return nil
 }
 
+// Rollback transaction.
 func (tx *SQLiteTx) Rollback() error {
 	if err := tx.c.exec("ROLLBACK"); err != nil {
 		return err
@@ -93,6 +119,7 @@ func (c *SQLiteConn) exec(cmd string) error {
 	return nil
 }
 
+// Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
 	if err := c.exec("BEGIN"); err != nil {
 		return nil, err
@@ -100,6 +127,12 @@ func (c *SQLiteConn) Begin() (driver.Tx, error) {
 	return &SQLiteTx{c}, nil
 }
 
+// Open database and return a new connection.
+// You can specify DSN string with URI filename.
+//   test.db
+//   file:test.db?cache=shared&mode=memory
+//   :memory:
+//   file::memory:
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
@@ -129,6 +162,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	return &SQLiteConn{db}, nil
 }
 
+// Close the connection.
 func (c *SQLiteConn) Close() error {
 	s := C.sqlite3_next_stmt(c.db, nil)
 	for s != nil {
@@ -143,13 +177,7 @@ func (c *SQLiteConn) Close() error {
 	return nil
 }
 
-type SQLiteStmt struct {
-	c      *SQLiteConn
-	s      *C.sqlite3_stmt
-	t      string
-	closed bool
-}
-
+// Prepare query string. Return a new statement.
 func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 	pquery := C.CString(query)
 	defer C.free(unsafe.Pointer(pquery))
@@ -166,6 +194,7 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 	return &SQLiteStmt{c: c, s: s, t: t}, nil
 }
 
+// Close the statement.
 func (s *SQLiteStmt) Close() error {
 	if s.closed {
 		return nil
@@ -178,6 +207,7 @@ func (s *SQLiteStmt) Close() error {
 	return nil
 }
 
+// Return a number of parameters.
 func (s *SQLiteStmt) NumInput() int {
 	return int(C.sqlite3_bind_parameter_count(s.s))
 }
@@ -234,6 +264,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 	return nil
 }
 
+// Query the statment with arguments. Return records.
 func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
@@ -241,18 +272,17 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil}, nil
 }
 
-type SQLiteResult struct {
-	s *SQLiteStmt
-}
-
+// Return last inserted ID.
 func (r *SQLiteResult) LastInsertId() (int64, error) {
 	return int64(C._sqlite3_last_insert_rowid(r.s.c.db)), nil
 }
 
+// Return how many rows affected.
 func (r *SQLiteResult) RowsAffected() (int64, error) {
 	return int64(C._sqlite3_changes(r.s.c.db)), nil
 }
 
+// Execute the statement with arguments. Return result object.
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
@@ -264,13 +294,7 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	return &SQLiteResult{s}, nil
 }
 
-type SQLiteRows struct {
-	s        *SQLiteStmt
-	nc       int
-	cols     []string
-	decltype []string
-}
-
+// Close the rows.
 func (rc *SQLiteRows) Close() error {
 	rv := C.sqlite3_reset(rc.s.s)
 	if rv != C.SQLITE_OK {
@@ -279,6 +303,7 @@ func (rc *SQLiteRows) Close() error {
 	return nil
 }
 
+// Return column names.
 func (rc *SQLiteRows) Columns() []string {
 	if rc.nc != len(rc.cols) {
 		rc.cols = make([]string, rc.nc)
@@ -289,6 +314,7 @@ func (rc *SQLiteRows) Columns() []string {
 	return rc.cols
 }
 
+// Move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	rv := C.sqlite3_step(rc.s.s)
 	if rv == C.SQLITE_DONE {
