@@ -6,6 +6,15 @@ package sqlite
 #include <string.h>
 
 static int
+_sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
+#ifdef SQLITE_OPEN_URI
+  return sqlite3_open_v2(filename, ppDb, flags | SQLITE_OPEN_URI, zVfs);
+#else
+  return sqlite3_open_v2(filename, ppDb, flags, zVfs);
+#endif
+}
+
+static int
 _sqlite3_bind_text(sqlite3_stmt *stmt, int n, char *p, int np) {
   return sqlite3_bind_text(stmt, n, p, np, SQLITE_TRANSIENT);
 }
@@ -141,11 +150,10 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var db *C.sqlite3
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
-	rv := C.sqlite3_open_v2(name, &db,
+	rv := C._sqlite3_open_v2(name, &db,
 		C.SQLITE_OPEN_FULLMUTEX|
 			C.SQLITE_OPEN_READWRITE|
-			C.SQLITE_OPEN_CREATE |
-			C.SQLITE_OPEN_URI,
+			C.SQLITE_OPEN_CREATE,
 		nil)
 	if rv != 0 {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
