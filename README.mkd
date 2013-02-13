@@ -32,6 +32,19 @@ Finally, this package can be installed with the go get command:
 
     go get github.com/mattn/go-sqlite3
 
+FAQ
+---
+
+## Can't build go-sqlite3 on windows 64bit.
+
+> Probably, you are using go 1.0, go1.0 have a problem to compile/link on windows 64bit. 
+> See: https://github.com/mattn/go-sqlite3/issues/27
+
+## Getting insert error while query is opened.
+
+> You can pass some arguments into the connection string like URI.
+> See: https://github.com/mattn/go-sqlite3/issues/39
+
 LICENSE
 -------
 
