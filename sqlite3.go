@@ -179,7 +179,7 @@ func (c *SQLiteConn) Close() error {
 	}
 	rv := C.sqlite3_close(c.db)
 	if rv != C.SQLITE_OK {
-		return errors.New("sqlite succeeded without returning a database")
+		return errors.New("error while closing sqlite database connection")
 	}
 	c.db = nil
 	return nil
@@ -208,6 +208,9 @@ func (s *SQLiteStmt) Close() error {
 		return nil
 	}
 	s.closed = true
+	if s.c == nil || s.c.db == nil {
+		return errors.New("sqlite statement with already closed database connection")
+	}
 	rv := C.sqlite3_finalize(s.s)
 	if rv != C.SQLITE_OK {
 		return errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
