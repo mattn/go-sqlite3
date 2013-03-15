@@ -45,6 +45,13 @@ FAQ
     > You can pass some arguments into the connection string like URI.
     > See: https://github.com/mattn/go-sqlite3/issues/39
 
+* Can't build go-sqlite3. I got error of pkg-config.
+
+    > Probably, you don't set PKG_CONFIG_PATH environment variable.
+    > Add to PKG_CONFIG_PATH=/path/to/pkgconfig
+    > Or do `export PKG_CONFIG_PATH=/path/to/pkgconfig`.
+    > See: https://github.com/mattn/go-sqlite3/issues/45
+
 LICENSE
 -------
 
