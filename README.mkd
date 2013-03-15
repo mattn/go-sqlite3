@@ -48,8 +48,8 @@ FAQ
 * Can't build go-sqlite3. I got error of pkg-config.
 
     > Probably, you don't set PKG_CONFIG_PATH environment variable.
-    > Add to PKG_CONFIG_PATH=/path/to/pkgconfig
-    > Or do `export PKG_CONFIG_PATH=/path/to/pkgconfig`.
+    > Add PKG_CONFIG_PATH=/path/to/pkgconfig into your bashrc (something for
+	> your shell), Or do `export PKG_CONFIG_PATH=/path/to/pkgconfig` in bash.
     > See: https://github.com/mattn/go-sqlite3/issues/45
 
 LICENSE
