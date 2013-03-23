@@ -3,6 +3,6 @@
 package sqlite
 
 /*
-#cgo pkg-config: sqlite3
+#cgo CFLAGS: -I.
 */
 import "C"
