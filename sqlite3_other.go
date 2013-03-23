@@ -1,9 +1,0 @@
-// +build !windows, !darwin
-
-package sqlite
-
-/*
-#cgo CFLAGS: -I.
-#cgo LDFLAGS: -ldl
-*/
-import "C"
