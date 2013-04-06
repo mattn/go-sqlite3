@@ -5,6 +5,14 @@ package sqlite
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef SQLITE_OPEN_READWRITE
+# define SQLITE_OPEN_READWRITE 0
+#endif
+
+#ifndef SQLITE_OPEN_FULLMUTEX
+# define SQLITE_OPEN_FULLMUTEX 0
+#endif
+
 static int
 _sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
 #ifdef SQLITE_OPEN_URI
