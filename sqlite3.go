@@ -251,7 +251,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 			}
 		case int:
-			rv = C.sqlite3_bind_int(s.s, n, C.int(v))
+			rv = C.sqlite3_bind_int64(s.s, n, C.sqlite3_int64(v))
 		case int32:
 			rv = C.sqlite3_bind_int(s.s, n, C.int(v))
 		case int64:
