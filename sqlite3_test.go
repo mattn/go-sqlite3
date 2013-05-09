@@ -1,18 +1,28 @@
 package sqlite
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
+func TempFilename() string {
+	randBytes := make([]byte, 16)
+	rand.Read(randBytes)
+	return filepath.Join(os.TempDir(), "foo"+hex.EncodeToString(randBytes)+".db")
+}
+
 func TestOpen(t *testing.T) {
-	db, err := sql.Open("sqlite3", "./foo.db")
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	defer os.Remove("./foo.db")
+	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
@@ -21,17 +31,18 @@ func TestOpen(t *testing.T) {
 		t.Fatal("Failed to create table:", err)
 	}
 
-	if stat, err := os.Stat("./foo.db"); err != nil || stat.IsDir() {
+	if stat, err := os.Stat(tempFilename); err != nil || stat.IsDir() {
 		t.Error("Failed to create ./foo.db")
 	}
 }
 
 func TestInsert(t *testing.T) {
-	db, err := sql.Open("sqlite3", "./foo.db")
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	defer os.Remove("./foo.db")
+	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
@@ -65,11 +76,12 @@ func TestInsert(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	db, err := sql.Open("sqlite3", "./foo.db")
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	defer os.Remove("./foo.db")
+	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
@@ -129,11 +141,12 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	db, err := sql.Open("sqlite3", "./foo.db")
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	defer os.Remove("./foo.db")
+	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
@@ -189,11 +202,12 @@ func TestDelete(t *testing.T) {
 }
 
 func TestBooleanRoundtrip(t *testing.T) {
-	db, err := sql.Open("sqlite3", "./foo.db")
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	defer os.Remove("./foo.db")
+	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
@@ -237,11 +251,12 @@ func TestBooleanRoundtrip(t *testing.T) {
 }
 
 func TestTimestamp(t *testing.T) {
-	db, err := sql.Open("sqlite3", "./foo.db")
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	defer os.Remove("./foo.db")
+	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
@@ -318,12 +333,13 @@ func TestTimestamp(t *testing.T) {
 }
 
 func TestBoolean(t *testing.T) {
-	db, err := sql.Open("sqlite3", "./foo.db")
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
 
-	defer os.Remove("./foo.db")
+	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, fbool BOOLEAN)")
@@ -407,4 +423,3 @@ func TestBoolean(t *testing.T) {
 		t.Error("Expected error from \"nonsense\" bool")
 	}
 }
-
