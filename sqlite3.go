@@ -99,7 +99,8 @@ type SQLiteStmt struct {
 
 // Result struct.
 type SQLiteResult struct {
-	s *SQLiteStmt
+	id	int64
+	changes int64
 }
 
 // Rows struct.
@@ -295,12 +296,12 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 // Return last inserted ID.
 func (r *SQLiteResult) LastInsertId() (int64, error) {
-	return int64(C._sqlite3_last_insert_rowid(r.s.c.db)), nil
+	return r.id, nil
 }
 
 // Return how many rows affected.
 func (r *SQLiteResult) RowsAffected() (int64, error) {
-	return int64(C._sqlite3_changes(r.s.c.db)), nil
+	return r.changes, nil
 }
 
 // Execute the statement with arguments. Return result object.
@@ -312,7 +313,12 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
 	}
-	return &SQLiteResult{s}, nil
+	
+	res := &SQLiteResult{
+		int64(C._sqlite3_last_insert_rowid(s.c.db)),
+		int64(C._sqlite3_changes(s.c.db)),
+	}
+	return res, nil
 }
 
 // Close the rows.
