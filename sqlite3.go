@@ -99,7 +99,7 @@ type SQLiteStmt struct {
 
 // Result struct.
 type SQLiteResult struct {
-	id	int64
+	id      int64
 	changes int64
 }
 
@@ -313,7 +313,7 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
 	}
-	
+
 	res := &SQLiteResult{
 		int64(C._sqlite3_last_insert_rowid(s.c.db)),
 		int64(C._sqlite3_changes(s.c.db)),
