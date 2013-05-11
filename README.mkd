@@ -1,6 +1,8 @@
 go-sqlite3
 ==========
 
+[![Build Status](https://travis-ci.org/mattn/go-sqlite3.png?branch=master)](https://travis-ci.org/mattn/go-sqlite3)
+
 DESCRIPTION
 -----------
 
