@@ -20,9 +20,7 @@ If you are using [Homebrew](http://mxcl.github.com/homebrew/) on Mac OS X, you c
      
 If you are using Ubuntu, you can install with:
 
-    sudo apt-get install pkg-config
-	sudo apt-get install sqlite3  
-	sudo apt-get install libsqlite3-dev 
+    sudo apt-get install pkg-config sqlite3 libsqlite3-dev
 	
 If you are using Windows, you can get pkg-config from below.
 
