@@ -37,17 +37,17 @@ FAQ
 
 * Can't build go-sqlite3 on windows 64bit.
 
-    > Probably, you are using go 1.0, go1.0 have a problem to compile/link on windows 64bit. 
+    > Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit. 
     > See: https://github.com/mattn/go-sqlite3/issues/27
 
 * Getting insert error while query is opened.
 
-    > You can pass some arguments into the connection string like URI.
+    > You can pass some arguments into the connection string, for example, a URI.
     > See: https://github.com/mattn/go-sqlite3/issues/39
 
 * Can't build go-sqlite3. I got error of pkg-config.
 
-    > Probably, you don't set PKG_CONFIG_PATH environment variable.
+    > Probably, you didn't set PKG_CONFIG_PATH environment variable.
     > Add PKG_CONFIG_PATH=/path/to/pkgconfig into your bashrc (something for
 	> your shell), Or do `export PKG_CONFIG_PATH=/path/to/pkgconfig` in bash.
     > See: https://github.com/mattn/go-sqlite3/issues/45
