@@ -1,4 +1,4 @@
-package sqlite
+package sqlite3
 
 /*
 #cgo CFLAGS: -I. -fno-stack-check -fno-stack-protector -mno-stack-arg-probe

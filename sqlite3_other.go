@@ -1,6 +1,6 @@
 // +build !windows
 
-package sqlite
+package sqlite3
 
 /*
 #cgo pkg-config: sqlite3
