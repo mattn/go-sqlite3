@@ -138,7 +138,7 @@ func (c *SQLiteConn) exec(cmd string) error {
 	defer C.free(unsafe.Pointer(pcmd))
 	rv := C.sqlite3_exec(c.db, pcmd, nil, nil, nil)
 	if rv != C.SQLITE_OK {
-		return errors.New(C.GoString(C.sqlite3_errmsg(c.db)))
+		return ErrNo(rv)
 	}
 	return nil
 }
@@ -149,6 +149,10 @@ func (c *SQLiteConn) Begin() (driver.Tx, error) {
 		return nil, err
 	}
 	return &SQLiteTx{c}, nil
+}
+
+func errorString(err ErrNo) string {
+	return C.GoString(C.sqlite3_errstr(C.int(err)))
 }
 
 // Open database and return a new connection.
@@ -171,7 +175,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			C.SQLITE_OPEN_CREATE,
 		nil)
 	if rv != 0 {
-		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
+		return nil, ErrNo(rv)
 	}
 	if db == nil {
 		return nil, errors.New("sqlite succeeded without returning a database")
@@ -179,7 +183,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	rv = C.sqlite3_busy_timeout(db, 5000)
 	if rv != C.SQLITE_OK {
-		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
+		return nil, ErrNo(rv)
 	}
 
 	conn := &SQLiteConn{db}
@@ -229,7 +233,7 @@ func (c *SQLiteConn) Close() error {
 	}
 	rv := C.sqlite3_close(c.db)
 	if rv != C.SQLITE_OK {
-		return errors.New("error while closing sqlite database connection")
+		return ErrNo(rv)
 	}
 	c.db = nil
 	return nil
@@ -243,7 +247,7 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 	var perror *C.char
 	rv := C.sqlite3_prepare_v2(c.db, pquery, -1, &s, &perror)
 	if rv != C.SQLITE_OK {
-		return nil, errors.New(C.GoString(C.sqlite3_errmsg(c.db)))
+		return nil, ErrNo(rv)
 	}
 	var t string
 	if perror != nil && C.strlen(perror) > 0 {
@@ -263,7 +267,7 @@ func (s *SQLiteStmt) Close() error {
 	}
 	rv := C.sqlite3_finalize(s.s)
 	if rv != C.SQLITE_OK {
-		return errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
+		return ErrNo(rv)
 	}
 	return nil
 }
@@ -276,7 +280,7 @@ func (s *SQLiteStmt) NumInput() int {
 func (s *SQLiteStmt) bind(args []driver.Value) error {
 	rv := C.sqlite3_reset(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
-		return errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
+		return ErrNo(rv)
 	}
 
 	for i, v := range args {
@@ -321,7 +325,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 		}
 		if rv != C.SQLITE_OK {
-			return errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
+			return ErrNo(rv)
 		}
 	}
 	return nil
@@ -352,7 +356,7 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	}
 	rv := C.sqlite3_step(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
-		return nil, errors.New(C.GoString(C.sqlite3_errmsg(s.c.db)))
+		return nil, ErrNo(rv)
 	}
 
 	res := &SQLiteResult{
@@ -366,7 +370,7 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 func (rc *SQLiteRows) Close() error {
 	rv := C.sqlite3_reset(rc.s.s)
 	if rv != C.SQLITE_OK {
-		return errors.New(C.GoString(C.sqlite3_errmsg(rc.s.c.db)))
+		return ErrNo(rv)
 	}
 	return nil
 }
@@ -389,7 +393,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 	if rv != C.SQLITE_ROW {
-		return errors.New(C.GoString(C.sqlite3_errmsg(rc.s.c.db)))
+		return ErrNo(rv)
 	}
 
 	if rc.decltype == nil {
