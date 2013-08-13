@@ -83,7 +83,7 @@ func main() {
 		return
 	}
 
-	_, err = db.Exec("insert into foo(id, name) values(1, 'foo'), (2, 'bar'), (3, 'baz')")
+	_, err = db.Exec("insert into foo(id, name) select 1, 'foo' union all select 2, 'bar' union all select 3, 'baz'")
 	if err != nil {
 		fmt.Println(err)
 		return
