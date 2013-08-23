@@ -72,13 +72,13 @@ var SQLiteTimestampFormats = []string{
 }
 
 func init() {
-	sql.Register("sqlite3", &SQLiteDriver{false})
-	sql.Register("sqlite3_with_extensions", &SQLiteDriver{true})
+	sql.Register("sqlite3", &SQLiteDriver{false, nil})
 }
 
 // Driver struct.
 type SQLiteDriver struct {
-	enableLoadExtentions bool
+	EnableLoadExtentions bool
+	ConnectHook func(*SQLiteConn)
 }
 
 // Conn struct.
@@ -179,7 +179,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	enableLoadExtentions := 0
-	if d.enableLoadExtentions {
+	if d.EnableLoadExtentions {
 		enableLoadExtentions = 1
 	}
 	rv = C.sqlite3_enable_load_extension(db, C.int(enableLoadExtentions))
@@ -187,7 +187,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
 	}
 
-	return &SQLiteConn{db}, nil
+	conn := &SQLiteConn{db}
+
+	if d.ConnectHook != nil {
+		d.ConnectHook(conn)
+	}
+
+	return conn, nil
 }
 
 // Close the connection.

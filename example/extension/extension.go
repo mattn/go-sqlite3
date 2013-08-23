@@ -3,11 +3,13 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 	"log"
 )
 
 func main() {
+	sql.Register("sqlite3_with_extensions", &sqlite3.SQLiteDriver{true, nil})
+
 	db, err := sql.Open("sqlite3_with_extensions", ":memory:")
 	if err != nil {
 		log.Fatal(err)
