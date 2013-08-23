@@ -129,6 +129,10 @@ func (tx *SQLiteTx) Rollback() error {
 	return nil
 }
 
+func (c *SQLiteConn) AutoCommit() bool {
+	return int(C.sqlite3_get_autocommit()) != 0
+}
+
 func (c *SQLiteConn) exec(cmd string) error {
 	pcmd := C.CString(cmd)
 	defer C.free(unsafe.Pointer(pcmd))
