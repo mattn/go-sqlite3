@@ -77,7 +77,7 @@ func init() {
 
 // Driver struct.
 type SQLiteDriver struct {
-	EnableLoadExtentions bool
+	EnableLoadExtension bool
 	ConnectHook func(*SQLiteConn)
 }
 
@@ -130,7 +130,7 @@ func (tx *SQLiteTx) Rollback() error {
 }
 
 func (c *SQLiteConn) AutoCommit() bool {
-	return int(C.sqlite3_get_autocommit()) != 0
+	return int(C.sqlite3_get_autocommit(c.db)) != 0
 }
 
 func (c *SQLiteConn) exec(cmd string) error {
@@ -182,11 +182,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
 	}
 
-	enableLoadExtentions := 0
-	if d.EnableLoadExtentions {
-		enableLoadExtentions = 1
+	enableLoadExtension := 0
+	if d.EnableLoadExtension {
+		enableLoadExtension = 1
 	}
-	rv = C.sqlite3_enable_load_extension(db, C.int(enableLoadExtentions))
+	rv = C.sqlite3_enable_load_extension(db, C.int(enableLoadExtension))
 	if rv != C.SQLITE_OK {
 		return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
 	}

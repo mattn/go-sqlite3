@@ -8,7 +8,11 @@ import (
 )
 
 func main() {
-	sql.Register("sqlite3_with_extensions", &sqlite3.SQLiteDriver{true, nil})
+	sql.Register("sqlite3_with_extensions",
+		&sqlite3.SQLiteDriver{
+			EnableLoadExtension: true,
+			ConnectHook: nil,
+		})
 
 	db, err := sql.Open("sqlite3_with_extensions", ":memory:")
 	if err != nil {
