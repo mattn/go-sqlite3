@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"log"
 	"os"
 )
 
@@ -12,8 +13,7 @@ func main() {
 
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 	defer db.Close()
 
@@ -24,35 +24,31 @@ func main() {
 	for _, sql := range sqls {
 		_, err = db.Exec(sql)
 		if err != nil {
-			fmt.Printf("%q: %s\n", err, sql)
+			log.Printf("%q: %s\n", err, sql)
 			return
 		}
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 	stmt, err := tx.Prepare("insert into foo(id, name) values(?, ?)")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 	defer stmt.Close()
 	for i := 0; i < 100; i++ {
 		_, err = stmt.Exec(i, fmt.Sprintf("こんにちわ世界%03d", i))
 		if err != nil {
-			fmt.Println(err)
-			return
+			log.Fatal(err)
 		}
 	}
 	tx.Commit()
 
 	rows, err := db.Query("select id, name from foo")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -65,34 +61,29 @@ func main() {
 
 	stmt, err = db.Prepare("select name from foo where id = ?")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 	defer stmt.Close()
 	var name string
 	err = stmt.QueryRow("3").Scan(&name)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 	fmt.Println(name)
 
 	_, err = db.Exec("delete from foo")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 
 	_, err = db.Exec("insert into foo(id, name) values(1, 'foo'), (2, 'bar'), (3, 'baz')")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 
 	rows, err = db.Query("select id, name from foo")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -101,6 +92,4 @@ func main() {
 		rows.Scan(&id, &name)
 		fmt.Println(id, name)
 	}
-	rows.Close()
-
 }
