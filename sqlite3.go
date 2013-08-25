@@ -78,7 +78,7 @@ func init() {
 // Driver struct.
 type SQLiteDriver struct {
 	EnableLoadExtension bool
-	ConnectHook func(*SQLiteConn)
+	ConnectHook         func(*SQLiteConn) error
 }
 
 // Conn struct.
@@ -194,7 +194,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	conn := &SQLiteConn{db}
 
 	if d.ConnectHook != nil {
-		d.ConnectHook(conn)
+		if err := d.ConnectHook(conn); err != nil {
+			return nil, err
+		}
 	}
 
 	return conn, nil
