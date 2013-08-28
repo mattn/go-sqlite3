@@ -1,4 +1,4 @@
-#include <regex.h>
+#include <pcre.h>
 #include <string.h>
 #include <stdio.h>
 #include <sqlite3ext.h>
@@ -21,7 +21,11 @@ static void regexp_func(sqlite3_context *context, int argc, sqlite3_value **argv
     sqlite3_result_int(context, 1);
   }
 }
-__declspec(dllexport) int sqlite3_extension_init(sqlite3 *db, char **errmsg, const sqlite3_api_routines *api) {
+
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+int sqlite3_extension_init(sqlite3 *db, char **errmsg, const sqlite3_api_routines *api) {
   SQLITE_EXTENSION_INIT2(api);
   return sqlite3_create_function(db, "regexp", 2, SQLITE_UTF8, (void*)db, regexp_func, NULL, NULL);
 }

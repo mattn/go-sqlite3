@@ -11,7 +11,7 @@ func main() {
 	sql.Register("sqlite3_with_extensions",
 		&sqlite3.SQLiteDriver{
 			Extensions: []string{
-				"sqlite3_mod_regexp.dll",
+				"sqlite3_mod_regexp",
 			},
 		})
 
