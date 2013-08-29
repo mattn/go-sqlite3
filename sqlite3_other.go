@@ -3,6 +3,7 @@
 package sqlite3
 
 /*
-#cgo LDFLAGS: -v -ldl
+#cgo LDFLAGS: -v
+#cgo linux LDFLAGS: -ldl
 */
 import "C"
