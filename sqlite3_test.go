@@ -575,12 +575,7 @@ func TestTransaction(t *testing.T) {
 	}
 
 	rows, err = tx.Query("SELECT id from foo")
-	if err != nil {
-		t.Fatal("Unable to query foo table:", err)
+	if err == nil {
+		t.Fatal("Expected failure to query")
 	}
-
-	if !rows.Next() {
-		t.Fatal("Unable to query results:", err)
-	}
-
 }
