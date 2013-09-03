@@ -36,6 +36,32 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+func TestClose(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer os.Remove(tempFilename)
+
+	_, err = db.Exec("drop table foo")
+	_, err = db.Exec("create table foo (id integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	stmt, err := db.Prepare("select id from foo where id = ?")
+	if err != nil {
+		t.Fatal("Failed to select records:", err)
+	}
+
+	db.Close()
+	_, err = stmt.Exec(1)
+	if err == nil {
+		t.Fatal("Failed to operate closed statement")
+	}
+}
+
 func TestInsert(t *testing.T) {
 	tempFilename := TempFilename()
 	db, err := sql.Open("sqlite3", tempFilename)
@@ -422,4 +448,139 @@ func TestBoolean(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error from \"nonsense\" bool")
 	}
+}
+
+func TestFloat32(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE foo(id INTEGER)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = db.Exec("INSERT INTO foo(id) VALUES(null)")
+	if err != nil {
+		t.Fatal("Failed to insert null:", err)
+	}
+
+	rows, err := db.Query("SELECT id FROM foo")
+	if err != nil {
+		t.Fatal("Unable to query foo table:", err)
+	}
+
+	if !rows.Next() {
+		t.Fatal("Unable to query results:", err)
+	}
+
+	var id interface{}
+	if err := rows.Scan(&id); err != nil {
+		t.Fatal("Unable to scan results:", err)
+	}
+	if id != nil {
+		t.Error("Expected nil but not")
+	}
+}
+
+func TestNull(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	rows, err := db.Query("SELECT 3.141592")
+	if err != nil {
+		t.Fatal("Unable to query foo table:", err)
+	}
+
+	if !rows.Next() {
+		t.Fatal("Unable to query results:", err)
+	}
+
+	var v interface{}
+	if err := rows.Scan(&v); err != nil {
+		t.Fatal("Unable to scan results:", err)
+	}
+	f, ok := v.(float64)
+	if !ok {
+		t.Error("Expected float but not")
+	}
+	if f != 3.141592 {
+		t.Error("Expected 3.141592 but not")
+	}
+}
+
+func TestTransaction(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE foo(id INTEGER)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+
+	_, err = tx.Exec("INSERT INTO foo(id) VALUES(1)")
+	if err != nil {
+		t.Fatal("Failed to insert null:", err)
+	}
+
+	rows, err := tx.Query("SELECT id from foo")
+	if err != nil {
+		t.Fatal("Unable to query foo table:", err)
+	}
+
+	err = tx.Rollback()
+	if err != nil {
+		t.Fatal("Failed to rollback transaction:", err)
+	}
+
+	if rows.Next() {
+		t.Fatal("Unable to query results:", err)
+	}
+
+	tx, err = db.Begin()
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+
+	_, err = tx.Exec("INSERT INTO foo(id) VALUES(1)")
+	if err != nil {
+		t.Fatal("Failed to insert null:", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		t.Fatal("Failed to commit transaction:", err)
+	}
+
+	rows, err = tx.Query("SELECT id from foo")
+	if err != nil {
+		t.Fatal("Unable to query foo table:", err)
+	}
+
+	if !rows.Next() {
+		t.Fatal("Unable to query results:", err)
+	}
+
 }

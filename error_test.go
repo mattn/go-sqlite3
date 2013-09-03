@@ -30,5 +30,8 @@ func TestFailures(t *testing.T) {
 	if err != ErrNotADB {
 		t.Error("wrong error code for corrupted DB")
 	}
+	if err.Error() == "" {
+		t.Error("wrong error string for corrupted DB")
+	}
 	db.Close()
 }
