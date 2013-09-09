@@ -175,7 +175,9 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 		if s.t == "" {
 			return rows, nil
 		}
-		rows.Close()
+		if rows != nil {
+			rows.Close()
+		}
 		s.Close()
 		query = s.t
 	}
