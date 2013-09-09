@@ -140,7 +140,6 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 		println(query)
 		ds, err := c.Prepare(query)
 		if err != nil {
-			println("FOO1")
 			return nil, err
 		}
 		s := ds.(*SQLiteStmt)
