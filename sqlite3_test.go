@@ -591,9 +591,9 @@ func TestExecer(t *testing.T) {
 
 	_, err = db.Exec(`
 	create table foo (id integer);
-	insert into foo values(1);
-	insert into foo values(2);
-	insert into foo values(3);
+	insert into foo(id) values(1);
+	insert into foo(id) values(2);
+	insert into foo(id) values(3);
 	`)
 	if err != nil {
 		t.Error("Failed to call db.Exec:", err)
@@ -614,24 +614,26 @@ func TestQueryer(t *testing.T) {
 
 	rows, err := db.Query(`
 	create table foo (id integer);
-	insert into foo values(1);
-	insert into foo values(2);
-	insert into foo values(3);
+	insert into foo(id) values(?);
+	insert into foo(id) values(?);
+	insert into foo(id) values(?);
 	select id from foo order by id;
-	`)
+	`, 3, 2, 1)
 	if err != nil {
-		t.Error("Failed to call db.Exec:", err)
+		t.Error("Failed to call db.Query:", err)
 	}
 	defer rows.Close()
 	n := 1
-	for rows.Next() {
-		var id int
-		err = rows.Scan(&id)
-		if err != nil {
-			t.Error("Failed to db.Query:", err)
-		}
-		if id != n {
-			t.Error("Failed to db.Query: not matched results")
+	if rows != nil {
+		for rows.Next() {
+			var id int
+			err = rows.Scan(&id)
+			if err != nil {
+				t.Error("Failed to db.Query:", err)
+			}
+			if id != n {
+				t.Error("Failed to db.Query: not matched results")
+			}
 		}
 	}
 }

@@ -136,50 +136,48 @@ func (c *SQLiteConn) AutoCommit() bool {
 
 // Implements Execer
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+	var res driver.Result
 	for {
-		ds, err := c.Prepare(query)
+		s, err := c.Prepare(query)
 		if err != nil {
 			return nil, err
 		}
-		s := ds.(*SQLiteStmt)
 		na := s.NumInput()
-		res, err := s.Exec(args[:na])
-		args = args[na:]
-		if err != nil {
+		res, err = s.Exec(args[:na])
+		if err != nil && err != driver.ErrSkip {
 			s.Close()
 			return nil, err
 		}
-		if s.t == "" {
+		args = args[na:]
+		tail := s.(*SQLiteStmt).t
+		if tail == "" {
 			return res, nil
 		}
 		s.Close()
-		query = s.t
+		query = tail
 	}
 }
 
 // Implements Queryer
 func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	var rows driver.Rows
 	for {
-		ds, err := c.Prepare(query)
+		s, err := c.Prepare(query)
 		if err != nil {
 			return nil, err
 		}
-		s := ds.(*SQLiteStmt)
 		na := s.NumInput()
-		rows, err := s.Query(args[:na])
-		args = args[na:]
-		if err != nil {
+		rows, err = s.Query(args[:na])
+		if err != nil && err != driver.ErrSkip {
 			s.Close()
 			return nil, err
 		}
-		if s.t == "" {
+		args = args[na:]
+		tail := s.(*SQLiteStmt).t
+		if tail == "" {
 			return rows, nil
 		}
-		if rows != nil {
-			rows.Close()
-		}
-		s.Close()
-		query = s.t
+		query = tail
 	}
 }
 
@@ -418,6 +416,9 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 
 // Close the rows.
 func (rc *SQLiteRows) Close() error {
+	if rc.s.closed {
+		return nil
+	}
 	rv := C.sqlite3_reset(rc.s.s)
 	if rv != C.SQLITE_OK {
 		return ErrNo(rv)
