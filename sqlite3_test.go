@@ -591,10 +591,10 @@ func TestExecer(t *testing.T) {
 
 	_, err = db.Exec(`
 	create table foo (id integer);
-	insert into foo(id) values(1);
-	insert into foo(id) values(2);
-	insert into foo(id) values(3);
-	`)
+	insert into foo(id) values(?);
+	insert into foo(id) values(?);
+	insert into foo(id) values(?);
+	`, 1, 2, 3)
 	if err != nil {
 		t.Error("Failed to call db.Exec:", err)
 	}
@@ -612,8 +612,14 @@ func TestQueryer(t *testing.T) {
 	defer os.Remove(tempFilename)
 	defer db.Close()
 
-	rows, err := db.Query(`
+	_, err = db.Exec(`
 	create table foo (id integer);
+	`)
+	if err != nil {
+		t.Error("Failed to call db.Query:", err)
+	}
+
+	rows, err := db.Query(`
 	insert into foo(id) values(?);
 	insert into foo(id) values(?);
 	insert into foo(id) values(?);
