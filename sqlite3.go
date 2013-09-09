@@ -136,14 +136,13 @@ func (c *SQLiteConn) AutoCommit() bool {
 
 // Implements Execer
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	var res driver.Result
 	for {
 		s, err := c.Prepare(query)
 		if err != nil {
 			return nil, err
 		}
 		na := s.NumInput()
-		res, err = s.Exec(args[:na])
+		res, err := s.Exec(args[:na])
 		if err != nil && err != driver.ErrSkip {
 			s.Close()
 			return nil, err
@@ -160,14 +159,13 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 
 // Implements Queryer
 func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	var rows driver.Rows
 	for {
 		s, err := c.Prepare(query)
 		if err != nil {
 			return nil, err
 		}
 		na := s.NumInput()
-		rows, err = s.Query(args[:na])
+		rows, err := s.Query(args[:na])
 		if err != nil && err != driver.ErrSkip {
 			s.Close()
 			return nil, err
@@ -177,6 +175,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 		if tail == "" {
 			return rows, nil
 		}
+		s.Close()
 		query = tail
 	}
 }
@@ -444,7 +443,11 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 	if rv != C.SQLITE_ROW {
-		return ErrNo(rv)
+		rv = C.sqlite3_reset(rc.s.s)
+		if rv != C.SQLITE_OK {
+			return ErrNo(rv)
+		}
+		return nil
 	}
 
 	if rc.decltype == nil {
