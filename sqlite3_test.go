@@ -590,13 +590,49 @@ func TestExecer(t *testing.T) {
 	defer db.Close()
 
 	_, err = db.Exec(`
-	create table foo (id integer)");
+	create table foo (id integer);
 	insert into foo values(1);
 	insert into foo values(2);
 	insert into foo values(3);
 	`)
 	if err != nil {
 		t.Error("Failed to call db.Exec:", err)
+	}
+	if err != nil {
+		t.Error("Failed to call res.RowsAffected:", err)
+	}
+}
+
+func TestQueryer(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	rows, err := db.Query(`
+	create table foo (id integer);
+	insert into foo values(1);
+	insert into foo values(2);
+	insert into foo values(3);
+	select id from foo order by id;
+	`)
+	if err != nil {
+		t.Error("Failed to call db.Exec:", err)
+	}
+	defer rows.Close()
+	n := 1
+	for rows.Next() {
+		var id int
+		err = rows.Scan(&id)
+		if err != nil {
+			t.Error("Failed to db.Query:", err)
+		}
+		if id != n {
+			t.Error("Failed to db.Query: not matched results")
+		}
 	}
 }
 
