@@ -145,8 +145,8 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 		na := s.NumInput()
 		res, err := s.Exec(args[:na])
 		args = args[na:]
-		s.Close()
 		if err != nil {
+			s.Close()
 			return nil, err
 		}
 		if s.t == "" {
@@ -168,8 +168,8 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 		na := s.NumInput()
 		rows, err := s.Query(args[:na])
 		args = args[na:]
-		s.Close()
 		if err != nil {
+			s.Close()
 			return nil, err
 		}
 		if s.t == "" {
