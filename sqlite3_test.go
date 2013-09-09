@@ -579,3 +579,24 @@ func TestTransaction(t *testing.T) {
 		t.Fatal("Expected failure to query")
 	}
 }
+
+func TestExecer(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	_, err = db.Exec(`
+	create table foo (id integer)");
+	insert into foo values(1);
+	insert into foo values(2);
+	insert into foo values(3);
+	`)
+	if err != nil {
+		t.Error("Failed to call db.Exec:", err)
+	}
+}
+

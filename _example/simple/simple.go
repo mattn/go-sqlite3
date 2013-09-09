@@ -17,16 +17,14 @@ func main() {
 	}
 	defer db.Close()
 
-	sqls := []string{
-		"create table foo (id integer not null primary key, name text)",
-		"delete from foo",
-	}
-	for _, sql := range sqls {
-		_, err = db.Exec(sql)
-		if err != nil {
-			log.Printf("%q: %s\n", err, sql)
-			return
-		}
+	sql := `
+	create table foo (id integer not null primary key, name text);
+	delete from foo;
+	`
+	_, err = db.Exec(sql)
+	if err != nil {
+		log.Printf("%q: %s\n", err, sql)
+		return
 	}
 
 	tx, err := db.Begin()

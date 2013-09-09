@@ -129,8 +129,34 @@ func (tx *SQLiteTx) Rollback() error {
 	return nil
 }
 
+// AutoCommit return which currently auto commit or not.
 func (c *SQLiteConn) AutoCommit() bool {
 	return int(C.sqlite3_get_autocommit(c.db)) != 0
+}
+
+// Implements Execer
+func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+	for {
+		println(query)
+		ds, err := c.Prepare(query)
+		if err != nil {
+			println("FOO1")
+			return nil, err
+		}
+		s := ds.(*SQLiteStmt)
+		na := s.NumInput()
+		res, err := s.Exec(args[:na])
+		args = args[na:]
+		s.Close()
+		if err != nil {
+			return nil, err
+		}
+		if s.t == "" {
+			return res, nil
+		}
+		s.Close()
+		query = s.t
+	}
 }
 
 func (c *SQLiteConn) exec(cmd string) error {
@@ -244,14 +270,14 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 	pquery := C.CString(query)
 	defer C.free(unsafe.Pointer(pquery))
 	var s *C.sqlite3_stmt
-	var perror *C.char
-	rv := C.sqlite3_prepare_v2(c.db, pquery, -1, &s, &perror)
+	var tail *C.char
+	rv := C.sqlite3_prepare_v2(c.db, pquery, -1, &s, &tail)
 	if rv != C.SQLITE_OK {
 		return nil, ErrNo(rv)
 	}
 	var t string
-	if perror != nil && C.strlen(perror) > 0 {
-		t = C.GoString(perror)
+	if tail != nil && C.strlen(tail) > 0 {
+		t = strings.TrimSpace(C.GoString(tail))
 	}
 	return &SQLiteStmt{c: c, s: s, t: t}, nil
 }
