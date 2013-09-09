@@ -137,7 +137,6 @@ func (c *SQLiteConn) AutoCommit() bool {
 // Implements Execer
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	for {
-		println(query)
 		ds, err := c.Prepare(query)
 		if err != nil {
 			return nil, err
@@ -153,6 +152,30 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 		if s.t == "" {
 			return res, nil
 		}
+		s.Close()
+		query = s.t
+	}
+}
+
+// Implements Queryer
+func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	for {
+		ds, err := c.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		s := ds.(*SQLiteStmt)
+		na := s.NumInput()
+		rows, err := s.Query(args[:na])
+		args = args[na:]
+		s.Close()
+		if err != nil {
+			return nil, err
+		}
+		if s.t == "" {
+			return rows, nil
+		}
+		rows.Close()
 		s.Close()
 		query = s.t
 	}
