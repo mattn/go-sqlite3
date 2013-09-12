@@ -580,6 +580,52 @@ func TestTransaction(t *testing.T) {
 	}
 }
 
+func TestWAL(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+
+	defer os.Remove(tempFilename)
+	defer db.Close()
+	if _, err = db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+		t.Fatal("Failed to Exec PRAGMA journal_mode:", err)
+	}
+	if _, err = db.Exec("PRAGMA locking_mode=EXCLUSIVE;"); err != nil {
+		t.Fatal("Failed to Exec PRAGMA locking_mode:", err)
+	}
+	if _, err = db.Exec("CREATE TABLE test (id SERIAL, user TEXT NOT NULL, name TEXT NOT NULL);"); err != nil {
+		t.Fatal("Failed to Exec CREATE TABLE:", err)
+	}
+	if _, err = db.Exec("INSERT INTO test (user, name) VALUES ('user','name');"); err != nil {
+		t.Fatal("Failed to Exec INSERT:", err)
+	}
+
+	trans, err := db.Begin()
+	if err != nil {
+		t.Fatal("Failed to Begin:", err)
+	}
+	s, err := trans.Prepare("INSERT INTO test (user, name) VALUES (?, ?);")
+	if err != nil {
+		t.Fatal("Failed to Prepare:", err)
+	}
+
+	var count int
+	if err = trans.QueryRow("SELECT count(user) FROM test;").Scan(&count); err != nil {
+		t.Fatal("Failed to QueryRow:", err)
+	}
+	if _, err = s.Exec("bbbb", "aaaa"); err != nil {
+		t.Fatal("Failed to Exec prepared statement:", err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal("Failed to Close prepared statement:", err)
+	}
+	if err = trans.Commit(); err != nil {
+		t.Fatal("Failed to Commit:", err)
+	}
+}
+
 // TODO: Execer & Queryer currently disabled
 // https://github.com/mattn/go-sqlite3/issues/82
 //func TestExecer(t *testing.T) {
@@ -645,4 +691,3 @@ func TestTransaction(t *testing.T) {
 //		}
 //	}
 //}
-
