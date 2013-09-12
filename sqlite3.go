@@ -134,65 +134,67 @@ func (c *SQLiteConn) AutoCommit() bool {
 	return int(C.sqlite3_get_autocommit(c.db)) != 0
 }
 
-// Implements Execer
-func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	tx, err := c.Begin()
-	if err != nil {
-		return nil, err
-	}
-	for {
-		s, err := c.Prepare(query)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		na := s.NumInput()
-		res, err := s.Exec(args[:na])
-		if err != nil && err != driver.ErrSkip {
-			tx.Rollback()
-			s.Close()
-			return nil, err
-		}
-		args = args[na:]
-		tail := s.(*SQLiteStmt).t
-		if tail == "" {
-			tx.Commit()
-			return res, nil
-		}
-		s.Close()
-		query = tail
-	}
-}
-
-// Implements Queryer
-func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	tx, err := c.Begin()
-	if err != nil {
-		return nil, err
-	}
-	for {
-		s, err := c.Prepare(query)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		na := s.NumInput()
-		rows, err := s.Query(args[:na])
-		if err != nil && err != driver.ErrSkip {
-			tx.Rollback()
-			s.Close()
-			return nil, err
-		}
-		args = args[na:]
-		tail := s.(*SQLiteStmt).t
-		if tail == "" {
-			tx.Commit()
-			return rows, nil
-		}
-		s.Close()
-		query = tail
-	}
-}
+// TODO: Execer & Queryer currently disabled
+// https://github.com/mattn/go-sqlite3/issues/82
+//// Implements Execer
+//func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+//	tx, err := c.Begin()
+//	if err != nil {
+//		return nil, err
+//	}
+//	for {
+//		s, err := c.Prepare(query)
+//		if err != nil {
+//			tx.Rollback()
+//			return nil, err
+//		}
+//		na := s.NumInput()
+//		res, err := s.Exec(args[:na])
+//		if err != nil && err != driver.ErrSkip {
+//			tx.Rollback()
+//			s.Close()
+//			return nil, err
+//		}
+//		args = args[na:]
+//		tail := s.(*SQLiteStmt).t
+//		if tail == "" {
+//			tx.Commit()
+//			return res, nil
+//		}
+//		s.Close()
+//		query = tail
+//	}
+//}
+//
+//// Implements Queryer
+//func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+//	tx, err := c.Begin()
+//	if err != nil {
+//		return nil, err
+//	}
+//	for {
+//		s, err := c.Prepare(query)
+//		if err != nil {
+//			tx.Rollback()
+//			return nil, err
+//		}
+//		na := s.NumInput()
+//		rows, err := s.Query(args[:na])
+//		if err != nil && err != driver.ErrSkip {
+//			tx.Rollback()
+//			s.Close()
+//			return nil, err
+//		}
+//		args = args[na:]
+//		tail := s.(*SQLiteStmt).t
+//		if tail == "" {
+//			tx.Commit()
+//			return rows, nil
+//		}
+//		s.Close()
+//		query = tail
+//	}
+//}
 
 func (c *SQLiteConn) exec(cmd string) error {
 	pcmd := C.CString(cmd)
