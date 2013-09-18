@@ -1,6 +1,7 @@
 package sqlite3
 
 import (
+	"./sqltest"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -624,6 +625,16 @@ func TestWAL(t *testing.T) {
 	if err = trans.Commit(); err != nil {
 		t.Fatal("Failed to Commit:", err)
 	}
+}
+
+func TestSuite(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	sqltest.RunTests(t, db, sqltest.SQLITE)
 }
 
 // TODO: Execer & Queryer currently disabled
