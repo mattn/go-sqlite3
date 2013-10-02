@@ -5,6 +5,10 @@ package sqlite3
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __CYGWIN__
+# include <errno.h>
+#endif
+
 #ifndef SQLITE_OPEN_READWRITE
 # define SQLITE_OPEN_READWRITE 0
 #endif
