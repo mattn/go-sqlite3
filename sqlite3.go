@@ -493,6 +493,10 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			dest[i] = float64(C.sqlite3_column_double(rc.s.s, C.int(i)))
 		case C.SQLITE_BLOB:
 			p := C.sqlite3_column_blob(rc.s.s, C.int(i))
+			if p == nil {
+				dest[i] = nil
+				continue
+			}
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
 			switch dest[i].(type) {
 			case sql.RawBytes:
