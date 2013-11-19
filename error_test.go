@@ -27,7 +27,7 @@ func TestFailures(t *testing.T) {
 	if err == nil {
 		_, err = db.Exec("drop table foo")
 	}
-	if err != ErrNotADB {
+	if err.Code != ErrNotADB {
 		t.Error("wrong error code for corrupted DB")
 	}
 	if err.Error() == "" {
