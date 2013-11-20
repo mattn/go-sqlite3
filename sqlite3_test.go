@@ -2,9 +2,11 @@ package sqlite3
 
 import (
 	"./sqltest"
+	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -627,7 +629,124 @@ func TestWAL(t *testing.T) {
 	}
 }
 
+// Inspired from go-mysql driver tests
+func TestDriverValues(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var typeTests = []struct {
+		def  string
+		sval string
+		val  interface{}
+	}{
+		{"text", "null", nil},
+		{"int", "5", int64(5)},
+		{"real", "5", float64(5)},
+		{"blob", "'blob'", []byte("blob")},
+		{"text", "'text'", []byte("text")},
+	}
+
+	for _, tt := range typeTests {
+		for _, mode := range []string{"string", "arg", "stmt"} {
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec("drop table if exists gotest"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec(fmt.Sprintf("create temporary table gotest (x %s)", tt.def)); err != nil {
+				t.Fatal(err)
+			}
+
+			var r *sql.Rows
+
+			switch mode {
+			case "string":
+				if _, err = tx.Exec(fmt.Sprintf("insert into gotest values (%s)", tt.sval)); err != nil {
+					t.Fatal(err)
+				}
+				if r, err = tx.Query("select * from gotest"); err != nil {
+					t.Fatal(err)
+				}
+			case "arg":
+				if _, err = tx.Exec("insert into gotest values (?)", tt.val); err != nil {
+					t.Fatal(err)
+				}
+				if r, err = tx.Query("select * from gotest"); err != nil {
+					t.Fatal(err)
+				}
+			case "stmt":
+				var st1, st2 *sql.Stmt
+				if st1, err = tx.Prepare("insert into gotest values (?)"); err != nil {
+					t.Fatal(err)
+				}
+				if st2, err = tx.Prepare("select * from gotest"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = st1.Exec(tt.val); err != nil {
+					t.Fatal(err)
+				}
+				if r, err = st2.Query(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if !r.Next() {
+				if err = r.Err(); err != nil {
+					t.Fatal(err)
+				}
+				t.Error("expected row")
+			}
+
+			var driverVal interface{}
+			if err := r.Scan(&driverVal); err != nil {
+				t.Fatal(err)
+			}
+
+			switch want := tt.val.(type) {
+			case []byte:
+				got, ok := driverVal.([]byte)
+				if !ok || !bytes.Equal(got, want) {
+					t.Errorf("%v: got %v, want %v", tt, got, want)
+				}
+			case nil:
+				if driverVal != nil {
+					t.Errorf("%v: got %v, want %v", tt, driverVal, want)
+				}
+			case int64:
+				got, ok := driverVal.(int64)
+				if !ok || !(got == want) {
+					t.Errorf("%v: got %v, want %v", tt, got, want)
+				}
+			case float64:
+				got, ok := driverVal.(float64)
+				if !ok || !(got == want) {
+					t.Errorf("%v: got %v, want %v", tt, got, want)
+				}
+			}
+
+			if r.Next() {
+				t.Fatal("expected exactly 1 row")
+			}
+			if err = r.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err = tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 func TestSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode")
+	}
+
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
