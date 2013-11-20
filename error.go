@@ -4,6 +4,12 @@ import "C"
 
 type ErrNo int
 
+type Error struct {
+	Code ErrNo  /* The error code returned by SQLite */
+	err  string /* The error string returned by sqlite3_errmsg(),
+	this usually contains more specific details. */
+}
+
 // result codes from http://www.sqlite.org/c3ref/c_abort.html
 var (
 	ErrError      error = ErrNo(1)  /* SQL error or missing database */
@@ -37,5 +43,13 @@ var (
 )
 
 func (err ErrNo) Error() string {
-	return errorString(err)
+	return Error{Code: err}.Error()
+}
+
+func (err Error) Error() string {
+	if err.err != "" {
+		return err.err
+	} else {
+		return errorString(err)
+	}
 }
