@@ -498,23 +498,18 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 				dest[i] = nil
 				continue
 			}
-			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
-			switch dest[i].(type) {
-			case sql.RawBytes:
-				dest[i] = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
-			default:
-				slice := make([]byte, n)
-				copy(slice[:], (*[1 << 30]byte)(unsafe.Pointer(p))[0:n])
-				dest[i] = slice
-			}
+			n := C.sqlite3_column_bytes(rc.s.s, C.int(i))
+			dest[i] = C.GoBytes(unsafe.Pointer(p), n)
 		case C.SQLITE_NULL:
 			dest[i] = nil
 		case C.SQLITE_TEXT:
 			var err error
-			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime":
+				s := C.GoString(
+					(*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))),
+				)
 				for _, format := range SQLiteTimestampFormats {
 					if dest[i], err = time.Parse(format, s); err == nil {
 						break
@@ -525,7 +520,8 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 					dest[i] = time.Time{}
 				}
 			default:
-				dest[i] = s
+				charptr := (*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i))))
+				dest[i] = C.GoBytes(unsafe.Pointer(charptr), C.int(C.strlen(charptr)))
 			}
 
 		}
