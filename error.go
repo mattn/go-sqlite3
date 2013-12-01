@@ -49,7 +49,6 @@ func (err ErrNo) Error() string {
 func (err Error) Error() string {
 	if err.err != "" {
 		return err.err
-	} else {
-		return errorString(err)
 	}
+	return errorString(err)
 }
