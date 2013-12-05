@@ -525,7 +525,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 					dest[i] = time.Time{}
 				}
 			default:
-				dest[i] = s
+				dest[i] = []byte(s)
 			}
 
 		}
