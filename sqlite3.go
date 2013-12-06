@@ -115,6 +115,14 @@ type SQLiteRows struct {
 	nc       int
 	cols     []string
 	decltype []string
+
+	// bufs[i] holds a copy of blob and text data for column i and
+	// is re-used on each row. the []byte is given to database/sql
+	// which can hand it out via RawBytes. If somebody misuses
+	// RawBytes, it's better they retain Go-managed memory (this
+	// copy) rather than memory from sqlite.
+	// TODO: recycle any non-empty buffers on close, for less garbage.
+	bufs [][]byte
 }
 
 // Commit transaction.
@@ -404,7 +412,7 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
-	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil}, nil
+	return &SQLiteRows{s: s, nc: int(C.sqlite3_column_count(s.s))}, nil
 }
 
 // Return last inserted ID.
@@ -479,6 +487,14 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	}
 
 	for i := range dest {
+		setDestBytes := func(p unsafe.Pointer, n int) {
+			unsafeSlice := (*[1 << 30]byte)(unsafe.Pointer(p))[0:n] // C memory
+			for len(rc.bufs) < i+1 {
+				rc.bufs = append(rc.bufs, nil)
+			}
+			rc.bufs[i] = append(rc.bufs[i], unsafeSlice...)
+			dest[i] = rc.bufs[i]
+		}
 		switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
 		case C.SQLITE_INTEGER:
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
@@ -499,22 +515,14 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 				continue
 			}
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
-			switch dest[i].(type) {
-			case sql.RawBytes:
-				dest[i] = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
-			default:
-				slice := make([]byte, n)
-				copy(slice[:], (*[1 << 30]byte)(unsafe.Pointer(p))[0:n])
-				dest[i] = slice
-			}
+			setDestBytes(unsafe.Pointer(p), n)
 		case C.SQLITE_NULL:
 			dest[i] = nil
 		case C.SQLITE_TEXT:
 			var err error
-			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
-
 			switch rc.decltype[i] {
 			case "timestamp", "datetime":
+				s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
 				for _, format := range SQLiteTimestampFormats {
 					if dest[i], err = time.Parse(format, s); err == nil {
 						break
@@ -525,9 +533,14 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 					dest[i] = time.Time{}
 				}
 			default:
-				dest[i] = []byte(s)
+				p := C.sqlite3_column_blob(rc.s.s, C.int(i))
+				if p == nil {
+					dest[i] = nil
+					continue
+				}
+				n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
+				setDestBytes(unsafe.Pointer(p), n)
 			}
-
 		}
 	}
 	return nil
