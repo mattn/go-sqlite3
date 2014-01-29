@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+func TestSimpleError(t *testing.T) {
+	if ErrWarning.Error() != "" {
+		t.Error("wrong error code for corrupted DB")
+	}
+}
+
 func TestCorruptDbErrors(t *testing.T) {
 	dirName, err := ioutil.TempDir("", "sqlite3")
 	if err != nil {
