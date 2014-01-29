@@ -9,8 +9,9 @@ import (
 )
 
 func TestSimpleError(t *testing.T) {
-	if ErrWarning.Error() != "" {
-		t.Error("wrong error code for corrupted DB")
+	e := ErrError.Error()
+	if e != "SQL logic error or missing database" {
+		t.Error("wrong error code:" + e)
 	}
 }
 
