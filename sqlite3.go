@@ -399,7 +399,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 	return nil
 }
 
-// Query the statment with arguments. Return records.
+// Query the statement with arguments. Return records.
 func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
