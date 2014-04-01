@@ -117,7 +117,7 @@ var (
 	ErrConstraintUnique       = ErrConstraint.Extend(8)
 	ErrConstraintVTab         = ErrConstraint.Extend(9)
 	ErrConstraintRowId        = ErrConstraint.Extend(10)
-	ErrNoticeRecoverWal       = ErrNotice.Extend(1)
+	ErrNoticeRecoverWAL       = ErrNotice.Extend(1)
 	ErrNoticeRecoverRollback  = ErrNotice.Extend(2)
 	ErrWarningAutoIndex       = ErrWarning.Extend(1)
 )
