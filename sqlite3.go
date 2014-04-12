@@ -56,6 +56,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 	"unsafe"
@@ -87,7 +88,13 @@ type SQLiteDriver struct {
 
 // Conn struct.
 type SQLiteConn struct {
-	db *C.sqlite3
+	db  *C.sqlite3
+	cfg *config
+}
+
+type config struct {
+	params map[string]string
+	loc    *time.Location
 }
 
 // Tx struct.
@@ -259,7 +266,12 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, Error{Code: ErrNo(rv)}
 	}
 
-	conn := &SQLiteConn{db}
+	conn := &SQLiteConn{db: db}
+
+	var err error
+	if conn.cfg, err = parseDSN(dsn); err != nil {
+		return nil, err
+	}
 
 	if len(d.Extensions) > 0 {
 		rv = C.sqlite3_enable_load_extension(db, 1)
@@ -484,7 +496,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
 			case "timestamp", "datetime":
-				dest[i] = time.Unix(val, 0)
+				dest[i] = time.Unix(val, 0).In(rc.s.c.cfg.loc)
 			case "boolean":
 				dest[i] = val > 0
 			default:
@@ -515,15 +527,17 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime":
+				var t time.Time
 				for _, format := range SQLiteTimestampFormats {
-					if dest[i], err = time.Parse(format, s); err == nil {
+					if t, err = time.Parse(format, s); err == nil {
 						break
 					}
 				}
 				if err != nil {
 					// The column is a time value, so return the zero time on parse failure.
-					dest[i] = time.Time{}
+					t = time.Time{}
 				}
+				dest[i] = t.In(rc.s.c.cfg.loc)
 			default:
 				dest[i] = []byte(s)
 			}
@@ -531,4 +545,51 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		}
 	}
 	return nil
+}
+
+func parseDSN(dsn string) (cfg *config, err error) {
+	cfg = new(config)
+	for i := 0; i < len(dsn); i++ {
+		if dsn[i] == '?' {
+			if err = parseDSNParams(cfg, dsn[i+1:]); err != nil {
+				return
+			}
+			break
+		}
+	}
+	if cfg.loc == nil {
+		cfg.loc = time.UTC
+	}
+	return
+}
+
+func parseDSNParams(cfg *config, params string) (err error) {
+	for _, v := range strings.Split(params, "&") {
+		param := strings.SplitN(v, "=", 2)
+		if len(param) != 2 {
+			continue
+		}
+
+		// cfg params
+		switch value := param[1]; param[0] {
+		// Time Location
+		case "loc":
+			if value, err = url.QueryUnescape(value); err != nil {
+				return
+			}
+			cfg.loc, err = time.LoadLocation(value)
+			if err != nil {
+				return
+			}
+		default:
+			// lazy init
+			if cfg.params == nil {
+				cfg.params = make(map[string]string)
+			}
+			if cfg.params[param[0]], err = url.QueryUnescape(value); err != nil {
+				return
+			}
+		}
+	}
+	return
 }
