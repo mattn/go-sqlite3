@@ -26,7 +26,11 @@ func (c *SQLiteConn) Backup(dest string, conn *SQLiteConn, src string) (*Backup,
 }
 
 func (b *Backup) Step(p int) error {
-	return Error{Code: ErrNo(C.sqlite3_backup_step(b.b, C.int(p)))}
+	ret := C.sqlite3_backup_step(b.b, C.int(p))
+	if ret != 0 {
+		return Error{Code: ErrNo(ret)}
+	}
+	return nil
 }
 
 func (b *Backup) Remaining() int {
@@ -38,5 +42,9 @@ func (b *Backup) PageCount() int {
 }
 
 func (b *Backup) Finish() error {
-	return Error{Code: ErrNo(C.sqlite3_backup_finish(b.b))}
+	ret := C.sqlite3_backup_finish(b.b)
+	if ret != 0 {
+		return Error{Code: ErrNo(ret)}
+	}
+	return nil
 }
