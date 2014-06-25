@@ -139,8 +139,10 @@ func (c *SQLiteConn) AutoCommit() bool {
 }
 
 func (c *SQLiteConn) lastError() Error {
-	return Error{Code: ErrNo(C.sqlite3_errcode(c.db)),
-		err: C.GoString(C.sqlite3_errmsg(c.db)),
+	return Error{
+		Code:         ErrNo(C.sqlite3_errcode(c.db)),
+		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(c.db)),
+		err:          C.GoString(C.sqlite3_errmsg(c.db)),
 	}
 }
 
