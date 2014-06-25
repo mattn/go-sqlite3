@@ -144,52 +144,55 @@ func (c *SQLiteConn) lastError() Error {
 
 // Implements Execer
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-       if len(args) == 0 {
-               return c.exec(query)
-       }
+	if len(args) == 0 {
+		return c.exec(query)
+	}
 
-       for {
-               s, err := c.Prepare(query)
-               if err != nil {
-                       return nil, err
-               }
-               na := s.NumInput()
-               res, err := s.Exec(args[:na])
-               if err != nil && err != driver.ErrSkip {
-                       s.Close()
-                       return nil, err
-               }
-               args = args[na:]
-               tail := s.(*SQLiteStmt).t
-               if tail == "" {
-                       return res, nil
-               }
-               s.Close()
-               query = tail
-       }
+	for {
+		s, err := c.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		var res driver.Result
+		if s.(*SQLiteStmt).s != nil {
+			na := s.NumInput()
+			res, err = s.Exec(args[:na])
+			if err != nil && err != driver.ErrSkip {
+				s.Close()
+				return nil, err
+			}
+			args = args[na:]
+		}
+		tail := s.(*SQLiteStmt).t
+		if tail == "" {
+			return res, nil
+		}
+		s.Close()
+		query = tail
+	}
 }
 
 // Implements Queryer
 func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-       for {
-               s, err := c.Prepare(query)
-               if err != nil {
-                       return nil, err
-               }
-               na := s.NumInput()
-               rows, err := s.Query(args[:na])
-               if err != nil && err != driver.ErrSkip {
-                       s.Close()
-                       return nil, err
-               }
-               args = args[na:]
-               tail := s.(*SQLiteStmt).t
-               if tail == "" {
-                       return rows, nil
-               }
-               s.Close()
-               query = tail
-       }
+	for {
+		s, err := c.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		na := s.NumInput()
+		rows, err := s.Query(args[:na])
+		if err != nil && err != driver.ErrSkip {
+			s.Close()
+			return nil, err
+		}
+		args = args[na:]
+		tail := s.(*SQLiteStmt).t
+		if tail == "" {
+			return rows, nil
+		}
+		s.Close()
+		query = tail
+	}
 }
 
 func (c *SQLiteConn) exec(cmd string) (driver.Result, error) {

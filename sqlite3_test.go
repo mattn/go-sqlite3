@@ -1,7 +1,6 @@
 package sqlite3
 
 import (
-	"./sqltest"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -9,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"./sqltest"
 )
 
 func TempFilename() string {
@@ -639,29 +640,26 @@ func TestSuite(t *testing.T) {
 
 // TODO: Execer & Queryer currently disabled
 // https://github.com/mattn/go-sqlite3/issues/82
-//func TestExecer(t *testing.T) {
-//	tempFilename := TempFilename()
-//	db, err := sql.Open("sqlite3", tempFilename)
-//	if err != nil {
-//		t.Fatal("Failed to open database:", err)
-//	}
-//	defer os.Remove(tempFilename)
-//	defer db.Close()
-//
-//	_, err = db.Exec(`
-//	create table foo (id integer);
-//	insert into foo(id) values(?);
-//	insert into foo(id) values(?);
-//	insert into foo(id) values(?);
-//	`, 1, 2, 3)
-//	if err != nil {
-//		t.Error("Failed to call db.Exec:", err)
-//	}
-//	if err != nil {
-//		t.Error("Failed to call res.RowsAffected:", err)
-//	}
-//}
-//
+func TestExecer(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	_, err = db.Exec(`
+       create table foo (id integer); -- one comment
+       insert into foo(id) values(?);
+       insert into foo(id) values(?);
+       insert into foo(id) values(?); -- another comment
+       `, 1, 2, 3)
+	if err != nil {
+		t.Error("Failed to call db.Exec:", err)
+	}
+}
+
 //func TestQueryer(t *testing.T) {
 //	tempFilename := TempFilename()
 //	db, err := sql.Open("sqlite3", tempFilename)
