@@ -1,7 +1,6 @@
 package sqlite3
 
 import (
-	"./sqltest"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -9,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"./sqltest"
 )
 
 func TempFilename() string {
@@ -624,6 +624,44 @@ func TestWAL(t *testing.T) {
 	}
 	if err = trans.Commit(); err != nil {
 		t.Fatal("Failed to Commit:", err)
+	}
+}
+
+func TestRawBytes(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	exec := func(sql string, args ...interface{}) sql.Result {
+		res, err := db.Exec(sql, args...)
+		if err != nil {
+			t.Fatalf("Error running %q: %v", sql, err)
+		}
+		return res
+	}
+
+	exec("CREATE TABLE test (name VARCHAR(10), stuff BLOB)")
+	const want, want2 = "foo", "\xff\xff\xff"
+	exec("INSERT INTO test (name, stuff) VALUES (?, ?)", want, want2)
+	var col1, col2 sql.RawBytes
+	rows, err := db.Query("select name, stuff from test")
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("expected a row")
+	}
+	if err := rows.Scan(&col1, &col2); err != nil {
+		t.Fatalf("Rows.Scan: %v", err)
+	}
+	if got := string(col1); got != want {
+		t.Errorf("column 1 = %q; want %q", got, want)
+	}
+	if got := string(col2); got != want2 {
+		t.Errorf("column 2 = %q; want %q", got, want2)
 	}
 }
 
