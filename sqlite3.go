@@ -119,18 +119,14 @@ type SQLiteRows struct {
 
 // Commit transaction.
 func (tx *SQLiteTx) Commit() error {
-	if err := tx.c.exec("COMMIT"); err != nil {
-		return err
-	}
-	return nil
+	_, err := tx.c.exec("COMMIT")
+	return err
 }
 
 // Rollback transaction.
 func (tx *SQLiteTx) Rollback() error {
-	if err := tx.c.exec("ROLLBACK"); err != nil {
-		return err
-	}
-	return nil
+	_, err := tx.c.exec("ROLLBACK")
+	return err
 }
 
 // AutoCommit return which currently auto commit or not.
@@ -146,81 +142,72 @@ func (c *SQLiteConn) lastError() Error {
 	}
 }
 
-// TODO: Execer & Queryer currently disabled
-// https://github.com/mattn/go-sqlite3/issues/82
-//// Implements Execer
-//func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-//	tx, err := c.Begin()
-//	if err != nil {
-//		return nil, err
-//	}
-//	for {
-//		s, err := c.Prepare(query)
-//		if err != nil {
-//			tx.Rollback()
-//			return nil, err
-//		}
-//		na := s.NumInput()
-//		res, err := s.Exec(args[:na])
-//		if err != nil && err != driver.ErrSkip {
-//			tx.Rollback()
-//			s.Close()
-//			return nil, err
-//		}
-//		args = args[na:]
-//		tail := s.(*SQLiteStmt).t
-//		if tail == "" {
-//			tx.Commit()
-//			return res, nil
-//		}
-//		s.Close()
-//		query = tail
-//	}
-//}
-//
-//// Implements Queryer
-//func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-//	tx, err := c.Begin()
-//	if err != nil {
-//		return nil, err
-//	}
-//	for {
-//		s, err := c.Prepare(query)
-//		if err != nil {
-//			tx.Rollback()
-//			return nil, err
-//		}
-//		na := s.NumInput()
-//		rows, err := s.Query(args[:na])
-//		if err != nil && err != driver.ErrSkip {
-//			tx.Rollback()
-//			s.Close()
-//			return nil, err
-//		}
-//		args = args[na:]
-//		tail := s.(*SQLiteStmt).t
-//		if tail == "" {
-//			tx.Commit()
-//			return rows, nil
-//		}
-//		s.Close()
-//		query = tail
-//	}
-//}
+// Implements Execer
+func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+       if len(args) == 0 {
+               return c.exec(query)
+       }
 
-func (c *SQLiteConn) exec(cmd string) error {
+       for {
+               s, err := c.Prepare(query)
+               if err != nil {
+                       return nil, err
+               }
+               na := s.NumInput()
+               res, err := s.Exec(args[:na])
+               if err != nil && err != driver.ErrSkip {
+                       s.Close()
+                       return nil, err
+               }
+               args = args[na:]
+               tail := s.(*SQLiteStmt).t
+               if tail == "" {
+                       return res, nil
+               }
+               s.Close()
+               query = tail
+       }
+}
+
+// Implements Queryer
+func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+       for {
+               s, err := c.Prepare(query)
+               if err != nil {
+                       return nil, err
+               }
+               na := s.NumInput()
+               rows, err := s.Query(args[:na])
+               if err != nil && err != driver.ErrSkip {
+                       s.Close()
+                       return nil, err
+               }
+               args = args[na:]
+               tail := s.(*SQLiteStmt).t
+               if tail == "" {
+                       return rows, nil
+               }
+               s.Close()
+               query = tail
+       }
+}
+
+func (c *SQLiteConn) exec(cmd string) (driver.Result, error) {
 	pcmd := C.CString(cmd)
 	defer C.free(unsafe.Pointer(pcmd))
 	rv := C.sqlite3_exec(c.db, pcmd, nil, nil, nil)
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		return nil, c.lastError()
 	}
-	return nil
+	return &SQLiteResult{
+		int64(C._sqlite3_last_insert_rowid(c.db)),
+		int64(C._sqlite3_changes(c.db)),
+	}, nil
 }
 
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
-	if err := c.exec("BEGIN"); err != nil {
+	if _, err := c.exec("BEGIN"); err != nil {
 		return nil, err
 	}
 	return &SQLiteTx{c}, nil
