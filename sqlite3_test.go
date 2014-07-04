@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"./sqltest"
+	"./_sqltest"
 )
 
 func TempFilename() string {
