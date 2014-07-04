@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"./_sqltest"
+	"./sqlite3_test"
 )
 
 func TempFilename() string {
@@ -635,7 +635,7 @@ func TestSuite(t *testing.T) {
 	}
 	defer db.Close()
 
-	sqltest.RunTests(t, db, sqltest.SQLITE)
+	sqlite3_test.RunTests(t, db, sqlite3_test.SQLITE)
 }
 
 // TODO: Execer & Queryer currently disabled

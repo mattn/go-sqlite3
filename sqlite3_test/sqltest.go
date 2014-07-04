@@ -1,4 +1,4 @@
-package sqltest
+package sqlite3_test
 
 import (
 	"database/sql"
