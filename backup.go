@@ -13,6 +13,15 @@ type Backup struct {
 	b *C.sqlite3_backup
 }
 
+func IsDone(err error) bool {
+	sqlErr, ok := err.(Error)
+	if !ok {
+		return false
+	}
+
+	return sqlErr.Code == ErrDone
+}
+
 func (c *SQLiteConn) Backup(dest string, conn *SQLiteConn, src string) (*Backup, error) {
 	destptr := C.CString(dest)
 	defer C.free(unsafe.Pointer(destptr))
