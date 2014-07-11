@@ -45,7 +45,6 @@ var (
 	ErrNotADB     = ErrNo(26) /* File opened that is not a database file */
 	ErrNotice     = ErrNo(27) /* Notifications from sqlite3_log() */
 	ErrWarning    = ErrNo(28) /* Warnings from sqlite3_log() */
-	ErrDone       = ErrNo(101)
 )
 
 func (err ErrNo) Error() string {
