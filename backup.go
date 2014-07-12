@@ -25,12 +25,18 @@ func (c *SQLiteConn) Backup(dest string, conn *SQLiteConn, src string) (*Backup,
 	return nil, c.lastError()
 }
 
-func (b *Backup) Step(p int) error {
+// Backs up for one step. Calls the underlying `sqlite3_backup_step` function.
+// This function returns a boolean indicating if the backup is done and
+// an error signalling any other error. Done is returned if the underlying C
+// function returns SQLITE_DONE (Code 101)
+func (b *Backup) Step(p int) (bool, error) {
 	ret := C.sqlite3_backup_step(b.b, C.int(p))
-	if ret != 0 {
-		return Error{Code: ErrNo(ret)}
+	if ret == 101 {
+		return true, nil
+	} else if ret != 0 {
+		return false, Error{Code: ErrNo(ret)}
 	}
-	return nil
+	return false, nil
 }
 
 func (b *Backup) Remaining() int {
