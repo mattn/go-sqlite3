@@ -102,6 +102,7 @@ type SQLiteStmt struct {
 	s      *C.sqlite3_stmt
 	t      string
 	closed bool
+	cls    bool
 }
 
 // Result struct.
@@ -116,6 +117,7 @@ type SQLiteRows struct {
 	nc       int
 	cols     []string
 	decltype []string
+	cls      bool
 }
 
 // Commit transaction.
@@ -165,10 +167,10 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 			args = args[na:]
 		}
 		tail := s.(*SQLiteStmt).t
+		s.Close()
 		if tail == "" {
 			return res, nil
 		}
-		s.Close()
 		query = tail
 	}
 }
@@ -180,6 +182,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 		if err != nil {
 			return nil, err
 		}
+		s.(*SQLiteStmt).cls = true
 		na := s.NumInput()
 		rows, err := s.Query(args[:na])
 		if err != nil && err != driver.ErrSkip {
@@ -389,7 +392,7 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
-	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil}, nil
+	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil, s.cls}, nil
 }
 
 // Return last inserted ID.
@@ -423,6 +426,9 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 func (rc *SQLiteRows) Close() error {
 	if rc.s.closed {
 		return nil
+	}
+	if rc.cls {
+		return rc.s.Close()
 	}
 	rv := C.sqlite3_reset(rc.s.s)
 	if rv != C.SQLITE_OK {
