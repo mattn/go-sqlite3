@@ -700,3 +700,40 @@ func TestQueryer(t *testing.T) {
 		}
 	}
 }
+
+func TestStress(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	db.Exec("CREATE TABLE foo (id int);")
+	db.Exec("INSERT INTO foo VALUES(1);")
+	db.Exec("INSERT INTO foo VALUES(2);")
+	db.Close()
+
+	for i := 0; i < 10000; i++ {
+		db, err := sql.Open("sqlite3", tempFilename)
+		if err != nil {
+			t.Fatal("Failed to open database:", err)
+		}
+
+		for j := 0; j < 3; j++ {
+			rows, err := db.Query("select * from foo where id=1;")
+			if err != nil {
+				t.Error("Failed to call db.Query:", err)
+			}
+			for rows.Next() {
+				var i int
+				if err := rows.Scan(&i); err != nil {
+					t.Errorf("Scan failed: %v\n", err)
+				}
+			}
+			if err := rows.Err(); err != nil {
+				t.Errorf("Post-scan failed: %v\n", err)
+			}
+			rows.Close()
+		}
+		db.Close()
+	}
+}
