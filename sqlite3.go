@@ -94,8 +94,7 @@ type SQLiteConn struct {
 }
 
 type config struct {
-	params map[string]string
-	loc    *time.Location
+	loc *time.Location
 }
 
 // Tx struct.
@@ -538,49 +537,29 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-func parseDSN(dsn string) (cfg *config, err error) {
-	cfg = new(config)
-	for i := 0; i < len(dsn); i++ {
-		if dsn[i] == '?' {
-			if err = parseDSNParams(cfg, dsn[i+1:]); err != nil {
-				return
-			}
-			break
-		}
+func parseDSN(dsn string) (*config, error) {
+	cfg := &config{
+		loc: time.UTC,
 	}
-	if cfg.loc == nil {
-		cfg.loc = time.UTC
-	}
-	return
-}
 
-func parseDSNParams(cfg *config, params string) (err error) {
-	for _, v := range strings.Split(params, "&") {
-		param := strings.SplitN(v, "=", 2)
-		if len(param) != 2 {
-			continue
-		}
-
-		// cfg params
-		switch value := param[1]; param[0] {
-		// Time Location
-		case "_loc":
-			if value, err = url.QueryUnescape(value); err != nil {
-				return
-			}
-			cfg.loc, err = time.LoadLocation(value)
-			if err != nil {
-				return
-			}
-		default:
-			// lazy init
-			if cfg.params == nil {
-				cfg.params = make(map[string]string)
-			}
-			if cfg.params[param[0]], err = url.QueryUnescape(value); err != nil {
-				return
-			}
-		}
+	parts := strings.Split(dsn, "?")
+	if len(parts) <= 1 {
+		return cfg, nil
 	}
-	return
+
+	params, err := url.ParseQuery(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	// _loc
+	if val := params.Get("_loc"); val != "" {
+		loc, err := time.LoadLocation(val)
+		if err != nil {
+			return nil, err
+		}
+		cfg.loc = loc
+	}
+
+	return cfg, nil
 }
