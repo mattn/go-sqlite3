@@ -633,7 +633,7 @@ func TestTimezoneConversion(t *testing.T) {
 	zones := []string{"UTC", "US/Central", "US/Pacific", "Local"}
 	for _, tz := range zones {
 		tempFilename := TempFilename()
-		db, err := sql.Open("sqlite3", tempFilename+"#loc="+url.QueryEscape(tz))
+		db, err := sql.Open("sqlite3", tempFilename+"?loc="+url.QueryEscape(tz))
 		if err != nil {
 			t.Fatal("Failed to open database:", err)
 		}

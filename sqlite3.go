@@ -550,7 +550,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 func parseDSN(dsn string) (cfg *config, err error) {
 	cfg = new(config)
 	for i := 0; i < len(dsn); i++ {
-		if dsn[i] == '#' {
+		if dsn[i] == '?' {
 			if err = parseDSNParams(cfg, dsn[i+1:]); err != nil {
 				return
 			}
