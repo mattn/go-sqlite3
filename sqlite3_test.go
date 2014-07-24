@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"./sqltest"
+	"./sqlite3_test"
 )
 
 func TempFilename() string {
@@ -732,71 +732,105 @@ func TestSuite(t *testing.T) {
 	}
 	defer db.Close()
 
-	sqltest.RunTests(t, db, sqltest.SQLITE)
+	sqlite3_test.RunTests(t, db, sqlite3_test.SQLITE)
 }
 
 // TODO: Execer & Queryer currently disabled
 // https://github.com/mattn/go-sqlite3/issues/82
-//func TestExecer(t *testing.T) {
-//	tempFilename := TempFilename()
-//	db, err := sql.Open("sqlite3", tempFilename)
-//	if err != nil {
-//		t.Fatal("Failed to open database:", err)
-//	}
-//	defer os.Remove(tempFilename)
-//	defer db.Close()
-//
-//	_, err = db.Exec(`
-//	create table foo (id integer);
-//	insert into foo(id) values(?);
-//	insert into foo(id) values(?);
-//	insert into foo(id) values(?);
-//	`, 1, 2, 3)
-//	if err != nil {
-//		t.Error("Failed to call db.Exec:", err)
-//	}
-//	if err != nil {
-//		t.Error("Failed to call res.RowsAffected:", err)
-//	}
-//}
-//
-//func TestQueryer(t *testing.T) {
-//	tempFilename := TempFilename()
-//	db, err := sql.Open("sqlite3", tempFilename)
-//	if err != nil {
-//		t.Fatal("Failed to open database:", err)
-//	}
-//	defer os.Remove(tempFilename)
-//	defer db.Close()
-//
-//	_, err = db.Exec(`
-//	create table foo (id integer);
-//	`)
-//	if err != nil {
-//		t.Error("Failed to call db.Query:", err)
-//	}
-//
-//	rows, err := db.Query(`
-//	insert into foo(id) values(?);
-//	insert into foo(id) values(?);
-//	insert into foo(id) values(?);
-//	select id from foo order by id;
-//	`, 3, 2, 1)
-//	if err != nil {
-//		t.Error("Failed to call db.Query:", err)
-//	}
-//	defer rows.Close()
-//	n := 1
-//	if rows != nil {
-//		for rows.Next() {
-//			var id int
-//			err = rows.Scan(&id)
-//			if err != nil {
-//				t.Error("Failed to db.Query:", err)
-//			}
-//			if id != n {
-//				t.Error("Failed to db.Query: not matched results")
-//			}
-//		}
-//	}
-//}
+func TestExecer(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	_, err = db.Exec(`
+       create table foo (id integer); -- one comment
+       insert into foo(id) values(?);
+       insert into foo(id) values(?);
+       insert into foo(id) values(?); -- another comment
+       `, 1, 2, 3)
+	if err != nil {
+		t.Error("Failed to call db.Exec:", err)
+	}
+}
+
+func TestQueryer(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	_, err = db.Exec(`
+	create table foo (id integer);
+	`)
+	if err != nil {
+		t.Error("Failed to call db.Query:", err)
+	}
+
+	rows, err := db.Query(`
+	insert into foo(id) values(?);
+	insert into foo(id) values(?);
+	insert into foo(id) values(?);
+	select id from foo order by id;
+	`, 3, 2, 1)
+	if err != nil {
+		t.Error("Failed to call db.Query:", err)
+	}
+	defer rows.Close()
+	n := 1
+	if rows != nil {
+		for rows.Next() {
+			var id int
+			err = rows.Scan(&id)
+			if err != nil {
+				t.Error("Failed to db.Query:", err)
+			}
+			if id != n {
+				t.Error("Failed to db.Query: not matched results")
+			}
+		}
+	}
+}
+
+func TestStress(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	db.Exec("CREATE TABLE foo (id int);")
+	db.Exec("INSERT INTO foo VALUES(1);")
+	db.Exec("INSERT INTO foo VALUES(2);")
+	db.Close()
+
+	for i := 0; i < 10000; i++ {
+		db, err := sql.Open("sqlite3", tempFilename)
+		if err != nil {
+			t.Fatal("Failed to open database:", err)
+		}
+
+		for j := 0; j < 3; j++ {
+			rows, err := db.Query("select * from foo where id=1;")
+			if err != nil {
+				t.Error("Failed to call db.Query:", err)
+			}
+			for rows.Next() {
+				var i int
+				if err := rows.Scan(&i); err != nil {
+					t.Errorf("Scan failed: %v\n", err)
+				}
+			}
+			if err := rows.Err(); err != nil {
+				t.Errorf("Post-scan failed: %v\n", err)
+			}
+			rows.Close()
+		}
+		db.Close()
+	}
+}

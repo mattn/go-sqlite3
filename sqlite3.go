@@ -74,6 +74,7 @@ var SQLiteTimestampFormats = []string{
 	"2006-01-02 15:04",
 	"2006-01-02T15:04",
 	"2006-01-02",
+	"2006-01-02 15:04:05-07:00",
 }
 
 func init() {
@@ -108,6 +109,7 @@ type SQLiteStmt struct {
 	s      *C.sqlite3_stmt
 	t      string
 	closed bool
+	cls    bool
 }
 
 // Result struct.
@@ -122,22 +124,19 @@ type SQLiteRows struct {
 	nc       int
 	cols     []string
 	decltype []string
+	cls      bool
 }
 
 // Commit transaction.
 func (tx *SQLiteTx) Commit() error {
-	if err := tx.c.exec("COMMIT"); err != nil {
-		return err
-	}
-	return nil
+	_, err := tx.c.exec("COMMIT")
+	return err
 }
 
 // Rollback transaction.
 func (tx *SQLiteTx) Rollback() error {
-	if err := tx.c.exec("ROLLBACK"); err != nil {
-		return err
-	}
-	return nil
+	_, err := tx.c.exec("ROLLBACK")
+	return err
 }
 
 // AutoCommit return which currently auto commit or not.
@@ -146,86 +145,83 @@ func (c *SQLiteConn) AutoCommit() bool {
 }
 
 func (c *SQLiteConn) lastError() Error {
-	return Error{Code: ErrNo(C.sqlite3_errcode(c.db)),
-		err: C.GoString(C.sqlite3_errmsg(c.db)),
+	return Error{
+		Code:         ErrNo(C.sqlite3_errcode(c.db)),
+		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(c.db)),
+		err:          C.GoString(C.sqlite3_errmsg(c.db)),
 	}
 }
 
-// TODO: Execer & Queryer currently disabled
-// https://github.com/mattn/go-sqlite3/issues/82
-//// Implements Execer
-//func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-//	tx, err := c.Begin()
-//	if err != nil {
-//		return nil, err
-//	}
-//	for {
-//		s, err := c.Prepare(query)
-//		if err != nil {
-//			tx.Rollback()
-//			return nil, err
-//		}
-//		na := s.NumInput()
-//		res, err := s.Exec(args[:na])
-//		if err != nil && err != driver.ErrSkip {
-//			tx.Rollback()
-//			s.Close()
-//			return nil, err
-//		}
-//		args = args[na:]
-//		tail := s.(*SQLiteStmt).t
-//		if tail == "" {
-//			tx.Commit()
-//			return res, nil
-//		}
-//		s.Close()
-//		query = tail
-//	}
-//}
-//
-//// Implements Queryer
-//func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-//	tx, err := c.Begin()
-//	if err != nil {
-//		return nil, err
-//	}
-//	for {
-//		s, err := c.Prepare(query)
-//		if err != nil {
-//			tx.Rollback()
-//			return nil, err
-//		}
-//		na := s.NumInput()
-//		rows, err := s.Query(args[:na])
-//		if err != nil && err != driver.ErrSkip {
-//			tx.Rollback()
-//			s.Close()
-//			return nil, err
-//		}
-//		args = args[na:]
-//		tail := s.(*SQLiteStmt).t
-//		if tail == "" {
-//			tx.Commit()
-//			return rows, nil
-//		}
-//		s.Close()
-//		query = tail
-//	}
-//}
+// Implements Execer
+func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+	if len(args) == 0 {
+		return c.exec(query)
+	}
 
-func (c *SQLiteConn) exec(cmd string) error {
+	for {
+		s, err := c.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		var res driver.Result
+		if s.(*SQLiteStmt).s != nil {
+			na := s.NumInput()
+			res, err = s.Exec(args[:na])
+			if err != nil && err != driver.ErrSkip {
+				s.Close()
+				return nil, err
+			}
+			args = args[na:]
+		}
+		tail := s.(*SQLiteStmt).t
+		s.Close()
+		if tail == "" {
+			return res, nil
+		}
+		query = tail
+	}
+}
+
+// Implements Queryer
+func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	for {
+		s, err := c.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		s.(*SQLiteStmt).cls = true
+		na := s.NumInput()
+		rows, err := s.Query(args[:na])
+		if err != nil && err != driver.ErrSkip {
+			s.Close()
+			return nil, err
+		}
+		args = args[na:]
+		tail := s.(*SQLiteStmt).t
+		if tail == "" {
+			return rows, nil
+		}
+		s.Close()
+		query = tail
+	}
+}
+
+func (c *SQLiteConn) exec(cmd string) (driver.Result, error) {
 	pcmd := C.CString(cmd)
 	defer C.free(unsafe.Pointer(pcmd))
 	rv := C.sqlite3_exec(c.db, pcmd, nil, nil, nil)
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		return nil, c.lastError()
 	}
-	return nil
+	return &SQLiteResult{
+		int64(C._sqlite3_last_insert_rowid(c.db)),
+		int64(C._sqlite3_changes(c.db)),
+	}, nil
 }
 
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
-	if err := c.exec("BEGIN"); err != nil {
+	if _, err := c.exec("BEGIN"); err != nil {
 		return nil, err
 	}
 	return &SQLiteTx{c}, nil
@@ -376,22 +372,14 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 				b := []byte(v)
 				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 			}
-		case int:
-			rv = C.sqlite3_bind_int64(s.s, n, C.sqlite3_int64(v))
-		case int32:
-			rv = C.sqlite3_bind_int(s.s, n, C.int(v))
 		case int64:
 			rv = C.sqlite3_bind_int64(s.s, n, C.sqlite3_int64(v))
-		case byte:
-			rv = C.sqlite3_bind_int(s.s, n, C.int(v))
 		case bool:
 			if bool(v) {
 				rv = C.sqlite3_bind_int(s.s, n, 1)
 			} else {
 				rv = C.sqlite3_bind_int(s.s, n, 0)
 			}
-		case float32:
-			rv = C.sqlite3_bind_double(s.s, n, C.double(v))
 		case float64:
 			rv = C.sqlite3_bind_double(s.s, n, C.double(v))
 		case []byte:
@@ -416,7 +404,7 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
-	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil}, nil
+	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil, s.cls}, nil
 }
 
 // Return last inserted ID.
@@ -450,6 +438,9 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 func (rc *SQLiteRows) Close() error {
 	if rc.s.closed {
 		return nil
+	}
+	if rc.cls {
+		return rc.s.Close()
 	}
 	rv := C.sqlite3_reset(rc.s.s)
 	if rv != C.SQLITE_OK {
