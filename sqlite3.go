@@ -573,7 +573,7 @@ func parseDSNParams(cfg *config, params string) (err error) {
 		// cfg params
 		switch value := param[1]; param[0] {
 		// Time Location
-		case "loc":
+		case "_loc":
 			if value, err = url.QueryUnescape(value); err != nil {
 				return
 			}
