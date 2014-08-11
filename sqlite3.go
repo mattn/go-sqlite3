@@ -505,7 +505,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
 
 			switch rc.decltype[i] {
-			case "timestamp", "datetime":
+			case "timestamp", "datetime", "date":
 				for _, format := range SQLiteTimestampFormats {
 					if dest[i], err = time.Parse(format, s); err == nil {
 						break
