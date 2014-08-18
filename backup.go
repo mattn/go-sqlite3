@@ -31,7 +31,7 @@ func (c *SQLiteConn) Backup(dest string, conn *SQLiteConn, src string) (*Backup,
 // function returns SQLITE_DONE (Code 101)
 func (b *Backup) Step(p int) (bool, error) {
 	ret := C.sqlite3_backup_step(b.b, C.int(p))
-	if ret == 101 {
+	if ret == C.SQLITE_DONE {
 		return true, nil
 	} else if ret != 0 {
 		return false, Error{Code: ErrNo(ret)}
