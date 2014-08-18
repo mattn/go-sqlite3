@@ -40,3 +40,12 @@ License
 -------
 
 MIT: http://mattn.mit-license.org/2012
+
+sqlite.c, sqlite3.h, sqlite3ext.h
+
+In this repository, those files are amalgamation code that copied from SQLite3. The license of those codes are depend on the license of SQLite3.
+
+Author
+------
+
+Yasuhiro Matsumoto (a.k.a mattn)
