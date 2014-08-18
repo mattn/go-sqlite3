@@ -159,6 +159,9 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 		var res driver.Result
 		if s.(*SQLiteStmt).s != nil {
 			na := s.NumInput()
+			if na < len(args) {
+				return nil, errors.New("args is not enough to execute query")
+			}
 			res, err = s.Exec(args[:na])
 			if err != nil && err != driver.ErrSkip {
 				s.Close()
