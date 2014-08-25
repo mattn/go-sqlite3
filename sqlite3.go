@@ -61,6 +61,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 	"unsafe"
@@ -93,7 +94,12 @@ type SQLiteDriver struct {
 
 // Conn struct.
 type SQLiteConn struct {
-	db *C.sqlite3
+	db  *C.sqlite3
+	cfg *config
+}
+
+type config struct {
+	loc *time.Location
 }
 
 // Tx struct.
@@ -263,7 +269,12 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, Error{Code: ErrNo(rv)}
 	}
 
-	conn := &SQLiteConn{db}
+	conn := &SQLiteConn{db: db}
+
+	var err error
+	if conn.cfg, err = parseDSN(dsn); err != nil {
+		return nil, err
+	}
 
 	if len(d.Extensions) > 0 {
 		rv = C.sqlite3_enable_load_extension(db, 1)
@@ -483,7 +494,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
 			case "timestamp", "datetime":
-				dest[i] = time.Unix(val, 0)
+				dest[i] = time.Unix(val, 0).In(rc.s.c.cfg.loc)
 			case "boolean":
 				dest[i] = val > 0
 			default:
@@ -514,15 +525,17 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime":
+				var t time.Time
 				for _, format := range SQLiteTimestampFormats {
-					if dest[i], err = time.Parse(format, s); err == nil {
+					if t, err = time.Parse(format, s); err == nil {
 						break
 					}
 				}
 				if err != nil {
 					// The column is a time value, so return the zero time on parse failure.
-					dest[i] = time.Time{}
+					t = time.Time{}
 				}
+				dest[i] = t.In(rc.s.c.cfg.loc)
 			default:
 				dest[i] = []byte(s)
 			}
@@ -530,4 +543,31 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		}
 	}
 	return nil
+}
+
+func parseDSN(dsn string) (*config, error) {
+	cfg := &config{
+		loc: time.UTC,
+	}
+
+	parts := strings.Split(dsn, "?")
+	if len(parts) <= 1 {
+		return cfg, nil
+	}
+
+	params, err := url.ParseQuery(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	// _loc
+	if val := params.Get("_loc"); val != "" {
+		loc, err := time.LoadLocation(val)
+		if err != nil {
+			return nil, err
+		}
+		cfg.loc = loc
+	}
+
+	return cfg, nil
 }
