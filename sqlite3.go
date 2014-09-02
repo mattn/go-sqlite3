@@ -474,7 +474,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_INTEGER:
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
-			case "timestamp", "datetime":
+			case "timestamp", "datetime", "date":
 				dest[i] = time.Unix(val, 0)
 			case "boolean":
 				dest[i] = val > 0
