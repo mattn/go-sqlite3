@@ -6,6 +6,9 @@
 package sqlite3
 
 /*
+#ifdef _WIN32
+# define _localtime32(x) localtime(x)
+#endif
 #include <sqlite3.h>
 #include <stdlib.h>
 #include <string.h>
