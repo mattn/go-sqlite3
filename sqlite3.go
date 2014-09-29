@@ -111,6 +111,7 @@ type SQLiteStmt struct {
 	t      string
 	closed bool
 	cls    bool
+	query  string
 }
 
 // Result struct.
@@ -328,7 +329,7 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 	if tail != nil && C.strlen(tail) > 0 {
 		t = strings.TrimSpace(C.GoString(tail))
 	}
-	return &SQLiteStmt{c: c, s: s, t: t}, nil
+	return &SQLiteStmt{c: c, s: s, t: t, query: query}, nil
 }
 
 // Close the statement.
@@ -401,6 +402,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 // Query the statement with arguments. Return records.
 func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
+		defer s.reprepare()
 		return nil, err
 	}
 	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil, s.cls}, nil
@@ -416,13 +418,21 @@ func (r *SQLiteResult) RowsAffected() (int64, error) {
 	return r.changes, nil
 }
 
+// Reprepares the statement in case of errors
+func (s *SQLiteStmt) reprepare() {
+	stmt, _ := s.c.Prepare(s.query)
+	s.s = stmt.(*SQLiteStmt).s
+}
+
 // Execute the statement with arguments. Return result object.
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
+		defer s.reprepare()
 		return nil, err
 	}
 	rv := C.sqlite3_step(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
+		defer s.reprepare()
 		return nil, s.c.lastError()
 	}
 

@@ -29,13 +29,14 @@ type DB struct {
 var db *DB
 
 // the following tables will be created and dropped during the test
-var testTables = []string{"foo", "bar", "t", "bench"}
+var testTables = []string{"foo", "bar", "t", "bench", "users"}
 
 var tests = []testing.InternalTest{
 	{"TestBlobs", TestBlobs},
 	{"TestManyQueryRow", TestManyQueryRow},
 	{"TestTxQuery", TestTxQuery},
 	{"TestPreparedStmt", TestPreparedStmt},
+	{"TestPreparedStmtRecovery", TestPreparedStmtRecovery},
 }
 
 var benchmarks = []testing.InternalBenchmark{
@@ -296,6 +297,35 @@ func TestPreparedStmt(t *testing.T) {
 	}
 	for i := 0; i < nRuns; i++ {
 		<-ch
+	}
+}
+
+func TestPreparedStmtRecovery(t *testing.T) {
+	db.tearDown()
+    db.Exec(`create table if not exists users (
+        uid integer primary key autoincrement,
+        name text not null,
+        constraint uniqname unique (name) on conflict rollback
+    );`)
+
+    stmt, err := db.Prepare(`insert into users (name) values (?);`)
+	if err != nil {
+		t.Fatalf("recovery 1: %v", err)
+	}
+
+    _, e1 := stmt.Exec("test")
+	if e1 != nil {
+		t.Fatalf("recovery 2: %v", e1)
+	}
+
+    _, e2 := stmt.Exec("test")
+	if e2 == nil {
+		t.Fatalf("recovery 3: %v", e2)
+	}
+
+    _, e3 := stmt.Exec("test1")
+	if e3 != nil {
+		t.Fatalf("recovery 4: %v", e3)
 	}
 }
 
