@@ -88,6 +88,14 @@ func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
 }
 
+// Return SQLite library Version information.
+func Version() (libVersion string, libVersionNumber int, sourceId string) {
+	libVersion = C.GoString(C.sqlite3_libversion())
+	libVersionNumber = int(C.sqlite3_libversion_number())
+	sourceId = C.GoString(C.sqlite3_sourceid())
+	return libVersion, libVersionNumber, sourceId
+}
+
 // Driver struct.
 type SQLiteDriver struct {
 	Extensions  []string
