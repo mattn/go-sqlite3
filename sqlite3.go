@@ -6,12 +6,16 @@
 package sqlite3
 
 /*
-#ifdef _WIN32
-# define _localtime32(x) localtime(x)
-#endif
 #include <sqlite3.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+#include <time.h>
+struct tm* _localtime32(const __time32_t *tm) {
+  return localtime(tm);
+}
+#endif
 
 #ifdef __CYGWIN__
 # include <errno.h>
@@ -23,6 +27,10 @@ package sqlite3
 
 #ifndef SQLITE_OPEN_FULLMUTEX
 # define SQLITE_OPEN_FULLMUTEX 0
+#endif
+
+#ifndef SQLITE_THREADSAFE
+# define SQLITE_THREADSAFE
 #endif
 
 static int
