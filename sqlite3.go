@@ -29,10 +29,6 @@ struct tm* _localtime32(const __time32_t *tm) {
 # define SQLITE_OPEN_FULLMUTEX 0
 #endif
 
-#ifndef SQLITE_THREADSAFE
-# define SQLITE_THREADSAFE
-#endif
-
 static int
 _sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
 #ifdef SQLITE_OPEN_URI
