@@ -486,7 +486,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
-				dest[i] = time.Unix(val, 0)
+				dest[i] = time.Unix(val, 0).Local()
 			case "boolean":
 				dest[i] = val > 0
 			default:
@@ -513,12 +513,14 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			dest[i] = nil
 		case C.SQLITE_TEXT:
 			var err error
+			var timeVal time.Time
 			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
 				for _, format := range SQLiteTimestampFormats {
-					if dest[i], err = time.Parse(format, s); err == nil {
+					if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
+						dest[i] = timeVal.Local()
 						break
 					}
 				}
