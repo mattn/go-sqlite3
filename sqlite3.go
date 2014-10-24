@@ -10,13 +10,6 @@ package sqlite3
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <time.h>
-struct tm* _localtime32(const __time32_t *tm) {
-  return localtime(tm);
-}
-#endif
-
 #ifdef __CYGWIN__
 # include <errno.h>
 #endif
