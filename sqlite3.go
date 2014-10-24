@@ -13,7 +13,7 @@ package sqlite3
 #ifdef _WIN32
 #include <time.h>
 struct tm* _localtime32(const __time32_t *tm) {
-  return localtime(tm);
+  return localtime((const time_t *)tm);
 }
 #endif
 
