@@ -210,6 +210,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 		if tail == "" {
 			return rows, nil
 		}
+		rows.Close()
 		s.Close()
 		query = tail
 	}
