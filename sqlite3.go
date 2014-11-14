@@ -61,6 +61,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"runtime"
 	"strings"
 	"time"
 	"unsafe"
@@ -306,7 +307,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return nil, err
 		}
 	}
-
+	runtime.SetFinalizer(conn, (*SQLiteConn).Close)
 	return conn, nil
 }
 
@@ -317,6 +318,7 @@ func (c *SQLiteConn) Close() error {
 		return c.lastError()
 	}
 	c.db = nil
+	runtime.SetFinalizer(c, nil)
 	return nil
 }
 
@@ -334,7 +336,9 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 	if tail != nil && C.strlen(tail) > 0 {
 		t = strings.TrimSpace(C.GoString(tail))
 	}
-	return &SQLiteStmt{c: c, s: s, t: t}, nil
+	ss := &SQLiteStmt{c: c, s: s, t: t}
+	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
+	return ss, nil
 }
 
 // Close the statement.
@@ -350,6 +354,7 @@ func (s *SQLiteStmt) Close() error {
 	if rv != C.SQLITE_OK {
 		return s.c.lastError()
 	}
+	runtime.SetFinalizer(s, nil)
 	return nil
 }
 

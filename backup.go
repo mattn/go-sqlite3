@@ -11,21 +11,24 @@ package sqlite3
 */
 import "C"
 import (
+	"runtime"
 	"unsafe"
 )
 
-type Backup struct {
+type SQLiteBackup struct {
 	b *C.sqlite3_backup
 }
 
-func (c *SQLiteConn) Backup(dest string, conn *SQLiteConn, src string) (*Backup, error) {
+func (c *SQLiteConn) Backup(dest string, conn *SQLiteConn, src string) (*SQLiteBackup, error) {
 	destptr := C.CString(dest)
 	defer C.free(unsafe.Pointer(destptr))
 	srcptr := C.CString(src)
 	defer C.free(unsafe.Pointer(srcptr))
 
 	if b := C.sqlite3_backup_init(c.db, destptr, conn.db, srcptr); b != nil {
-		return &Backup{b: b}, nil
+		bb := &SQLiteBackup{b: b}
+		runtime.SetFinalizer(bb, (*SQLiteBackup).Finish)
+		return bb, nil
 	}
 	return nil, c.lastError()
 }
@@ -34,7 +37,7 @@ func (c *SQLiteConn) Backup(dest string, conn *SQLiteConn, src string) (*Backup,
 // This function returns a boolean indicating if the backup is done and
 // an error signalling any other error. Done is returned if the underlying C
 // function returns SQLITE_DONE (Code 101)
-func (b *Backup) Step(p int) (bool, error) {
+func (b *SQLiteBackup) Step(p int) (bool, error) {
 	ret := C.sqlite3_backup_step(b.b, C.int(p))
 	if ret == C.SQLITE_DONE {
 		return true, nil
@@ -44,18 +47,24 @@ func (b *Backup) Step(p int) (bool, error) {
 	return false, nil
 }
 
-func (b *Backup) Remaining() int {
+func (b *SQLiteBackup) Remaining() int {
 	return int(C.sqlite3_backup_remaining(b.b))
 }
 
-func (b *Backup) PageCount() int {
+func (b *SQLiteBackup) PageCount() int {
 	return int(C.sqlite3_backup_pagecount(b.b))
 }
 
-func (b *Backup) Finish() error {
+func (b *SQLiteBackup) Finish() error {
+	return b.Close()
+}
+
+func (b *SQLiteBackup) Close() error {
 	ret := C.sqlite3_backup_finish(b.b)
 	if ret != 0 {
 		return Error{Code: ErrNo(ret)}
 	}
+	b.b = nil
+	runtime.SetFinalizer(b, nil)
 	return nil
 }
