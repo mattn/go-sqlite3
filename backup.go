@@ -41,7 +41,7 @@ func (b *SQLiteBackup) Step(p int) (bool, error) {
 	ret := C.sqlite3_backup_step(b.b, C.int(p))
 	if ret == C.SQLITE_DONE {
 		return true, nil
-	} else if ret != 0 {
+	} else if ret != 0 && ret != C.SQLITE_LOCKED && ret != C.SQLITE_BUSY {
 		return false, Error{Code: ErrNo(ret)}
 	}
 	return false, nil
