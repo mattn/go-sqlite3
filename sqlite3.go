@@ -430,10 +430,12 @@ func (r *SQLiteResult) RowsAffected() (int64, error) {
 // Execute the statement with arguments. Return result object.
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
+		C.sqlite3_reset(s.s)
 		return nil, err
 	}
 	rv := C.sqlite3_step(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
+		C.sqlite3_reset(s.s)
 		return nil, s.c.lastError()
 	}
 
