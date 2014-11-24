@@ -39,14 +39,14 @@ _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
 #include <stdio.h>
 #include <stdint.h>
 
-static long
+static int
 _sqlite3_last_insert_rowid(sqlite3* db) {
-  return (long) sqlite3_last_insert_rowid(db);
+  return sqlite3_last_insert_rowid(db);
 }
 
-static long
+static int
 _sqlite3_changes(sqlite3* db) {
-  return (long) sqlite3_changes(db);
+  return sqlite3_changes(db);
 }
 
 */
