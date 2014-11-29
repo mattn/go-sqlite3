@@ -60,6 +60,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"io"
 	"runtime"
 	"strings"
@@ -174,7 +175,7 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 		if s.(*SQLiteStmt).s != nil {
 			na := s.NumInput()
 			if len(args) < na {
-				return nil, errors.New("args is not enough to execute query")
+				return nil, fmt.Errorf("Not enough args to execute query. Expected %d, got %d.", na, len(args))
 			}
 			res, err = s.Exec(args[:na])
 			if err != nil && err != driver.ErrSkip {
@@ -201,6 +202,9 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 		}
 		s.(*SQLiteStmt).cls = true
 		na := s.NumInput()
+		if len(args) < na {
+			return nil, fmt.Errorf("Not enough args to execute query. Expected %d, got %d.", na, len(args))
+		}
 		rows, err := s.Query(args[:na])
 		if err != nil && err != driver.ErrSkip {
 			s.Close()
