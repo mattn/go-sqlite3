@@ -6,6 +6,7 @@
 package sqlite3
 
 /*
+#cgo CFLAGS: -std=gnu99
 #include <sqlite3.h>
 #include <stdlib.h>
 #include <string.h>
