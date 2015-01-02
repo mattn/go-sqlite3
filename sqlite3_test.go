@@ -309,6 +309,7 @@ func TestTimestamp(t *testing.T) {
 		{"0000-00-00 00:00:00", time.Time{}},
 		{timestamp1, timestamp1},
 		{timestamp1.Unix(), timestamp1},
+		{timestamp1.UnixNano() / int64(time.Millisecond), timestamp1},
 		{timestamp1.In(time.FixedZone("TEST", -7*3600)), timestamp1},
 		{timestamp1.Format("2006-01-02 15:04:05.000"), timestamp1},
 		{timestamp1.Format("2006-01-02T15:04:05.000"), timestamp1},

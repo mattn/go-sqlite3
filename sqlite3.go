@@ -64,6 +64,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unsafe"
@@ -504,7 +505,18 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
-				dest[i] = time.Unix(val, 0).Local()
+				unixTimestamp := strconv.FormatInt(val, 10)
+				if len(unixTimestamp) == 13 {
+					duration, err := time.ParseDuration(unixTimestamp + "ms")
+					if err != nil {
+						return fmt.Errorf("error parsing %s value %d, %s", rc.decltype[i], val, err)
+					}
+					epoch := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+					dest[i] = epoch.Add(duration)
+				} else {
+					dest[i] = time.Unix(val, 0).Local()
+				}
+
 			case "boolean":
 				dest[i] = val > 0
 			default:
