@@ -287,19 +287,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
 		}
 
-		stmt, err := conn.Prepare("SELECT load_extension(?);")
-		if err != nil {
-			return nil, err
-		}
-
 		for _, extension := range d.Extensions {
-			if _, err = stmt.Exec([]driver.Value{extension}); err != nil {
-				return nil, err
+			cext := C.CString(extension)
+			defer C.free(unsafe.Pointer(cext))
+			rv = C.sqlite3_load_extension(db, cext, nil, nil)
+			if rv != C.SQLITE_OK {
+				return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
 			}
-		}
-
-		if err = stmt.Close(); err != nil {
-			return nil, err
 		}
 
 		rv = C.sqlite3_enable_load_extension(db, 0)
