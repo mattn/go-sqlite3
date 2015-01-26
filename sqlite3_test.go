@@ -743,3 +743,10 @@ func TestStress(t *testing.T) {
 		db.Close()
 	}
 }
+
+func TestVersion(t *testing.T) {
+	s, n, id, := Version()
+	if s == "" || n == 0 || id == 0 {
+		t.Errorf("Version failed %q, %d, %q\n", s, n, id)
+	}
+}
