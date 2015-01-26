@@ -441,8 +441,9 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	}
 	rv := C.sqlite3_step(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
+		err := s.c.lastError()
 		C.sqlite3_reset(s.s)
-		return nil, s.c.lastError()
+		return nil, err
 	}
 
 	res := &SQLiteResult{
