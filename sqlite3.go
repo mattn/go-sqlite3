@@ -65,6 +65,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"runtime"
 	"strconv"
 	"strings"
@@ -107,7 +108,8 @@ type SQLiteDriver struct {
 
 // Conn struct.
 type SQLiteConn struct {
-	db *C.sqlite3
+	db  *C.sqlite3
+	loc *time.Location
 }
 
 // Tx struct.
@@ -256,9 +258,29 @@ func errorString(err Error) string {
 //   file:test.db?cache=shared&mode=memory
 //   :memory:
 //   file::memory:
+// go-sqlite handle especially query parameters.
+//   loc=XXX
+//     Specify location of time format. It's possible to specify "auto".
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
+	}
+
+	var loc *time.Location
+	if u, err := url.Parse(dsn); err == nil {
+		for k, v := range u.Query() {
+			switch k {
+			case "loc":
+				if len(v) > 0 {
+					if v[0] == "auto" {
+						v[0] = time.Local.String()
+					}
+					if loc, err = time.LoadLocation(v[0]); err != nil {
+						return nil, fmt.Errorf("Invalid loc: %v: %v", v[0], err)
+					}
+				}
+			}
+		}
 	}
 
 	var db *C.sqlite3
@@ -281,7 +303,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, Error{Code: ErrNo(rv)}
 	}
 
-	conn := &SQLiteConn{db}
+	conn := &SQLiteConn{db: db, loc: loc}
 
 	if len(d.Extensions) > 0 {
 		rv = C.sqlite3_enable_load_extension(db, 1)
@@ -401,8 +423,13 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			}
 			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(p), C.int(len(v)))
 		case time.Time:
-			b := []byte(v.UTC().Format(SQLiteTimestampFormats[0]))
-			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
+			if s.c.loc != nil {
+				b := []byte(v.In(s.c.loc).Format(SQLiteTimestampFormats[0]))
+				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
+			} else {
+				b := []byte(v.UTC().Format(SQLiteTimestampFormats[0]))
+				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
+			}
 		}
 		if rv != C.SQLITE_OK {
 			return s.c.lastError()
@@ -545,10 +572,19 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
-				for _, format := range SQLiteTimestampFormats {
-					if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
-						dest[i] = timeVal.Local()
-						break
+				if rc.s.c.loc != nil {
+					for _, format := range SQLiteTimestampFormats {
+						if timeVal, err = time.ParseInLocation(format, s, rc.s.c.loc); err == nil {
+							dest[i] = timeVal
+							break
+						}
+					}
+				} else {
+					for _, format := range SQLiteTimestampFormats {
+						if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
+							dest[i] = timeVal
+							break
+						}
 					}
 				}
 				if err != nil {

@@ -744,6 +744,71 @@ func TestStress(t *testing.T) {
 	}
 }
 
+func TestDateTimeLocal(t *testing.T) {
+	zone := "Asia/Tokyo"
+	z, err := time.LoadLocation(zone)
+	if err != nil {
+		t.Skip("Failed to load timezon:", err)
+	}
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", "file:///"+tempFilename+"?loc="+zone)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	db.Exec("CREATE TABLE foo (id datetime);")
+	db.Exec("INSERT INTO foo VALUES('2015-03-05 15:16:17');")
+
+	row := db.QueryRow("select * from foo")
+	var d time.Time
+	err = row.Scan(&d)
+	if err != nil {
+		t.Fatal("Failed to scan datetime:", err)
+	}
+	if d.Local().Hour() != 15 {
+		t.Fatal("Result should have timezone", d)
+	}
+	db.Close()
+
+	db, err = sql.Open("sqlite3", "file:///"+tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+
+	row = db.QueryRow("select * from foo")
+	err = row.Scan(&d)
+	if err != nil {
+		t.Fatal("Failed to scan datetime:", err)
+	}
+	if d.In(z).Hour() == 15 {
+		t.Fatalf("Result should not have timezone %v", zone)
+	}
+
+	_, err = db.Exec("DELETE FROM foo")
+	if err != nil {
+		t.Fatal("Failed to delete table:", err)
+	}
+	dt, err := time.Parse("2006/1/2 15/4/5 -0700 MST", "2015/3/5 15/16/17 +0900 JST")
+	if err != nil {
+		t.Fatal("Failed to parse datetime:", err)
+	}
+	db.Exec("INSERT INTO foo VALUES(?);", dt)
+
+	db.Close()
+	db, err = sql.Open("sqlite3", "file:///"+tempFilename+"?loc="+zone)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+
+	row = db.QueryRow("select * from foo")
+	err = row.Scan(&d)
+	if err != nil {
+		t.Fatal("Failed to scan datetime:", err)
+	}
+	if d.Hour() == 15 {
+		t.Fatalf("Result should have timezone %v", zone)
+	}
+}
+
 func TestVersion(t *testing.T) {
 	s, n, id := Version()
 	if s == "" || n == 0 || id == "" {
