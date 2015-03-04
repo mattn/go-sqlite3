@@ -572,19 +572,14 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
-				if rc.s.c.loc != nil {
-					for _, format := range SQLiteTimestampFormats {
-						if timeVal, err = time.ParseInLocation(format, s, rc.s.c.loc); err == nil {
-							dest[i] = timeVal
-							break
-						}
-					}
-				} else {
-					for _, format := range SQLiteTimestampFormats {
-						if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
-							dest[i] = timeVal
-							break
-						}
+				zone := rc.s.c.loc
+				if zone == nil {
+					zone = time.UTC
+				}
+				for _, format := range SQLiteTimestampFormats {
+					if timeVal, err = time.ParseInLocation(format, s, zone); err == nil {
+						dest[i] = timeVal
+						break
 					}
 				}
 				if err != nil {
