@@ -41,6 +41,10 @@ FAQ
     > See: https://github.com/mattn/go-sqlite3/issues/106
     > See also: http://www.limitlessfx.com/cross-compile-golang-app-for-windows-from-linux.html
 
+* Want to get time.Time with current locale
+
+    Use `loc=auto` in SQLite3 filename schema like `file:foo.db?loc=auto`.
+
 License
 -------
 
