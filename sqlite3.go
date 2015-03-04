@@ -423,13 +423,8 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			}
 			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(p), C.int(len(v)))
 		case time.Time:
-			if s.c.loc != nil {
-				b := []byte(v.In(s.c.loc).Format(SQLiteTimestampFormats[0]))
-				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
-			} else {
-				b := []byte(v.UTC().Format(SQLiteTimestampFormats[0]))
-				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
-			}
+			b := []byte(v.UTC().Format(SQLiteTimestampFormats[0]))
+			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 		}
 		if rv != C.SQLITE_OK {
 			return s.c.lastError()
@@ -536,11 +531,18 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 						return fmt.Errorf("error parsing %s value %d, %s", rc.decltype[i], val, err)
 					}
 					epoch := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-					dest[i] = epoch.Add(duration)
+					if rc.s.c.loc != nil {
+						dest[i] = epoch.Add(duration).In(rc.s.c.loc)
+					} else {
+						dest[i] = epoch.Add(duration)
+					}
 				} else {
-					dest[i] = time.Unix(val, 0).Local()
+					if rc.s.c.loc != nil {
+						dest[i] = time.Unix(val, 0).In(rc.s.c.loc)
+					} else {
+						dest[i] = time.Unix(val, 0)
+					}
 				}
-
 			case "boolean":
 				dest[i] = val > 0
 			default:
@@ -572,13 +574,13 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
-				zone := rc.s.c.loc
-				if zone == nil {
-					zone = time.UTC
-				}
 				for _, format := range SQLiteTimestampFormats {
-					if timeVal, err = time.ParseInLocation(format, s, zone); err == nil {
-						dest[i] = timeVal
+					if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
+						if rc.s.c.loc != nil {
+							dest[i] = timeVal.In(rc.s.c.loc)
+						} else {
+							dest[i] = timeVal
+						}
 						break
 					}
 				}

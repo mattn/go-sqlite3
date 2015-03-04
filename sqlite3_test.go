@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -746,16 +747,12 @@ func TestStress(t *testing.T) {
 
 func TestDateTimeLocal(t *testing.T) {
 	zone := "Asia/Tokyo"
-	z, err := time.LoadLocation(zone)
-	if err != nil {
-		t.Skip("Failed to load timezon:", err)
-	}
 	tempFilename := TempFilename()
 	db, err := sql.Open("sqlite3", "file:///"+tempFilename+"?loc="+zone)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	db.Exec("CREATE TABLE foo (id datetime);")
+	db.Exec("CREATE TABLE foo (dt datetime);")
 	db.Exec("INSERT INTO foo VALUES('2015-03-05 15:16:17');")
 
 	row := db.QueryRow("select * from foo")
@@ -764,7 +761,7 @@ func TestDateTimeLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to scan datetime:", err)
 	}
-	if d.Local().Hour() != 15 {
+	if d.Hour() == 15 || !strings.Contains(d.String(), "JST") {
 		t.Fatal("Result should have timezone", d)
 	}
 	db.Close()
@@ -779,8 +776,8 @@ func TestDateTimeLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to scan datetime:", err)
 	}
-	if d.In(z).Hour() == 15 {
-		t.Fatalf("Result should not have timezone %v", zone)
+	if d.UTC().Hour() != 15 || !strings.Contains(d.String(), "UTC") {
+		t.Fatalf("Result should not have timezone %v %v", zone, d.String())
 	}
 
 	_, err = db.Exec("DELETE FROM foo")
@@ -804,8 +801,8 @@ func TestDateTimeLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to scan datetime:", err)
 	}
-	if d.Hour() == 15 {
-		t.Fatalf("Result should have timezone %v", zone)
+	if d.Hour() != 15 || !strings.Contains(d.String(), "JST") {
+		t.Fatalf("Result should have timezone %v %v", zone, d.String())
 	}
 }
 
