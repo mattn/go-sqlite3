@@ -845,7 +845,7 @@ func TestStress(t *testing.T) {
 func TestDateTimeLocal(t *testing.T) {
 	zone := "Asia/Tokyo"
 	tempFilename := TempFilename()
-	db, err := sql.Open("sqlite3", "file:///"+tempFilename+"?loc="+zone)
+	db, err := sql.Open("sqlite3", tempFilename+"?loc="+zone)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
@@ -863,7 +863,7 @@ func TestDateTimeLocal(t *testing.T) {
 	}
 	db.Close()
 
-	db, err = sql.Open("sqlite3", "file:///"+tempFilename)
+	db, err = sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
@@ -888,7 +888,7 @@ func TestDateTimeLocal(t *testing.T) {
 	db.Exec("INSERT INTO foo VALUES(?);", dt)
 
 	db.Close()
-	db, err = sql.Open("sqlite3", "file:///"+tempFilename+"?loc="+zone)
+	db, err = sql.Open("sqlite3", tempFilename+"?loc="+zone)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
