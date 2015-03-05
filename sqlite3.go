@@ -286,7 +286,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
-		dsn = dsn[:pos-1]
+		dsn = dsn[:pos]
 	}
 
 	var db *C.sqlite3
