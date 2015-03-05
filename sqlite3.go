@@ -286,7 +286,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
-		if !strings.HasPrefox(dsn, "file:") {
+		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
 	}
