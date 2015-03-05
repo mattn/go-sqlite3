@@ -286,7 +286,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
-		dsn = dsn[:pos]
+		if !strings.HasPrefox(dsn, "file:") {
+			dsn = dsn[:pos]
+		}
 	}
 
 	var db *C.sqlite3
