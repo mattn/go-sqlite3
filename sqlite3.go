@@ -267,20 +267,26 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	var loc *time.Location
-	if u, err := url.Parse(dsn); err == nil {
-		for k, v := range u.Query() {
-			switch k {
-			case "loc":
-				if len(v) > 0 {
-					if v[0] == "auto" {
-						v[0] = time.Local.String()
-					}
-					if loc, err = time.LoadLocation(v[0]); err != nil {
-						return nil, fmt.Errorf("Invalid loc: %v: %v", v[0], err)
-					}
+	pos := strings.IndexRune(dsn, '?')
+	if pos >= 1 {
+		params, err := url.ParseQuery(dsn[pos+1:])
+		if err != nil {
+			return nil, err
+		}
+
+		// loc
+		if val := params.Get("loc"); val != "" {
+			if val == "auto" {
+				loc = time.Local
+			} else {
+				loc, err = time.LoadLocation(val)
+				if err != nil {
+					return nil, fmt.Errorf("Invalid loc: %v: %v", val, err)
 				}
 			}
 		}
+
+		dsn = dsn[:pos-1]
 	}
 
 	var db *C.sqlite3
@@ -525,24 +531,21 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
 				unixTimestamp := strconv.FormatInt(val, 10)
+				var t time.Time
 				if len(unixTimestamp) == 13 {
 					duration, err := time.ParseDuration(unixTimestamp + "ms")
 					if err != nil {
 						return fmt.Errorf("error parsing %s value %d, %s", rc.decltype[i], val, err)
 					}
 					epoch := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-					if rc.s.c.loc != nil {
-						dest[i] = epoch.Add(duration).In(rc.s.c.loc)
-					} else {
-						dest[i] = epoch.Add(duration)
-					}
+					t = epoch.Add(duration)
 				} else {
-					if rc.s.c.loc != nil {
-						dest[i] = time.Unix(val, 0).In(rc.s.c.loc)
-					} else {
-						dest[i] = time.Unix(val, 0)
-					}
+					t = time.Unix(val, 0)
 				}
+				if rc.s.c.loc != nil {
+					t = t.In(rc.s.c.loc)
+				}
+				dest[i] = t
 			case "boolean":
 				dest[i] = val > 0
 			default:
@@ -574,20 +577,21 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
+				var t time.Time
 				for _, format := range SQLiteTimestampFormats {
 					if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
-						if rc.s.c.loc != nil {
-							dest[i] = timeVal.In(rc.s.c.loc)
-						} else {
-							dest[i] = timeVal
-						}
+						t = timeVal
 						break
 					}
 				}
 				if err != nil {
 					// The column is a time value, so return the zero time on parse failure.
-					dest[i] = time.Time{}
+					t = time.Time{}
 				}
+				if rc.s.c.loc != nil {
+					t = t.In(rc.s.c.loc)
+				}
+				dest[i] = t
 			default:
 				dest[i] = []byte(s)
 			}

@@ -719,10 +719,10 @@ func TestTimezoneConversion(t *testing.T) {
 				t.Errorf("Datetime value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt)
 			}
 			if tests[id].expected.Location().String() != ts.Location().String() {
-				t.Errorf("Location for id %v (%v) should be %v, not %v", id, tests[id].expected.Location().String(), ts.Location().String())
+				t.Errorf("Location for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected.Location().String(), ts.Location().String())
 			}
 			if tests[id].expected.Location().String() != dt.Location().String() {
-				t.Errorf("Location for id %v (%v) should be %v, not %v", id, tests[id].expected.Location().String(), dt.Location().String())
+				t.Errorf("Location for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected.Location().String(), dt.Location().String())
 			}
 		}
 
