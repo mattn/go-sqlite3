@@ -50,7 +50,9 @@ License
 
 MIT: http://mattn.mit-license.org/2012
 
-sqlite.c, sqlite3.h, sqlite3ext.h
+sqlite3-binding.c, sqlite3-binding.h, sqlite3ext.h
+
+The -binding suffix was added to avoid build failures under gccgo.
 
 In this repository, those files are amalgamation code that copied from SQLite3. The license of those codes are depend on the license of SQLite3.
 
