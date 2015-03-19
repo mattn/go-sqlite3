@@ -463,12 +463,14 @@ func (r *SQLiteResult) RowsAffected() (int64, error) {
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
 		C.sqlite3_reset(s.s)
+		C.sqlite3_clear_bindings(s.s)
 		return nil, err
 	}
 	rv := C.sqlite3_step(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		err := s.c.lastError()
 		C.sqlite3_reset(s.s)
+		C.sqlite3_clear_bindings(s.s)
 		return nil, err
 	}
 
@@ -507,16 +509,22 @@ func (rc *SQLiteRows) Columns() []string {
 
 // Move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
-	rv := C.sqlite3_step(rc.s.s)
-	if rv == C.SQLITE_DONE {
-		return io.EOF
-	}
-	if rv != C.SQLITE_ROW {
-		rv = C.sqlite3_reset(rc.s.s)
-		if rv != C.SQLITE_OK {
-			return rc.s.c.lastError()
+	for {
+		rv := C.sqlite3_step(rc.s.s)
+		if rv == C.SQLITE_DONE {
+			return io.EOF
 		}
-		return nil
+		if rv == C.SQLITE_ROW {
+			break
+		}
+		if rv != C.SQLITE_BUSY && rv != C.SQLITE_LOCKED {
+			err := rc.s.c.lastError()
+			C.sqlite3_reset(rc.s.s)
+			if rc.nc > 0 {
+				C.sqlite3_clear_bindings(rc.s.s)
+			}
+			return err
+		}
 	}
 
 	if rc.decltype == nil {
