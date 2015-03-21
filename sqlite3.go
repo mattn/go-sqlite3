@@ -382,17 +382,18 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 		t = strings.TrimSpace(C.GoString(tail))
 	}
 	nv := int(C.sqlite3_bind_parameter_count(s))
-	if nv > 0 {
-		pn := C.GoString(C.sqlite3_bind_parameter_name(s, 1))
-		/* TODO: map argument for named parameters
-		if len(pn) > 0 && pn[0] == '$' && pn[1] != '1' {
-			nv = -1
+	/*
+		if nv > 0 {
+			pn := C.GoString(C.sqlite3_bind_parameter_name(s, 1))
+			// TODO: map argument for named parameters
+			if len(pn) > 0 && pn[0] == '$' && pn[1] != '1' {
+				nv = -1
+			}
+			if len(pn) > 0 && pn[0] != '?' {
+				nv = -1
+			}
 		}
-		*/
-		if len(pn) > 0 && pn[0] != '?' {
-			nv = -1
-		}
-	}
+	*/
 	ss := &SQLiteStmt{c: c, s: s, nv: nv, t: t}
 	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
 	return ss, nil
@@ -440,7 +441,6 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 				for k, v := range m {
 					pn := C.CString(k)
 					if pi := int(C.sqlite3_bind_parameter_index(s.s, pn)); pi > 0 {
-						println(pi)
 						vargs = append(vargs, bindArg{pi, v})
 					}
 					C.free(unsafe.Pointer(pn))
@@ -503,6 +503,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			return s.c.lastError()
 		}
 	}
+	println(4)
 	return nil
 }
 
