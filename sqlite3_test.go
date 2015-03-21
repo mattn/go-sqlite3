@@ -926,7 +926,7 @@ func TestNumberNamedParams(t *testing.T) {
 		t.Error("Failed to call db.Query:", err)
 	}
 
-	_, err = db.Exec(`insert into foo(id, name, extra)) values($1, $2, $2)`, 1, "foo")
+	_, err = db.Exec(`insert into foo(id, name, extra) values($1, $2, $2)`, 1, "foo")
 	if err != nil {
 		t.Error("Failed to call db.Exec:", err)
 	}
