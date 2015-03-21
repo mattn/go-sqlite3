@@ -260,14 +260,17 @@ func errorString(err Error) string {
 //   :memory:
 //   file::memory:
 // go-sqlite handle especially query parameters.
-//   loc=XXX
+//   _loc=XXX
 //     Specify location of time format. It's possible to specify "auto".
+//   _busy_timeout=XXX
+//     Specify value for sqlite3_busy_timeout.
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
 	}
 
 	var loc *time.Location
+	busy_timeout := 5000
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -275,15 +278,23 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return nil, err
 		}
 
-		// loc
-		if val := params.Get("loc"); val != "" {
+		// _loc
+		if val := params.Get("_loc"); val != "" {
 			if val == "auto" {
 				loc = time.Local
 			} else {
 				loc, err = time.LoadLocation(val)
 				if err != nil {
-					return nil, fmt.Errorf("Invalid loc: %v: %v", val, err)
+					return nil, fmt.Errorf("Invalid _loc: %v: %v", val, err)
 				}
+			}
+		}
+
+		// _busy_timeout
+		if val := params.Get("_busy_timeout"); val != "" {
+			busy_timeout = int(strconv.ParseInt(val, 10, 64))
+			if err != nil {
+				return nil, fmt.Errorf("Invalid _busy_timeout: %v: %v", val, err)
 			}
 		}
 
@@ -307,7 +318,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
 
-	rv = C.sqlite3_busy_timeout(db, 5000)
+	rv = C.sqlite3_busy_timeout(db, busy_timeout)
 	if rv != C.SQLITE_OK {
 		return nil, Error{Code: ErrNo(rv)}
 	}
@@ -562,22 +573,16 @@ func (rc *SQLiteRows) Columns() []string {
 
 // Move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
-	for {
-		rv := C.sqlite3_step(rc.s.s)
-		if rv == C.SQLITE_DONE {
-			return io.EOF
+	rv := C.sqlite3_step(rc.s.s)
+	if rv == C.SQLITE_DONE {
+		return io.EOF
+	}
+	if rv != C.SQLITE_ROW {
+		rv = C.sqlite3_reset(rc.s.s)
+		if rv != C.SQLITE_OK {
+			return rc.s.c.lastError()
 		}
-		if rv == C.SQLITE_ROW {
-			break
-		}
-		if rv != C.SQLITE_BUSY && rv != C.SQLITE_LOCKED {
-			err := rc.s.c.lastError()
-			C.sqlite3_reset(rc.s.s)
-			if rc.nc > 0 {
-				C.sqlite3_clear_bindings(rc.s.s)
-			}
-			return err
-		}
+		return nil
 	}
 
 	if rc.decltype == nil {
