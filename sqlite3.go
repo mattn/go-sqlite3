@@ -503,7 +503,6 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			return s.c.lastError()
 		}
 	}
-	println(4)
 	return nil
 }
 
