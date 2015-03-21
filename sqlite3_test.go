@@ -640,7 +640,7 @@ func TestTimezoneConversion(t *testing.T) {
 	zones := []string{"UTC", "US/Central", "US/Pacific", "Local"}
 	for _, tz := range zones {
 		tempFilename := TempFilename()
-		db, err := sql.Open("sqlite3", tempFilename+"?loc="+url.QueryEscape(tz))
+		db, err := sql.Open("sqlite3", tempFilename+"?_loc="+url.QueryEscape(tz))
 		if err != nil {
 			t.Fatal("Failed to open database:", err)
 		}
@@ -845,7 +845,7 @@ func TestStress(t *testing.T) {
 func TestDateTimeLocal(t *testing.T) {
 	zone := "Asia/Tokyo"
 	tempFilename := TempFilename()
-	db, err := sql.Open("sqlite3", tempFilename+"?loc="+zone)
+	db, err := sql.Open("sqlite3", tempFilename+"?_loc="+zone)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
@@ -888,7 +888,7 @@ func TestDateTimeLocal(t *testing.T) {
 	db.Exec("INSERT INTO foo VALUES(?);", dt)
 
 	db.Close()
-	db, err = sql.Open("sqlite3", tempFilename+"?loc="+zone)
+	db, err = sql.Open("sqlite3", tempFilename+"?_loc="+zone)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}

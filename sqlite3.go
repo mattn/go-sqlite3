@@ -292,10 +292,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 		// _busy_timeout
 		if val := params.Get("_busy_timeout"); val != "" {
-			busy_timeout = int(strconv.ParseInt(val, 10, 64))
+			iv, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Invalid _busy_timeout: %v: %v", val, err)
 			}
+			busy_timeout = int(iv)
 		}
 
 		if !strings.HasPrefix(dsn, "file:") {
