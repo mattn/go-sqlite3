@@ -382,18 +382,6 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 		t = strings.TrimSpace(C.GoString(tail))
 	}
 	nv := int(C.sqlite3_bind_parameter_count(s))
-	/*
-		if nv > 0 {
-			pn := C.GoString(C.sqlite3_bind_parameter_name(s, 1))
-			// TODO: map argument for named parameters
-			if len(pn) > 0 && pn[0] == '$' && pn[1] != '1' {
-				nv = -1
-			}
-			if len(pn) > 0 && pn[0] != '?' {
-				nv = -1
-			}
-		}
-	*/
 	ss := &SQLiteStmt{c: c, s: s, nv: nv, t: t}
 	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
 	return ss, nil
@@ -434,35 +422,9 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 
 	var vargs []bindArg
 	narg := len(args)
-	if s.nv == -1 {
-		/* TODO: map argument for named parameters
-		if narg == 1 {
-			if m, ok := args[0].(map[string]driver.Value); ok {
-				for k, v := range m {
-					pn := C.CString(k)
-					if pi := int(C.sqlite3_bind_parameter_index(s.s, pn)); pi > 0 {
-						vargs = append(vargs, bindArg{pi, v})
-					}
-					C.free(unsafe.Pointer(pn))
-				}
-			}
-			narg = 0
-		}
-		*/
-		if narg > 0 {
-			for i := 0; i < narg; i++ {
-				pn := C.CString(fmt.Sprint(i + 1))
-				if pi := int(C.sqlite3_bind_parameter_index(s.s, pn)); pi > 0 {
-					vargs = append(vargs, bindArg{pi, args[i]})
-				}
-				C.free(unsafe.Pointer(pn))
-			}
-		}
-	} else {
-		vargs = make([]bindArg, narg)
-		for i, v := range args {
-			vargs[i] = bindArg{i + 1, v}
-		}
+	vargs = make([]bindArg, narg)
+	for i, v := range args {
+		vargs[i] = bindArg{i + 1, v}
 	}
 
 	for _, varg := range vargs {
