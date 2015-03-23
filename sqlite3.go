@@ -373,7 +373,7 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 		return nil, c.lastError()
 	}
 	var t string
-	if tail != nil && C.strlen(tail) > 0 {
+	if tail != nil && *tail != '\000' {
 		t = strings.TrimSpace(C.GoString(tail))
 	}
 	ss := &SQLiteStmt{c: c, s: s, t: t}
