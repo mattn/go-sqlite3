@@ -122,6 +122,7 @@ type SQLiteStmt struct {
 	c      *SQLiteConn
 	s      *C.sqlite3_stmt
 	nv     int
+	nn     []string
 	t      string
 	closed bool
 	cls    bool
@@ -382,7 +383,14 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 		t = strings.TrimSpace(C.GoString(tail))
 	}
 	nv := int(C.sqlite3_bind_parameter_count(s))
-	ss := &SQLiteStmt{c: c, s: s, nv: nv, t: t}
+	var nn []string
+	for i := 0; i < nv; i++ {
+		pn := C.GoString(C.sqlite3_bind_parameter_name(s, C.int(i+1)))
+		if len(pn) > 1 && pn[0] == '$' && 48 <= pn[1] && pn[1] <= 57 {
+			nn = append(nn, C.GoString(C.sqlite3_bind_parameter_name(s, C.int(i+1))))
+		}
+	}
+	ss := &SQLiteStmt{c: c, s: s, nv: nv, nn: nn, t: t}
 	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
 	return ss, nil
 }
@@ -423,8 +431,16 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 	var vargs []bindArg
 	narg := len(args)
 	vargs = make([]bindArg, narg)
-	for i, v := range args {
-		vargs[i] = bindArg{i + 1, v}
+	if len(s.nn) > 0 {
+		for i, v := range s.nn {
+			if pi, err := strconv.Atoi(v[1:]); err == nil {
+				vargs[i] = bindArg{pi, args[i]}
+			}
+		}
+	} else {
+		for i, v := range args {
+			vargs[i] = bindArg{i + 1, v}
+		}
 	}
 
 	for _, varg := range vargs {
