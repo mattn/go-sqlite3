@@ -47,14 +47,23 @@ _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
 #include <stdio.h>
 #include <stdint.h>
 
-static long
-_sqlite3_last_insert_rowid(sqlite3* db) {
-  return (long) sqlite3_last_insert_rowid(db);
+static int
+_sqlite3_exec(sqlite3* db, const char* pcmd, long* rowid, long* changes)
+{
+  int rv = sqlite3_exec(db, pcmd, 0, 0, 0);
+  *rowid = (long) sqlite3_last_insert_rowid(db);
+  *changes = (long) sqlite3_changes(db);
+  return rv;
 }
 
-static long
-_sqlite3_changes(sqlite3* db) {
-  return (long) sqlite3_changes(db);
+static int
+_sqlite3_step(sqlite3_stmt* stmt, long* rowid, long* changes)
+{
+  int rv = sqlite3_step(stmt);
+  sqlite3* db = sqlite3_db_handle(stmt);
+  *rowid = (long) sqlite3_last_insert_rowid(db);
+  *changes = (long) sqlite3_changes(db);
+  return rv;
 }
 
 */
@@ -230,14 +239,13 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 func (c *SQLiteConn) exec(cmd string) (driver.Result, error) {
 	pcmd := C.CString(cmd)
 	defer C.free(unsafe.Pointer(pcmd))
-	rv := C.sqlite3_exec(c.db, pcmd, nil, nil, nil)
+
+	var rowid, changes C.long
+	rv := C._sqlite3_exec(c.db, pcmd, &rowid, &changes)
 	if rv != C.SQLITE_OK {
 		return nil, c.lastError()
 	}
-	return &SQLiteResult{
-		int64(C._sqlite3_last_insert_rowid(c.db)),
-		int64(C._sqlite3_changes(c.db)),
-	}, nil
+	return &SQLiteResult{int64(rowid), int64(changes)}, nil
 }
 
 // Begin transaction.
@@ -465,18 +473,14 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 		C.sqlite3_reset(s.s)
 		return nil, err
 	}
-	rv := C.sqlite3_step(s.s)
+	var rowid, changes C.long
+	rv := C._sqlite3_step(s.s, &rowid, &changes)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		err := s.c.lastError()
 		C.sqlite3_reset(s.s)
 		return nil, err
 	}
-
-	res := &SQLiteResult{
-		int64(C._sqlite3_last_insert_rowid(s.c.db)),
-		int64(C._sqlite3_changes(s.c.db)),
-	}
-	return res, nil
+	return &SQLiteResult{int64(rowid), int64(changes)}, nil
 }
 
 // Close the rows.
