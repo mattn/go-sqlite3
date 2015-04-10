@@ -117,8 +117,9 @@ type SQLiteDriver struct {
 
 // Conn struct.
 type SQLiteConn struct {
-	db  *C.sqlite3
-	loc *time.Location
+	db     *C.sqlite3
+	loc    *time.Location
+	txlock string
 }
 
 // Tx struct.
@@ -252,7 +253,7 @@ func (c *SQLiteConn) exec(cmd string) (driver.Result, error) {
 
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
-	if _, err := c.exec("BEGIN"); err != nil {
+	if _, err := c.exec(c.txlock); err != nil {
 		return nil, err
 	}
 	return &SQLiteTx{c}, nil
@@ -273,12 +274,16 @@ func errorString(err Error) string {
 //     Specify location of time format. It's possible to specify "auto".
 //   _busy_timeout=XXX
 //     Specify value for sqlite3_busy_timeout.
+//   _txlock=XXX
+//     Specify locking behavior for transactions.  XXX can be "immediate",
+//     "deferred", "exclusive".
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
 	}
 
 	var loc *time.Location
+	txlock := "BEGIN"
 	busy_timeout := 5000
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -308,6 +313,20 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			busy_timeout = int(iv)
 		}
 
+		// _txlock
+		if val := params.Get("_txlock"); val != "" {
+			switch val {
+			case "immediate":
+				txlock = "BEGIN IMMEDIATE"
+			case "exclusive":
+				txlock = "BEGIN EXCLUSIVE"
+			case "deferred":
+				txlock = "BEGIN"
+			default:
+				return nil, fmt.Errorf("Invalid _txlock: %v", val)
+			}
+		}
+
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
@@ -333,7 +352,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, Error{Code: ErrNo(rv)}
 	}
 
-	conn := &SQLiteConn{db: db, loc: loc}
+	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
 
 	if len(d.Extensions) > 0 {
 		rv = C.sqlite3_enable_load_extension(db, 1)
