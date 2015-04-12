@@ -945,3 +945,42 @@ func TestNumberNamedParams(t *testing.T) {
 		t.Error("Failed to db.QueryRow: not matched results")
 	}
 }
+
+func TestStringContainingZero(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer os.Remove(tempFilename)
+	defer db.Close()
+
+	_, err = db.Exec(`
+	create table foo (id integer, name, extra text);
+	`)
+	if err != nil {
+		t.Error("Failed to call db.Query:", err)
+	}
+
+	const text = "foo\x00bar"
+
+	_, err = db.Exec(`insert into foo(id, name, extra) values($1, $2, $2)`, 1, text)
+	if err != nil {
+		t.Error("Failed to call db.Exec:", err)
+	}
+
+	row := db.QueryRow(`select id, extra from foo where id = $1 and extra = $2`, 1, text)
+	if row == nil {
+		t.Error("Failed to call db.QueryRow")
+	}
+
+	var id int
+	var extra string
+	err = row.Scan(&id, &extra)
+	if err != nil {
+		t.Error("Failed to db.Scan:", err)
+	}
+	if id != 1 || extra != text {
+		t.Error("Failed to db.QueryRow: not matched results")
+	}
+}
