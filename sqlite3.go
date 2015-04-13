@@ -624,7 +624,9 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_TEXT:
 			var err error
 			var timeVal time.Time
-			s := C.GoString((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))))
+
+			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
+			s := C.GoStringN((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))), C.int(n))
 
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
