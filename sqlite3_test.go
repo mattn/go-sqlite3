@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -25,11 +26,17 @@ func TempFilename() string {
 	return filepath.Join(os.TempDir(), "foo"+hex.EncodeToString(randBytes)+".db")
 }
 
-func TestOpen(t *testing.T) {
+func doTestOpen(t *testing.T, option string) (string, error) {
+	var url string
 	tempFilename := TempFilename()
-	db, err := sql.Open("sqlite3", tempFilename)
+	if option != "" {
+		url = tempFilename + option
+	} else {
+		url = tempFilename
+	}
+	db, err := sql.Open("sqlite3", url)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		return "Failed to open database:", err
 	}
 	defer os.Remove(tempFilename)
 	defer db.Close()
@@ -37,11 +44,38 @@ func TestOpen(t *testing.T) {
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		return "Failed to create table:", err
 	}
 
 	if stat, err := os.Stat(tempFilename); err != nil || stat.IsDir() {
-		t.Error("Failed to create ./foo.db")
+		return "Failed to create ./foo.db", nil
+	}
+
+	return "", nil
+}
+
+func TestOpen(t *testing.T) {
+	cases := map[string]bool{
+		"":                   true,
+		"?_txlock=immediate": true,
+		"?_txlock=deferred":  true,
+		"?_txlock=exclusive": true,
+		"?_txlock=bogus":     false,
+	}
+	for option, expectedPass := range cases {
+		result, err := doTestOpen(t, option)
+		if result == "" {
+			if ! expectedPass {
+				errmsg := fmt.Sprintf("_txlock error not caught at dbOpen with option: %s", option)
+				t.Fatal(errmsg)
+			}
+		} else if expectedPass {
+			if err == nil {
+				t.Fatal(result)
+			} else {
+				t.Fatal(result, err)
+			}
+		}
 	}
 }
 
