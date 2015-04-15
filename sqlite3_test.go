@@ -8,7 +8,9 @@ package sqlite3
 import (
 	"crypto/rand"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -65,7 +67,7 @@ func TestOpen(t *testing.T) {
 	for option, expectedPass := range cases {
 		result, err := doTestOpen(t, option)
 		if result == "" {
-			if ! expectedPass {
+			if !expectedPass {
 				errmsg := fmt.Sprintf("_txlock error not caught at dbOpen with option: %s", option)
 				t.Fatal(errmsg)
 			}
@@ -1016,5 +1018,43 @@ func TestStringContainingZero(t *testing.T) {
 	}
 	if id != 1 || extra != text {
 		t.Error("Failed to db.QueryRow: not matched results")
+	}
+}
+
+const CurrentTimeStamp = "2006-01-02 15:04:05"
+
+type TimeStamp struct{ *time.Time }
+
+func (t TimeStamp) Scan(value interface{}) error {
+	fmt.Printf("%T\n", value)
+
+	var err error
+	switch v := value.(type) {
+	case string:
+		*t.Time, err = time.Parse(CurrentTimeStamp, v)
+	case []byte:
+		*t.Time, err = time.Parse(CurrentTimeStamp, string(v))
+	default:
+		err = errors.New("invalid type for current_timestamp")
+	}
+	return err
+}
+
+func (t TimeStamp) Value() (driver.Value, error) {
+	return t.Time.Format(CurrentTimeStamp), nil
+}
+
+func TestDateTimeNow(t *testing.T) {
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	var d time.Time
+	err = db.QueryRow("SELECT datetime('now')").Scan(TimeStamp{&d})
+	if err != nil {
+		t.Fatal("Failed to scan datetime:", err)
 	}
 }

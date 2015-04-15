@@ -650,6 +650,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
 				var t time.Time
+				s = strings.TrimSuffix(s, "Z")
 				for _, format := range SQLiteTimestampFormats {
 					if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
 						t = timeVal
