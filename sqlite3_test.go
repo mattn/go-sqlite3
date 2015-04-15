@@ -1026,8 +1026,6 @@ const CurrentTimeStamp = "2006-01-02 15:04:05"
 type TimeStamp struct{ *time.Time }
 
 func (t TimeStamp) Scan(value interface{}) error {
-	fmt.Printf("%T\n", value)
-
 	var err error
 	switch v := value.(type) {
 	case string:
