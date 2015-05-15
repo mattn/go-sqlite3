@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>go-sqlite3 by mattn</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/github-light.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>go-sqlite3</h1>
+        <p>sqlite3 driver for go that using database/sql</p>
+
+        <p class="view"><a href="https://github.com/mattn/go-sqlite3">View the Project on GitHub <small>mattn/go-sqlite3</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/mattn/go-sqlite3/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/mattn/go-sqlite3/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/mattn/go-sqlite3">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a id="go-sqlite3" class="anchor" href="#go-sqlite3" aria-hidden="true"><span class="octicon octicon-link"></span></a>go-sqlite3</h1>
+
+<p><a href="https://travis-ci.org/mattn/go-sqlite3"><img src="https://travis-ci.org/mattn/go-sqlite3.png?branch=master" alt="Build Status"></a>
+<a href="https://coveralls.io/r/mattn/go-sqlite3?branch=master"><img src="https://coveralls.io/repos/mattn/go-sqlite3/badge.png?branch=master" alt="Coverage Status"></a></p>
+
+<h2>
+<a id="description" class="anchor" href="#description" aria-hidden="true"><span class="octicon octicon-link"></span></a>Description</h2>
+
+<p>sqlite3 driver conforming to the built-in database/sql interface</p>
+
+<h2>
+<a id="installation" class="anchor" href="#installation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Installation</h2>
+
+<p>This package can be installed with the go get command:</p>
+
+<pre><code>go get github.com/mattn/go-sqlite3
+</code></pre>
+
+<h2>
+<a id="documentation" class="anchor" href="#documentation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Documentation</h2>
+
+<p>API documentation can be found here: <a href="http://godoc.org/github.com/mattn/go-sqlite3">http://godoc.org/github.com/mattn/go-sqlite3</a></p>
+
+<p>Examples can be found under the <code>./_example</code> directory</p>
+
+<h2>
+<a id="faq" class="anchor" href="#faq" aria-hidden="true"><span class="octicon octicon-link"></span></a>FAQ</h2>
+
+<ul>
+<li>
+<p>Can't build go-sqlite3 on windows 64bit.</p>
+
+<blockquote>
+<p>Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit. 
+See: <a href="https://github.com/mattn/go-sqlite3/issues/27">https://github.com/mattn/go-sqlite3/issues/27</a></p>
+</blockquote>
+</li>
+<li>
+<p>Getting insert error while query is opened.</p>
+
+<blockquote>
+<p>You can pass some arguments into the connection string, for example, a URI.
+See: <a href="https://github.com/mattn/go-sqlite3/issues/39">https://github.com/mattn/go-sqlite3/issues/39</a></p>
+</blockquote>
+</li>
+<li>
+<p>Do you want cross compiling? mingw on Linux or Mac?</p>
+
+<blockquote>
+<p>See: <a href="https://github.com/mattn/go-sqlite3/issues/106">https://github.com/mattn/go-sqlite3/issues/106</a>
+See also: <a href="http://www.limitlessfx.com/cross-compile-golang-app-for-windows-from-linux.html">http://www.limitlessfx.com/cross-compile-golang-app-for-windows-from-linux.html</a></p>
+</blockquote>
+</li>
+<li>
+<p>Want to get time.Time with current locale</p>
+
+<p>Use <code>loc=auto</code> in SQLite3 filename schema like <code>file:foo.db?loc=auto</code>.</p>
+</li>
+</ul>
+
+<h2>
+<a id="license" class="anchor" href="#license" aria-hidden="true"><span class="octicon octicon-link"></span></a>License</h2>
+
+<p>MIT: <a href="http://mattn.mit-license.org/2012">http://mattn.mit-license.org/2012</a></p>
+
+<p>sqlite3-binding.c, sqlite3-binding.h, sqlite3ext.h</p>
+
+<p>The -binding suffix was added to avoid build failures under gccgo.</p>
+
+<p>In this repository, those files are amalgamation code that copied from SQLite3. The license of those codes are depend on the license of SQLite3.</p>
+
+<h2>
+<a id="author" class="anchor" href="#author" aria-hidden="true"><span class="octicon octicon-link"></span></a>Author</h2>
+
+<p>Yasuhiro Matsumoto (a.k.a mattn)</p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/mattn">mattn</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
