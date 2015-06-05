@@ -83,6 +83,27 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+func TestReadonly(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+
+	db1, err := sql.Open("sqlite3", "file:" + tempFilename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db1.Exec("CREATE TABLE test (x int, y float)")
+
+	db2, err := sql.Open("sqlite3", "file:" + tempFilename + "?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = db2
+	_, err = db2.Exec("INSERT INTO test VALUES (1, 3.14)")
+	if err == nil {
+		t.Fatal("didn't expect INSERT into read-only database to work")
+	}
+}
+
 func TestClose(t *testing.T) {
 	tempFilename := TempFilename(t)
 	db, err := sql.Open("sqlite3", tempFilename)
