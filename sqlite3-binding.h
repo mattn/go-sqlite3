@@ -7476,3 +7476,6 @@ struct sqlite3_rtree_query_info {
 
 #endif  /* ifndef _SQLITE3RTREE_H_ */
 
+#ifndef HAVE_USLEEP
+#define HAVE_USLEEP 1
+#endif
