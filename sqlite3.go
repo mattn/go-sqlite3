@@ -9,6 +9,7 @@ package sqlite3
 #cgo CFLAGS: -std=gnu99
 #cgo CFLAGS: -DSQLITE_ENABLE_RTREE -DSQLITE_THREADSAFE
 #cgo CFLAGS: -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS
+#cgo CFLAGS: -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
 #include <sqlite3-binding.h>
 #include <stdlib.h>
 #include <string.h>
