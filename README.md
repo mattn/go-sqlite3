@@ -26,6 +26,10 @@ Examples can be found under the `./_example` directory
 FAQ
 ---
 
+* Want to build go-sqlite3 with libsqlite3 on my linux.
+
+    Use `go build --tags "libsqlite3 linux"`
+
 * Can't build go-sqlite3 on windows 64bit.
 
     > Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit. 
