@@ -55,7 +55,6 @@ func main() {
 		rows.Scan(&id, &name)
 		fmt.Println(id, name)
 	}
-	rows.Close()
 
 	stmt, err = db.Prepare("select name from foo where id = ?")
 	if err != nil {
