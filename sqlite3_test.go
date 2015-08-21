@@ -1071,6 +1071,13 @@ func TestFunctionRegistration(t *testing.T) {
 	regex := func(re, s string) (bool, error) {
 		return regexp.MatchString(re, s)
 	}
+	variadic := func(a, b int64, c ...int64) int64 {
+		ret := a + b
+		for _, d := range c {
+			ret += d
+		}
+		return ret
+	}
 
 	sql.Register("sqlite3_FunctionRegistration", &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
@@ -1098,6 +1105,9 @@ func TestFunctionRegistration(t *testing.T) {
 			if err := conn.RegisterFunc("regex", regex, true); err != nil {
 				return err
 			}
+			if err := conn.RegisterFunc("variadic", variadic, true); err != nil {
+				return err
+			}
 			return nil
 		},
 	})
@@ -1121,6 +1131,9 @@ func TestFunctionRegistration(t *testing.T) {
 		{"SELECT not(0)", true},
 		{`SELECT regex("^foo.*", "foobar")`, true},
 		{`SELECT regex("^foo.*", "barfoobar")`, false},
+		{"SELECT variadic(1,2)", int64(3)},
+		{"SELECT variadic(1,2,3,4)", int64(10)},
+		{"SELECT variadic(1,1,1,1,1,1,1,1,1,1)", int64(10)},
 	}
 
 	for _, op := range ops {
