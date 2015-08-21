@@ -166,7 +166,8 @@ type SQLiteRows struct {
 
 type functionInfo struct {
 	f             reflect.Value
-	argConverters []func(*C.sqlite3_value) (reflect.Value, error)
+	argConverters []callbackArgConverter
+	retConverter  callbackRetConverter
 }
 
 func (fi *functionInfo) error(ctx *C.sqlite3_context, err error) {
@@ -193,57 +194,10 @@ func (fi *functionInfo) Call(ctx *C.sqlite3_context, argv []*C.sqlite3_value) {
 		return
 	}
 
-	res := ret[0].Interface()
-	// Normalize ret to one of the types sqlite knows.
-	switch r := res.(type) {
-	case int64, float64, []byte, string:
-		// Already the right type
-	case bool:
-		if r {
-			res = int64(1)
-		} else {
-			res = int64(0)
-		}
-	case int:
-		res = int64(r)
-	case uint:
-		res = int64(r)
-	case uint8:
-		res = int64(r)
-	case uint16:
-		res = int64(r)
-	case uint32:
-		res = int64(r)
-	case uint64:
-		res = int64(r)
-	case int8:
-		res = int64(r)
-	case int16:
-		res = int64(r)
-	case int32:
-		res = int64(r)
-	case float32:
-		res = float64(r)
-	default:
-		fi.error(ctx, errors.New("cannot convert returned type to sqlite type"))
+	err := fi.retConverter(ctx, ret[0])
+	if err != nil {
+		fi.error(ctx, err)
 		return
-	}
-
-	switch r := res.(type) {
-	case int64:
-		C.sqlite3_result_int64(ctx, C.sqlite3_int64(r))
-	case float64:
-		C.sqlite3_result_double(ctx, C.double(r))
-	case []byte:
-		if len(r) == 0 {
-			C.sqlite3_result_null(ctx)
-		} else {
-			C._sqlite3_result_blob(ctx, unsafe.Pointer(&r[0]), C.int(len(r)))
-		}
-	case string:
-		C._sqlite3_result_text(ctx, C.CString(r))
-	default:
-		panic("unreachable")
 	}
 }
 
@@ -261,10 +215,10 @@ func (tx *SQLiteTx) Rollback() error {
 
 // RegisterFunc makes a Go function available as a SQLite function.
 //
-// The function must accept only arguments of type int64, float64,
-// []byte or string, and return one value of any numeric type except
-// complex, bool, []byte or string. Optionally, an error can be
-// provided as a second return value.
+// The function can accept arguments of any real numeric type
+// (i.e. not complex), as well as []byte and string. It must return a
+// value of one of those types, and optionally an error as a second
+// value.
 //
 // If pure is true. SQLite will assume that the function's return
 // value depends only on its inputs, and make more aggressive
@@ -287,58 +241,18 @@ func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) erro
 	}
 
 	for i := 0; i < t.NumIn(); i++ {
-		arg := t.In(i)
-		var conv func(*C.sqlite3_value) (reflect.Value, error)
-		switch arg.Kind() {
-		case reflect.Int64:
-			conv = func(v *C.sqlite3_value) (reflect.Value, error) {
-				if C.sqlite3_value_type(v) != C.SQLITE_INTEGER {
-					return reflect.Value{}, fmt.Errorf("Argument %d to %s must be an INTEGER", i+1, name)
-				}
-				return reflect.ValueOf(int64(C.sqlite3_value_int64(v))), nil
-			}
-		case reflect.Float64:
-			conv = func(v *C.sqlite3_value) (reflect.Value, error) {
-				if C.sqlite3_value_type(v) != C.SQLITE_FLOAT {
-					return reflect.Value{}, fmt.Errorf("Argument %d to %s must be a FLOAT", i+1, name)
-				}
-				return reflect.ValueOf(float64(C.sqlite3_value_double(v))), nil
-			}
-		case reflect.Slice:
-			if arg.Elem().Kind() != reflect.Uint8 {
-				return errors.New("The only supported slice type is []byte")
-			}
-			conv = func(v *C.sqlite3_value) (reflect.Value, error) {
-				switch C.sqlite3_value_type(v) {
-				case C.SQLITE_BLOB:
-					l := C.sqlite3_value_bytes(v)
-					p := C.sqlite3_value_blob(v)
-					return reflect.ValueOf(C.GoBytes(p, l)), nil
-				case C.SQLITE_TEXT:
-					l := C.sqlite3_value_bytes(v)
-					c := unsafe.Pointer(C.sqlite3_value_text(v))
-					return reflect.ValueOf(C.GoBytes(c, l)), nil
-				default:
-					return reflect.Value{}, fmt.Errorf("Argument %d to %s must be BLOB or TEXT", i+1, name)
-				}
-			}
-		case reflect.String:
-			conv = func(v *C.sqlite3_value) (reflect.Value, error) {
-				switch C.sqlite3_value_type(v) {
-				case C.SQLITE_BLOB:
-					l := C.sqlite3_value_bytes(v)
-					p := (*C.char)(C.sqlite3_value_blob(v))
-					return reflect.ValueOf(C.GoStringN(p, l)), nil
-				case C.SQLITE_TEXT:
-					c := (*C.char)(unsafe.Pointer(C.sqlite3_value_text(v)))
-					return reflect.ValueOf(C.GoString(c)), nil
-				default:
-					return reflect.Value{}, fmt.Errorf("Argument %d to %s must be BLOB or TEXT", i+1, name)
-				}
-			}
+		conv, err := callbackArg(t.In(i))
+		if err != nil {
+			return err
 		}
 		fi.argConverters = append(fi.argConverters, conv)
 	}
+
+	conv, err := callbackRet(t.Out(0))
+	if err != nil {
+		return err
+	}
+	fi.retConverter = conv
 
 	// fi must outlast the database connection, or we'll have dangling pointers.
 	c.funcs = append(c.funcs, &fi)

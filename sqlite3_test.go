@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -1060,25 +1061,41 @@ func TestDateTimeNow(t *testing.T) {
 }
 
 func TestFunctionRegistration(t *testing.T) {
-	custom_add := func(a, b int64) (int64, error) {
-		return a + b, nil
-	}
-	custom_regex := func(s, re string) bool {
-		matched, err := regexp.MatchString(re, s)
-		if err != nil {
-			// We should really return the error here, but this
-			// function is also testing single return value functions.
-			panic("Bad regexp")
-		}
-		return matched
+	addi_8_16_32 := func(a int8, b int16) int32 { return int32(a) + int32(b) }
+	addi_64 := func(a, b int64) int64 { return a + b }
+	addu_8_16_32 := func(a uint8, b uint16) uint32 { return uint32(a) + uint32(b) }
+	addu_64 := func(a, b uint64) uint64 { return a + b }
+	addiu := func(a int, b uint) int64 { return int64(a) + int64(b) }
+	addf_32_64 := func(a float32, b float64) float64 { return float64(a) + b }
+	not := func(a bool) bool { return !a }
+	regex := func(re, s string) (bool, error) {
+		return regexp.MatchString(re, s)
 	}
 
 	sql.Register("sqlite3_FunctionRegistration", &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
-			if err := conn.RegisterFunc("custom_add", custom_add, true); err != nil {
+			if err := conn.RegisterFunc("addi_8_16_32", addi_8_16_32, true); err != nil {
 				return err
 			}
-			if err := conn.RegisterFunc("regexp", custom_regex, true); err != nil {
+			if err := conn.RegisterFunc("addi_64", addi_64, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("addu_8_16_32", addu_8_16_32, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("addu_64", addu_64, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("addiu", addiu, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("addf_32_64", addf_32_64, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("not", not, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("regex", regex, true); err != nil {
 				return err
 			}
 			return nil
@@ -1090,42 +1107,29 @@ func TestFunctionRegistration(t *testing.T) {
 	}
 	defer db.Close()
 
-	additions := []struct {
-		a, b, c int64
+	ops := []struct {
+		query    string
+		expected interface{}
 	}{
-		{1, 1, 2},
-		{1, 3, 4},
-		{1, -1, 0},
+		{"SELECT addi_8_16_32(1,2)", int32(3)},
+		{"SELECT addi_64(1,2)", int64(3)},
+		{"SELECT addu_8_16_32(1,2)", uint32(3)},
+		{"SELECT addu_64(1,2)", uint64(3)},
+		{"SELECT addiu(1,2)", int64(3)},
+		{"SELECT addf_32_64(1.5,1.5)", float64(3)},
+		{"SELECT not(1)", false},
+		{"SELECT not(0)", true},
+		{`SELECT regex("^foo.*", "foobar")`, true},
+		{`SELECT regex("^foo.*", "barfoobar")`, false},
 	}
 
-	for _, add := range additions {
-		var i int64
-		err = db.QueryRow("SELECT custom_add($1, $2)", add.a, add.b).Scan(&i)
+	for _, op := range ops {
+		ret := reflect.New(reflect.TypeOf(op.expected))
+		err = db.QueryRow(op.query).Scan(ret.Interface())
 		if err != nil {
-			t.Fatal("Failed to call custom_add:", err)
-		}
-		if i != add.c {
-			t.Fatalf("custom_add returned the wrong value, got %d, want %d", i, add.c)
-		}
-	}
-
-	regexes := []struct {
-		re, in string
-		out    bool
-	}{
-		{".*", "foo", true},
-		{"^foo.*", "foobar", true},
-		{"^foo.*", "barfoo", false},
-	}
-
-	for _, re := range regexes {
-		var b bool
-		err = db.QueryRow("SELECT regexp($1, $2)", re.in, re.re).Scan(&b)
-		if err != nil {
-			t.Fatal("Failed to call regexp:", err)
-		}
-		if b != re.out {
-			t.Fatalf("regexp returned the wrong value, got %v, want %v", b, re.out)
+			t.Errorf("Query %q failed: %s", op.query, err)
+		} else if !reflect.DeepEqual(ret.Elem().Interface(), op.expected) {
+			t.Errorf("Query %q returned wrong value: got %v (%T), want %v (%T)", op.query, ret.Elem().Interface(), ret.Elem().Interface(), op.expected, op.expected)
 		}
 	}
 }
@@ -1134,8 +1138,8 @@ var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
 	customFunctionOnce.Do(func() {
-		custom_add := func(a, b int64) (int64, error) {
-			return a + b, nil
+		custom_add := func(a, b int64) int64 {
+			return a + b
 		}
 
 		sql.Register("sqlite3_BenchmarkCustomFunctions", &SQLiteDriver{

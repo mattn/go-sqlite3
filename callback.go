@@ -5,16 +5,214 @@
 
 package sqlite3
 
+// You can't export a Go function to C and have definitions in the C
+// preamble in the same file, so we have to have callbackTrampoline in
+// its own file. Because we need a separate file anyway, the support
+// code for SQLite custom functions is in here.
+
 /*
 #include <sqlite3-binding.h>
+
+void _sqlite3_result_text(sqlite3_context* ctx, const char* s);
+void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l);
 */
 import "C"
 
-import "unsafe"
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"unsafe"
+)
 
 //export callbackTrampoline
 func callbackTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
 	args := (*[1 << 30]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
 	fi := (*functionInfo)(unsafe.Pointer(C.sqlite3_user_data(ctx)))
 	fi.Call(ctx, args)
+}
+
+// This is only here so that tests can refer to it.
+type callbackArgRaw C.sqlite3_value
+
+type callbackArgConverter func(*C.sqlite3_value) (reflect.Value, error)
+
+type callbackArgCast struct {
+	f   callbackArgConverter
+	typ reflect.Type
+}
+
+func (c callbackArgCast) Run(v *C.sqlite3_value) (reflect.Value, error) {
+	val, err := c.f(v)
+	if err != nil {
+		return reflect.Value{}, err
+	}
+	if !val.Type().ConvertibleTo(c.typ) {
+		return reflect.Value{}, fmt.Errorf("cannot convert %s to %s", val.Type(), c.typ)
+	}
+	return val.Convert(c.typ), nil
+}
+
+func callbackArgInt64(v *C.sqlite3_value) (reflect.Value, error) {
+	if C.sqlite3_value_type(v) != C.SQLITE_INTEGER {
+		return reflect.Value{}, fmt.Errorf("argument must be an INTEGER")
+	}
+	return reflect.ValueOf(int64(C.sqlite3_value_int64(v))), nil
+}
+
+func callbackArgBool(v *C.sqlite3_value) (reflect.Value, error) {
+	if C.sqlite3_value_type(v) != C.SQLITE_INTEGER {
+		return reflect.Value{}, fmt.Errorf("argument must be an INTEGER")
+	}
+	i := int64(C.sqlite3_value_int64(v))
+	val := false
+	if i != 0 {
+		val = true
+	}
+	return reflect.ValueOf(val), nil
+}
+
+func callbackArgFloat64(v *C.sqlite3_value) (reflect.Value, error) {
+	if C.sqlite3_value_type(v) != C.SQLITE_FLOAT {
+		return reflect.Value{}, fmt.Errorf("argument must be a FLOAT")
+	}
+	return reflect.ValueOf(float64(C.sqlite3_value_double(v))), nil
+}
+
+func callbackArgBytes(v *C.sqlite3_value) (reflect.Value, error) {
+	switch C.sqlite3_value_type(v) {
+	case C.SQLITE_BLOB:
+		l := C.sqlite3_value_bytes(v)
+		p := C.sqlite3_value_blob(v)
+		return reflect.ValueOf(C.GoBytes(p, l)), nil
+	case C.SQLITE_TEXT:
+		l := C.sqlite3_value_bytes(v)
+		c := unsafe.Pointer(C.sqlite3_value_text(v))
+		return reflect.ValueOf(C.GoBytes(c, l)), nil
+	default:
+		return reflect.Value{}, fmt.Errorf("argument must be BLOB or TEXT")
+	}
+}
+
+func callbackArgString(v *C.sqlite3_value) (reflect.Value, error) {
+	switch C.sqlite3_value_type(v) {
+	case C.SQLITE_BLOB:
+		l := C.sqlite3_value_bytes(v)
+		p := (*C.char)(C.sqlite3_value_blob(v))
+		return reflect.ValueOf(C.GoStringN(p, l)), nil
+	case C.SQLITE_TEXT:
+		c := (*C.char)(unsafe.Pointer(C.sqlite3_value_text(v)))
+		return reflect.ValueOf(C.GoString(c)), nil
+	default:
+		return reflect.Value{}, fmt.Errorf("argument must be BLOB or TEXT")
+	}
+}
+
+func callbackArg(typ reflect.Type) (callbackArgConverter, error) {
+	switch typ.Kind() {
+	case reflect.Slice:
+		if typ.Elem().Kind() != reflect.Uint8 {
+			return nil, errors.New("the only supported slice type is []byte")
+		}
+		return callbackArgBytes, nil
+	case reflect.String:
+		return callbackArgString, nil
+	case reflect.Bool:
+		return callbackArgBool, nil
+	case reflect.Int64:
+		return callbackArgInt64, nil
+	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Int, reflect.Uint:
+		c := callbackArgCast{callbackArgInt64, typ}
+		return c.Run, nil
+	case reflect.Float64:
+		return callbackArgFloat64, nil
+	case reflect.Float32:
+		c := callbackArgCast{callbackArgFloat64, typ}
+		return c.Run, nil
+	default:
+		return nil, fmt.Errorf("don't know how to convert to %s", typ)
+	}
+}
+
+type callbackRetConverter func(*C.sqlite3_context, reflect.Value) error
+
+func callbackRetInteger(ctx *C.sqlite3_context, v reflect.Value) error {
+	switch v.Type().Kind() {
+	case reflect.Int64:
+	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Int, reflect.Uint:
+		v = v.Convert(reflect.TypeOf(int64(0)))
+	case reflect.Bool:
+		b := v.Interface().(bool)
+		if b {
+			v = reflect.ValueOf(int64(1))
+		} else {
+			v = reflect.ValueOf(int64(0))
+		}
+	default:
+		return fmt.Errorf("cannot convert %s to INTEGER", v.Type())
+	}
+
+	C.sqlite3_result_int64(ctx, C.sqlite3_int64(v.Interface().(int64)))
+	return nil
+}
+
+func callbackRetFloat(ctx *C.sqlite3_context, v reflect.Value) error {
+	switch v.Type().Kind() {
+	case reflect.Float64:
+	case reflect.Float32:
+		v = v.Convert(reflect.TypeOf(float64(0)))
+	default:
+		return fmt.Errorf("cannot convert %s to FLOAT", v.Type())
+	}
+
+	C.sqlite3_result_double(ctx, C.double(v.Interface().(float64)))
+	return nil
+}
+
+func callbackRetBlob(ctx *C.sqlite3_context, v reflect.Value) error {
+	if v.Type().Kind() != reflect.Slice || v.Type().Elem().Kind() != reflect.Uint8 {
+		return fmt.Errorf("cannot convert %s to BLOB", v.Type())
+	}
+	i := v.Interface()
+	if i == nil || len(i.([]byte)) == 0 {
+		C.sqlite3_result_null(ctx)
+	} else {
+		bs := i.([]byte)
+		C._sqlite3_result_blob(ctx, unsafe.Pointer(&bs[0]), C.int(len(bs)))
+	}
+	return nil
+}
+
+func callbackRetText(ctx *C.sqlite3_context, v reflect.Value) error {
+	if v.Type().Kind() != reflect.String {
+		return fmt.Errorf("cannot convert %s to TEXT", v.Type())
+	}
+	C._sqlite3_result_text(ctx, C.CString(v.Interface().(string)))
+	return nil
+}
+
+func callbackRet(typ reflect.Type) (callbackRetConverter, error) {
+	switch typ.Kind() {
+	case reflect.Slice:
+		if typ.Elem().Kind() != reflect.Uint8 {
+			return nil, errors.New("the only supported slice type is []byte")
+		}
+		return callbackRetBlob, nil
+	case reflect.String:
+		return callbackRetText, nil
+	case reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Int, reflect.Uint:
+		return callbackRetInteger, nil
+	case reflect.Float32, reflect.Float64:
+		return callbackRetFloat, nil
+	default:
+		return nil, fmt.Errorf("don't know how to convert to %s", typ)
+	}
+}
+
+// Test support code. Tests are not allowed to import "C", so we can't
+// declare any functions that use C.sqlite3_value.
+func callbackSyntheticForTests(v reflect.Value, err error) callbackArgConverter {
+	return func(*C.sqlite3_value) (reflect.Value, error) {
+		return v, err
+	}
 }
