@@ -15,7 +15,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1054,5 +1056,111 @@ func TestDateTimeNow(t *testing.T) {
 	err = db.QueryRow("SELECT datetime('now')").Scan(TimeStamp{&d})
 	if err != nil {
 		t.Fatal("Failed to scan datetime:", err)
+	}
+}
+
+func TestFunctionRegistration(t *testing.T) {
+	custom_add := func(a, b int64) (int64, error) {
+		return a + b, nil
+	}
+	custom_regex := func(s, re string) bool {
+		matched, err := regexp.MatchString(re, s)
+		if err != nil {
+			// We should really return the error here, but this
+			// function is also testing single return value functions.
+			panic("Bad regexp")
+		}
+		return matched
+	}
+
+	sql.Register("sqlite3_FunctionRegistration", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			if err := conn.RegisterFunc("custom_add", custom_add, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("regexp", custom_regex, true); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	db, err := sql.Open("sqlite3_FunctionRegistration", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	additions := []struct {
+		a, b, c int64
+	}{
+		{1, 1, 2},
+		{1, 3, 4},
+		{1, -1, 0},
+	}
+
+	for _, add := range additions {
+		var i int64
+		err = db.QueryRow("SELECT custom_add($1, $2)", add.a, add.b).Scan(&i)
+		if err != nil {
+			t.Fatal("Failed to call custom_add:", err)
+		}
+		if i != add.c {
+			t.Fatalf("custom_add returned the wrong value, got %d, want %d", i, add.c)
+		}
+	}
+
+	regexes := []struct {
+		re, in string
+		out    bool
+	}{
+		{".*", "foo", true},
+		{"^foo.*", "foobar", true},
+		{"^foo.*", "barfoo", false},
+	}
+
+	for _, re := range regexes {
+		var b bool
+		err = db.QueryRow("SELECT regexp($1, $2)", re.in, re.re).Scan(&b)
+		if err != nil {
+			t.Fatal("Failed to call regexp:", err)
+		}
+		if b != re.out {
+			t.Fatalf("regexp returned the wrong value, got %v, want %v", b, re.out)
+		}
+	}
+}
+
+var customFunctionOnce sync.Once
+
+func BenchmarkCustomFunctions(b *testing.B) {
+	customFunctionOnce.Do(func() {
+		custom_add := func(a, b int64) (int64, error) {
+			return a + b, nil
+		}
+
+		sql.Register("sqlite3_BenchmarkCustomFunctions", &SQLiteDriver{
+			ConnectHook: func(conn *SQLiteConn) error {
+				// Impure function to force sqlite to reexecute it each time.
+				if err := conn.RegisterFunc("custom_add", custom_add, false); err != nil {
+					return err
+				}
+				return nil
+			},
+		})
+	})
+
+	db, err := sql.Open("sqlite3_BenchmarkCustomFunctions", ":memory:")
+	if err != nil {
+		b.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var i int64
+		err = db.QueryRow("SELECT custom_add(1,2)").Scan(&i)
+		if err != nil {
+			b.Fatal("Failed to run custom add:", err)
+		}
 	}
 }
