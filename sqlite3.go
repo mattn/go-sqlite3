@@ -75,6 +75,8 @@ void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l) {
 }
 
 void callbackTrampoline(sqlite3_context*, int, sqlite3_value**);
+void stepTrampoline(sqlite3_context*, int, sqlite3_value**);
+void doneTrampoline(sqlite3_context*);
 */
 import "C"
 import (
@@ -127,10 +129,11 @@ type SQLiteDriver struct {
 
 // Conn struct.
 type SQLiteConn struct {
-	db     *C.sqlite3
-	loc    *time.Location
-	txlock string
-	funcs  []*functionInfo
+	db          *C.sqlite3
+	loc         *time.Location
+	txlock      string
+	funcs       []*functionInfo
+	aggregators []*aggInfo
 }
 
 // Tx struct.
@@ -171,49 +174,96 @@ type functionInfo struct {
 	retConverter      callbackRetConverter
 }
 
-func (fi *functionInfo) error(ctx *C.sqlite3_context, err error) {
-	cstr := C.CString(err.Error())
-	defer C.free(unsafe.Pointer(cstr))
-	C.sqlite3_result_error(ctx, cstr, -1)
-}
-
 func (fi *functionInfo) Call(ctx *C.sqlite3_context, argv []*C.sqlite3_value) {
-	var args []reflect.Value
-
-	if len(argv) < len(fi.argConverters) {
-		fi.error(ctx, fmt.Errorf("function requires at least %d arguments", len(fi.argConverters)))
-	}
-
-	for i, arg := range argv[:len(fi.argConverters)] {
-		v, err := fi.argConverters[i](arg)
-		if err != nil {
-			fi.error(ctx, err)
-			return
-		}
-		args = append(args, v)
-	}
-
-	if fi.variadicConverter != nil {
-		for _, arg := range argv[len(fi.argConverters):] {
-			v, err := fi.variadicConverter(arg)
-			if err != nil {
-				fi.error(ctx, err)
-				return
-			}
-			args = append(args, v)
-		}
+	args, err := callbackConvertArgs(argv, fi.argConverters, fi.variadicConverter)
+	if err != nil {
+		callbackError(ctx, err)
+		return
 	}
 
 	ret := fi.f.Call(args)
 
 	if len(ret) == 2 && ret[1].Interface() != nil {
-		fi.error(ctx, ret[1].Interface().(error))
+		callbackError(ctx, ret[1].Interface().(error))
 		return
 	}
 
-	err := fi.retConverter(ctx, ret[0])
+	err = fi.retConverter(ctx, ret[0])
 	if err != nil {
-		fi.error(ctx, err)
+		callbackError(ctx, err)
+		return
+	}
+}
+
+type aggInfo struct {
+	constructor reflect.Value
+
+	// Active aggregator objects for aggregations in flight. The
+	// aggregators are indexed by a counter stored in the aggregation
+	// user data space provided by sqlite.
+	active map[int64]reflect.Value
+	next   int64
+
+	stepArgConverters     []callbackArgConverter
+	stepVariadicConverter callbackArgConverter
+
+	doneRetConverter callbackRetConverter
+}
+
+func (ai *aggInfo) agg(ctx *C.sqlite3_context) (int64, reflect.Value, error) {
+	aggIdx := (*int64)(C.sqlite3_aggregate_context(ctx, C.int(8)))
+	if *aggIdx == 0 {
+		*aggIdx = ai.next
+		ret := ai.constructor.Call(nil)
+		if len(ret) == 2 && ret[1].Interface() != nil {
+			return 0, reflect.Value{}, ret[1].Interface().(error)
+		}
+		if ret[0].IsNil() {
+			return 0, reflect.Value{}, errors.New("aggregator constructor returned nil state")
+		}
+		ai.next++
+		ai.active[*aggIdx] = ret[0]
+	}
+	return *aggIdx, ai.active[*aggIdx], nil
+}
+
+func (ai *aggInfo) Step(ctx *C.sqlite3_context, argv []*C.sqlite3_value) {
+	_, agg, err := ai.agg(ctx)
+	if err != nil {
+		callbackError(ctx, err)
+		return
+	}
+
+	args, err := callbackConvertArgs(argv, ai.stepArgConverters, ai.stepVariadicConverter)
+	if err != nil {
+		callbackError(ctx, err)
+		return
+	}
+
+	ret := agg.MethodByName("Step").Call(args)
+	if len(ret) == 1 && ret[0].Interface() != nil {
+		callbackError(ctx, ret[0].Interface().(error))
+		return
+	}
+}
+
+func (ai *aggInfo) Done(ctx *C.sqlite3_context) {
+	idx, agg, err := ai.agg(ctx)
+	if err != nil {
+		callbackError(ctx, err)
+		return
+	}
+	defer func() { delete(ai.active, idx) }()
+
+	ret := agg.MethodByName("Done").Call(nil)
+	if len(ret) == 2 && ret[1].Interface() != nil {
+		callbackError(ctx, ret[1].Interface().(error))
+		return
+	}
+
+	err = ai.doneRetConverter(ctx, ret[0])
+	if err != nil {
+		callbackError(ctx, err)
 		return
 	}
 }
@@ -244,6 +294,8 @@ func (tx *SQLiteTx) Rollback() error {
 // If pure is true. SQLite will assume that the function's return
 // value depends only on its inputs, and make more aggressive
 // optimizations in its queries.
+//
+// See _example/go_custom_funcs for a detailed example.
 func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) error {
 	var fi functionInfo
 	fi.f = reflect.ValueOf(impl)
@@ -298,7 +350,132 @@ func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) erro
 	if pure {
 		opts |= C.SQLITE_DETERMINISTIC
 	}
-	rv := C.sqlite3_create_function_v2(c.db, cname, C.int(numArgs), C.int(opts), unsafe.Pointer(&fi), (*[0]byte)(unsafe.Pointer(C.callbackTrampoline)), nil, nil, nil)
+	rv := C.sqlite3_create_function(c.db, cname, C.int(numArgs), C.int(opts), unsafe.Pointer(&fi), (*[0]byte)(unsafe.Pointer(C.callbackTrampoline)), nil, nil)
+	if rv != C.SQLITE_OK {
+		return c.lastError()
+	}
+	return nil
+}
+
+// RegisterAggregator makes a Go type available as a SQLite aggregation function.
+//
+// Because aggregation is incremental, it's implemented in Go with a
+// type that has 2 methods: func Step(values) accumulates one row of
+// data into the accumulator, and func Done() ret finalizes and
+// returns the aggregate value. "values" and "ret" may be any type
+// supported by RegisterFunc.
+//
+// RegisterAggregator takes as implementation a constructor function
+// that constructs an instance of the aggregator type each time an
+// aggregation begins. The constructor must return a pointer to a
+// type, or an interface that implements Step() and Done().
+//
+// The constructor function and the Step/Done methods may optionally
+// return an error in addition to their other return values.
+//
+// See _example/go_custom_funcs for a detailed example.
+func (c *SQLiteConn) RegisterAggregator(name string, impl interface{}, pure bool) error {
+	var ai aggInfo
+	ai.constructor = reflect.ValueOf(impl)
+	t := ai.constructor.Type()
+	if t.Kind() != reflect.Func {
+		return errors.New("non-function passed to RegisterAggregator")
+	}
+	if t.NumOut() != 1 && t.NumOut() != 2 {
+		return errors.New("SQLite aggregator constructors must return 1 or 2 values")
+	}
+	if t.NumOut() == 2 && !t.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		return errors.New("Second return value of SQLite function must be error")
+	}
+	if t.NumIn() != 0 {
+		return errors.New("SQLite aggregator constructors must not have arguments")
+	}
+
+	agg := t.Out(0)
+	switch agg.Kind() {
+	case reflect.Ptr, reflect.Interface:
+	default:
+		return errors.New("SQlite aggregator constructor must return a pointer object")
+	}
+	stepFn, found := agg.MethodByName("Step")
+	if !found {
+		return errors.New("SQlite aggregator doesn't have a Step() function")
+	}
+	step := stepFn.Type
+	if step.NumOut() != 0 && step.NumOut() != 1 {
+		return errors.New("SQlite aggregator Step() function must return 0 or 1 values")
+	}
+	if step.NumOut() == 1 && !step.Out(0).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		return errors.New("type of SQlite aggregator Step() return value must be error")
+	}
+
+	stepNArgs := step.NumIn()
+	start := 0
+	if agg.Kind() == reflect.Ptr {
+		// Skip over the method receiver
+		stepNArgs--
+		start++
+	}
+	if step.IsVariadic() {
+		stepNArgs--
+	}
+	for i := start; i < start+stepNArgs; i++ {
+		conv, err := callbackArg(step.In(i))
+		if err != nil {
+			return err
+		}
+		ai.stepArgConverters = append(ai.stepArgConverters, conv)
+	}
+	if step.IsVariadic() {
+		conv, err := callbackArg(t.In(start + stepNArgs).Elem())
+		if err != nil {
+			return err
+		}
+		ai.stepVariadicConverter = conv
+		// Pass -1 to sqlite so that it allows any number of
+		// arguments. The call helper verifies that the minimum number
+		// of arguments is present for variadic functions.
+		stepNArgs = -1
+	}
+
+	doneFn, found := agg.MethodByName("Done")
+	if !found {
+		return errors.New("SQlite aggregator doesn't have a Done() function")
+	}
+	done := doneFn.Type
+	doneNArgs := done.NumIn()
+	if agg.Kind() == reflect.Ptr {
+		// Skip over the method receiver
+		doneNArgs--
+	}
+	if doneNArgs != 0 {
+		return errors.New("SQlite aggregator Done() function must have no arguments")
+	}
+	if done.NumOut() != 1 && done.NumOut() != 2 {
+		return errors.New("SQLite aggregator Done() function must return 1 or 2 values")
+	}
+	if done.NumOut() == 2 && !done.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		return errors.New("second return value of SQLite aggregator Done() function must be error")
+	}
+
+	conv, err := callbackRet(done.Out(0))
+	if err != nil {
+		return err
+	}
+	ai.doneRetConverter = conv
+	ai.active = make(map[int64]reflect.Value)
+	ai.next = 1
+
+	// ai must outlast the database connection, or we'll have dangling pointers.
+	c.aggregators = append(c.aggregators, &ai)
+
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	opts := C.SQLITE_UTF8
+	if pure {
+		opts |= C.SQLITE_DETERMINISTIC
+	}
+	rv := C.sqlite3_create_function(c.db, cname, C.int(stepNArgs), C.int(opts), unsafe.Pointer(&ai), nil, (*[0]byte)(unsafe.Pointer(C.stepTrampoline)), (*[0]byte)(unsafe.Pointer(C.doneTrampoline)))
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}

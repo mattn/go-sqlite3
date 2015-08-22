@@ -12,6 +12,7 @@ package sqlite3
 
 /*
 #include <sqlite3-binding.h>
+#include <stdlib.h>
 
 void _sqlite3_result_text(sqlite3_context* ctx, const char* s);
 void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l);
@@ -30,6 +31,19 @@ func callbackTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value
 	args := (*[1 << 30]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
 	fi := (*functionInfo)(unsafe.Pointer(C.sqlite3_user_data(ctx)))
 	fi.Call(ctx, args)
+}
+
+//export stepTrampoline
+func stepTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
+	args := (*[1 << 30]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
+	ai := (*aggInfo)(unsafe.Pointer(C.sqlite3_user_data(ctx)))
+	ai.Step(ctx, args)
+}
+
+//export doneTrampoline
+func doneTrampoline(ctx *C.sqlite3_context) {
+	ai := (*aggInfo)(unsafe.Pointer(C.sqlite3_user_data(ctx)))
+	ai.Done(ctx)
 }
 
 // This is only here so that tests can refer to it.
@@ -158,6 +172,33 @@ func callbackArg(typ reflect.Type) (callbackArgConverter, error) {
 	}
 }
 
+func callbackConvertArgs(argv []*C.sqlite3_value, converters []callbackArgConverter, variadic callbackArgConverter) ([]reflect.Value, error) {
+	var args []reflect.Value
+
+	if len(argv) < len(converters) {
+		return nil, fmt.Errorf("function requires at least %d arguments", len(converters))
+	}
+
+	for i, arg := range argv[:len(converters)] {
+		v, err := converters[i](arg)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, v)
+	}
+
+	if variadic != nil {
+		for _, arg := range argv[len(converters):] {
+			v, err := variadic(arg)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, v)
+		}
+	}
+	return args, nil
+}
+
 type callbackRetConverter func(*C.sqlite3_context, reflect.Value) error
 
 func callbackRetInteger(ctx *C.sqlite3_context, v reflect.Value) error {
@@ -231,6 +272,12 @@ func callbackRet(typ reflect.Type) (callbackRetConverter, error) {
 	default:
 		return nil, fmt.Errorf("don't know how to convert to %s", typ)
 	}
+}
+
+func callbackError(ctx *C.sqlite3_context, err error) {
+	cstr := C.CString(err.Error())
+	defer C.free(unsafe.Pointer(cstr))
+	C.sqlite3_result_error(ctx, cstr, -1)
 }
 
 // Test support code. Tests are not allowed to import "C", so we can't
