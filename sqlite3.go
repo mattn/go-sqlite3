@@ -232,11 +232,14 @@ func (tx *SQLiteTx) Rollback() error {
 
 // RegisterFunc makes a Go function available as a SQLite function.
 //
-// The function can accept arguments of any real numeric type
-// (i.e. not complex), as well as []byte and string. It must return a
-// value of one of those types, and optionally an error as a second
-// value. Variadic functions are allowed, if the variadic argument is
-// one of the allowed types.
+// The Go function can have arguments of the following types: any
+// numeric type except complex, bool, []byte, string and
+// interface{}. interface{} arguments are given the direct translation
+// of the SQLite data type: int64 for INTEGER, float64 for FLOAT,
+// []byte for BLOB, string for TEXT.
+//
+// The function can additionally be variadic, as long as the type of
+// the variadic argument is one of the above.
 //
 // If pure is true. SQLite will assume that the function's return
 // value depends only on its inputs, and make more aggressive

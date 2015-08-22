@@ -108,8 +108,32 @@ func callbackArgString(v *C.sqlite3_value) (reflect.Value, error) {
 	}
 }
 
+func callbackArgGeneric(v *C.sqlite3_value) (reflect.Value, error) {
+	switch C.sqlite3_value_type(v) {
+	case C.SQLITE_INTEGER:
+		return callbackArgInt64(v)
+	case C.SQLITE_FLOAT:
+		return callbackArgFloat64(v)
+	case C.SQLITE_TEXT:
+		return callbackArgString(v)
+	case C.SQLITE_BLOB:
+		return callbackArgBytes(v)
+	case C.SQLITE_NULL:
+		// Interpret NULL as a nil byte slice.
+		var ret []byte
+		return reflect.ValueOf(ret), nil
+	default:
+		panic("unreachable")
+	}
+}
+
 func callbackArg(typ reflect.Type) (callbackArgConverter, error) {
 	switch typ.Kind() {
+	case reflect.Interface:
+		if typ.NumMethod() != 0 {
+			return nil, errors.New("the only supported interface type is interface{}")
+		}
+		return callbackArgGeneric, nil
 	case reflect.Slice:
 		if typ.Elem().Kind() != reflect.Uint8 {
 			return nil, errors.New("the only supported slice type is []byte")

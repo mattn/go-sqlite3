@@ -1071,12 +1071,29 @@ func TestFunctionRegistration(t *testing.T) {
 	regex := func(re, s string) (bool, error) {
 		return regexp.MatchString(re, s)
 	}
+	generic := func(a interface{}) int64 {
+		switch a.(type) {
+		case int64:
+			return 1
+		case float64:
+			return 2
+		case []byte:
+			return 3
+		case string:
+			return 4
+		default:
+			panic("unreachable")
+		}
+	}
 	variadic := func(a, b int64, c ...int64) int64 {
 		ret := a + b
 		for _, d := range c {
 			ret += d
 		}
 		return ret
+	}
+	variadicGeneric := func(a ...interface{}) int64 {
+		return int64(len(a))
 	}
 
 	sql.Register("sqlite3_FunctionRegistration", &SQLiteDriver{
@@ -1105,7 +1122,13 @@ func TestFunctionRegistration(t *testing.T) {
 			if err := conn.RegisterFunc("regex", regex, true); err != nil {
 				return err
 			}
+			if err := conn.RegisterFunc("generic", generic, true); err != nil {
+				return err
+			}
 			if err := conn.RegisterFunc("variadic", variadic, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("variadicGeneric", variadicGeneric, true); err != nil {
 				return err
 			}
 			return nil
@@ -1131,9 +1154,14 @@ func TestFunctionRegistration(t *testing.T) {
 		{"SELECT not(0)", true},
 		{`SELECT regex("^foo.*", "foobar")`, true},
 		{`SELECT regex("^foo.*", "barfoobar")`, false},
+		{"SELECT generic(1)", int64(1)},
+		{"SELECT generic(1.1)", int64(2)},
+		{`SELECT generic(NULL)`, int64(3)},
+		{`SELECT generic("foo")`, int64(4)},
 		{"SELECT variadic(1,2)", int64(3)},
 		{"SELECT variadic(1,2,3,4)", int64(10)},
 		{"SELECT variadic(1,1,1,1,1,1,1,1,1,1)", int64(10)},
+		{`SELECT variadicGeneric(1,"foo",2.3, NULL)`, int64(4)},
 	}
 
 	for _, op := range ops {
