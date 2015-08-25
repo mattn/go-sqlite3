@@ -769,10 +769,12 @@ func TestTimezoneConversion(t *testing.T) {
 }
 
 func TestSuite(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:")
+	tempFilename := TempFilename()
+	db, err := sql.Open("sqlite3", tempFilename+"?_busy_timeout=99999")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	sqlite3_test.RunTests(t, db, sqlite3_test.SQLITE)
