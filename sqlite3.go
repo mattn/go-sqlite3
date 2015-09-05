@@ -355,23 +355,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
 
 	if len(d.Extensions) > 0 {
-		rv = C.sqlite3_enable_load_extension(db, 1)
-		if rv != C.SQLITE_OK {
-			return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
-		}
-
-		for _, extension := range d.Extensions {
-			cext := C.CString(extension)
-			defer C.free(unsafe.Pointer(cext))
-			rv = C.sqlite3_load_extension(db, cext, nil, nil)
-			if rv != C.SQLITE_OK {
-				return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
-			}
-		}
-
-		rv = C.sqlite3_enable_load_extension(db, 0)
-		if rv != C.SQLITE_OK {
-			return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
+		if err := conn.loadExtensions(d.Extensions); err != nil {
+			return nil, err
 		}
 	}
 
