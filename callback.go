@@ -29,14 +29,14 @@ import (
 
 //export callbackTrampoline
 func callbackTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
-	args := (*[math.MaxInt32 - 1]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
+	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
 	fi := (*functionInfo)(unsafe.Pointer(C.sqlite3_user_data(ctx)))
 	fi.Call(ctx, args)
 }
 
 //export stepTrampoline
 func stepTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
-	args := (*[math.MaxInt32 - 1]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
+	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
 	ai := (*aggInfo)(unsafe.Pointer(C.sqlite3_user_data(ctx)))
 	ai.Step(ctx, args)
 }
