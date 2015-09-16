@@ -22,22 +22,21 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"unsafe"
 )
 
 //export callbackTrampoline
 func callbackTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
-	// TODO should create slice dynamically?
-	args := (*[1 << 20]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
+	args := (*[math.MaxInt32 - 1]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
 	fi := (*functionInfo)(unsafe.Pointer(C.sqlite3_user_data(ctx)))
 	fi.Call(ctx, args)
 }
 
 //export stepTrampoline
 func stepTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
-	// TODO should create slice dynamically?
-	args := (*[1 << 20]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
+	args := (*[math.MaxInt32 - 1]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
 	ai := (*aggInfo)(unsafe.Pointer(C.sqlite3_user_data(ctx)))
 	ai.Step(ctx, args)
 }
