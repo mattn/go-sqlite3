@@ -33,7 +33,7 @@ extension for Regexp matcher operation.
     #include <string.h>
     #include <stdio.h>
     #include <sqlite3ext.h>
-    
+
     SQLITE_EXTENSION_INIT1
     static void regexp_func(sqlite3_context *context, int argc, sqlite3_value **argv) {
       if (argc >= 2) {
@@ -44,7 +44,7 @@ extension for Regexp matcher operation.
         int vec[500];
         int n, rc;
         pcre* re = pcre_compile(pattern, 0, &errstr, &erroff, NULL);
-        rc = pcre_exec(re, NULL, target, strlen(target), 0, 0, vec, 500); 
+        rc = pcre_exec(re, NULL, target, strlen(target), 0, 0, vec, 500);
         if (rc <= 0) {
           sqlite3_result_error(context, errstr, 0);
           return;
@@ -52,7 +52,7 @@ extension for Regexp matcher operation.
         sqlite3_result_int(context, 1);
       }
     }
-    
+
     #ifdef _WIN32
     __declspec(dllexport)
     #endif
@@ -90,6 +90,23 @@ you need to hook ConnectHook and get the SQLiteConn.
 						return nil
 					},
 			})
+
+Go SQlite3 Extensions
+
+If you want to register Go functions as SQLite extension functions,
+call RegisterFunction from ConnectHook.
+
+	regex = func(re, s string) (bool, error) {
+		return regexp.MatchString(re, s)
+	}
+	sql.Register("sqlite3_with_go_func",
+			&sqlite3.SQLiteDriver{
+					ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+						return conn.RegisterFunc("regex", regex, true)
+					},
+			})
+
+See the documentation of RegisterFunc for more details.
 
 */
 package sqlite3
