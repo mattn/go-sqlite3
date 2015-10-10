@@ -324,6 +324,8 @@ func TestBooleanRoundtrip(t *testing.T) {
 	}
 }
 
+func timezone(t time.Time) string { return t.Format("-07:00") }
+
 func TestTimestamp(t *testing.T) {
 	tempFilename := TempFilename()
 	db, err := sql.Open("sqlite3", tempFilename)
@@ -342,6 +344,7 @@ func TestTimestamp(t *testing.T) {
 	timestamp1 := time.Date(2012, time.April, 6, 22, 50, 0, 0, time.UTC)
 	timestamp2 := time.Date(2006, time.January, 2, 15, 4, 5, 123456789, time.UTC)
 	timestamp3 := time.Date(2012, time.November, 4, 0, 0, 0, 0, time.UTC)
+	tzTest := time.FixedZone("TEST", -9*3600-13*60)
 	tests := []struct {
 		value    interface{}
 		expected time.Time
@@ -349,9 +352,9 @@ func TestTimestamp(t *testing.T) {
 		{"nonsense", time.Time{}},
 		{"0000-00-00 00:00:00", time.Time{}},
 		{timestamp1, timestamp1},
-		{timestamp1.Unix(), timestamp1},
-		{timestamp1.UnixNano() / int64(time.Millisecond), timestamp1},
-		{timestamp1.In(time.FixedZone("TEST", -7*3600)), timestamp1},
+		{timestamp2.Unix(), timestamp2.Truncate(time.Second)},
+		{timestamp2.UnixNano() / int64(time.Millisecond), timestamp2.Truncate(time.Millisecond)},
+		{timestamp1.In(tzTest), timestamp1.In(tzTest)},
 		{timestamp1.Format("2006-01-02 15:04:05.000"), timestamp1},
 		{timestamp1.Format("2006-01-02T15:04:05.000"), timestamp1},
 		{timestamp1.Format("2006-01-02 15:04:05"), timestamp1},
@@ -359,6 +362,7 @@ func TestTimestamp(t *testing.T) {
 		{timestamp2, timestamp2},
 		{"2006-01-02 15:04:05.123456789", timestamp2},
 		{"2006-01-02T15:04:05.123456789", timestamp2},
+		{"2006-01-02T05:51:05.123456789-09:13", timestamp2.In(tzTest)},
 		{"2012-11-04", timestamp3},
 		{"2012-11-04 00:00", timestamp3},
 		{"2012-11-04 00:00:00", timestamp3},
@@ -366,6 +370,14 @@ func TestTimestamp(t *testing.T) {
 		{"2012-11-04T00:00", timestamp3},
 		{"2012-11-04T00:00:00", timestamp3},
 		{"2012-11-04T00:00:00.000", timestamp3},
+		{"2006-01-02T15:04:05.123456789Z", timestamp2},
+		{"2012-11-04Z", timestamp3},
+		{"2012-11-04 00:00Z", timestamp3},
+		{"2012-11-04 00:00:00Z", timestamp3},
+		{"2012-11-04 00:00:00.000Z", timestamp3},
+		{"2012-11-04T00:00Z", timestamp3},
+		{"2012-11-04T00:00:00Z", timestamp3},
+		{"2012-11-04T00:00:00.000Z", timestamp3},
 	}
 	for i := range tests {
 		_, err = db.Exec("INSERT INTO foo(id, ts, dt) VALUES(?, ?, ?)", i, tests[i].value, tests[i].value)
@@ -399,6 +411,14 @@ func TestTimestamp(t *testing.T) {
 		}
 		if !tests[id].expected.Equal(dt) {
 			t.Errorf("Datetime value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt)
+		}
+		if timezone(tests[id].expected) != timezone(ts) {
+			t.Errorf("Timezone for id %v (%v) should be %v, not %v", id, tests[id].value,
+				timezone(tests[id].expected), timezone(ts))
+		}
+		if timezone(tests[id].expected) != timezone(dt) {
+			t.Errorf("Timezone for id %v (%v) should be %v, not %v", id, tests[id].value,
+				timezone(tests[id].expected), timezone(dt))
 		}
 	}
 

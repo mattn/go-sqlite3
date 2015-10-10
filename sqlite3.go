@@ -99,6 +99,10 @@ import (
 // into the database. When parsing a string from a timestamp or
 // datetime column, the formats are tried in order.
 var SQLiteTimestampFormats = []string{
+	// By default, store timestamps with whatever timezone they come with.
+	// When parsed, they will be returned with the same timezone.
+	"2006-01-02 15:04:05.999999999-07:00",
+	"2006-01-02T15:04:05.999999999-07:00",
 	"2006-01-02 15:04:05.999999999",
 	"2006-01-02T15:04:05.999999999",
 	"2006-01-02 15:04:05",
@@ -106,7 +110,6 @@ var SQLiteTimestampFormats = []string{
 	"2006-01-02 15:04",
 	"2006-01-02T15:04",
 	"2006-01-02",
-	"2006-01-02 15:04:05-07:00",
 }
 
 func init() {
@@ -803,7 +806,7 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 			}
 			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(p), C.int(len(v)))
 		case time.Time:
-			b := []byte(v.UTC().Format(SQLiteTimestampFormats[0]))
+			b := []byte(v.Format(SQLiteTimestampFormats[0]))
 			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 		}
 		if rv != C.SQLITE_OK {
@@ -902,18 +905,15 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
 			case "timestamp", "datetime", "date":
-				unixTimestamp := strconv.FormatInt(val, 10)
 				var t time.Time
-				if len(unixTimestamp) == 13 {
-					duration, err := time.ParseDuration(unixTimestamp + "ms")
-					if err != nil {
-						return fmt.Errorf("error parsing %s value %d, %s", rc.decltype[i], val, err)
-					}
-					epoch := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-					t = epoch.Add(duration)
+				// Assume a millisecond unix timestamp if it's 13 digits -- too
+				// large to be a reasonable timestamp in seconds.
+				if val > 1e12 || val < -1e12 {
+					val *= int64(time.Millisecond) // convert ms to nsec
 				} else {
-					t = time.Unix(val, 0)
+					val *= int64(time.Second) // convert sec to nsec
 				}
+				t = time.Unix(0, val).UTC()
 				if rc.s.c.loc != nil {
 					t = t.In(rc.s.c.loc)
 				}
