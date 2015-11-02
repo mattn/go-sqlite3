@@ -586,7 +586,7 @@ func errorString(err Error) string {
 //   file:test.db?cache=shared&mode=memory
 //   :memory:
 //   file::memory:
-// go-sqlite handle especially query parameters.
+// go-sqlite3 adds the following query parameters to those used by SQLite:
 //   _loc=XXX
 //     Specify location of time format. It's possible to specify "auto".
 //   _busy_timeout=XXX

@@ -12,7 +12,7 @@ import (
 )
 
 func TestFTS3(t *testing.T) {
-	tempFilename := TempFilename()
+	tempFilename := TempFilename(t)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
