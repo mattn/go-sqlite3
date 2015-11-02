@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -796,7 +795,7 @@ func TestTimezoneConversion(t *testing.T) {
 }
 
 func TestSuite(t *testing.T) {
-	tempFilename := TempFilename()
+	tempFilename := TempFilename(t)
 	db, err := sql.Open("sqlite3", tempFilename+"?_busy_timeout=99999")
 	if err != nil {
 		t.Fatal(err)
