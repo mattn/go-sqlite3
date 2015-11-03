@@ -13,11 +13,11 @@ import (
 
 func TestFTS3(t *testing.T) {
 	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
@@ -84,11 +84,11 @@ func TestFTS3(t *testing.T) {
 
 func TestFTS4(t *testing.T) {
 	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
-	defer os.Remove(tempFilename)
 	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
