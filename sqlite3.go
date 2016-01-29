@@ -367,7 +367,7 @@ func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) erro
 	if pure {
 		opts |= C.SQLITE_DETERMINISTIC
 	}
-	rv := C._sqlite3_create_function(c.db, cname, C.int(numArgs), C.int(opts), C.uintptr_t(uintptr(unsafe.Pointer(&fi))), (*[0]byte)(unsafe.Pointer(C.callbackTrampoline)), nil, nil)
+	rv := C._sqlite3_create_function(c.db, cname, C.int(numArgs), C.int(opts), C.uintptr_t(newHandle(c, &fi)), (*[0]byte)(unsafe.Pointer(C.callbackTrampoline)), nil, nil)
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
@@ -492,7 +492,7 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl interface{}, pure bool
 	if pure {
 		opts |= C.SQLITE_DETERMINISTIC
 	}
-	rv := C._sqlite3_create_function(c.db, cname, C.int(stepNArgs), C.int(opts), C.uintptr_t(uintptr(unsafe.Pointer(&ai))), nil, (*[0]byte)(unsafe.Pointer(C.stepTrampoline)), (*[0]byte)(unsafe.Pointer(C.doneTrampoline)))
+	rv := C._sqlite3_create_function(c.db, cname, C.int(stepNArgs), C.int(opts), C.uintptr_t(newHandle(c, &ai)), nil, (*[0]byte)(unsafe.Pointer(C.stepTrampoline)), (*[0]byte)(unsafe.Pointer(C.doneTrampoline)))
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
@@ -705,6 +705,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 // Close the connection.
 func (c *SQLiteConn) Close() error {
+	deleteHandles(c)
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
 		return c.lastError()
