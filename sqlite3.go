@@ -815,11 +815,11 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 		case float64:
 			rv = C.sqlite3_bind_double(s.s, n, C.double(v))
 		case []byte:
-			var p *byte
-			if len(v) > 0 {
-				p = &v[0]
+			if len(v) == 0 {
+				rv = C._sqlite3_bind_blob(s.s, n, nil, 0)
+			} else {
+				rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(&v[0]), C.int(len(v)))
 			}
-			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(p), C.int(len(v)))
 		case time.Time:
 			b := []byte(v.Format(SQLiteTimestampFormats[0]))
 			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
