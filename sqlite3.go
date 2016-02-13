@@ -98,6 +98,9 @@ int _sqlite3_create_function(
 }
 
 void callbackTrampoline(sqlite3_context*, int, sqlite3_value**);
+int commitHookTrampoline(void*);
+void rollbackHookTrampoline(void*);
+void updateHookTrampoline(void*, int, char*, char*, sqlite3_int64);
 */
 import "C"
 import (
@@ -144,6 +147,12 @@ func Version() (libVersion string, libVersionNumber int, sourceId string) {
 	sourceId = C.GoString(C.sqlite3_sourceid())
 	return libVersion, libVersionNumber, sourceId
 }
+
+const (
+	SQLITE_DELETE = C.SQLITE_DELETE
+	SQLITE_INSERT = C.SQLITE_INSERT
+	SQLITE_UPDATE = C.SQLITE_UPDATE
+)
 
 // Driver struct.
 type SQLiteDriver struct {
@@ -308,6 +317,51 @@ func (tx *SQLiteTx) Commit() error {
 func (tx *SQLiteTx) Rollback() error {
 	_, err := tx.c.exec("ROLLBACK")
 	return err
+}
+
+// RegisterCommitHook sets the commit hook for a connection.
+//
+// If the callback returns non-zero the transaction will become a rollback.
+//
+// If there is an existing commit hook for this connection, it will be
+// removed. If callback is nil the existing hook (if any) will be removed
+// without creating a new one.
+func (c *SQLiteConn) RegisterCommitHook(callback func() int) {
+	if callback == nil {
+		C.sqlite3_commit_hook(c.db, nil, nil)
+	} else {
+		C.sqlite3_commit_hook(c.db, (*[0]byte)(unsafe.Pointer(C.commitHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+	}
+}
+
+// RegisterRollbackHook sets the rollback hook for a connection.
+//
+// If there is an existing rollback hook for this connection, it will be
+// removed. If callback is nil the existing hook (if any) will be removed
+// without creating a new one.
+func (c *SQLiteConn) RegisterRollbackHook(callback func()) {
+	if callback == nil {
+		C.sqlite3_rollback_hook(c.db, nil, nil)
+	} else {
+		C.sqlite3_rollback_hook(c.db, (*[0]byte)(unsafe.Pointer(C.rollbackHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+	}
+}
+
+// RegisterUpdateHook sets the update hook for a connection.
+//
+// The parameters to the callback are the operation (one of the constants
+// SQLITE_INSERT, SQLITE_DELETE, or SQLITE_UPDATE), the database name, the
+// table name, and the rowid.
+//
+// If there is an existing update hook for this connection, it will be
+// removed. If callback is nil the existing hook (if any) will be removed
+// without creating a new one.
+func (c *SQLiteConn) RegisterUpdateHook(callback func(int, string, string, int64)) {
+	if callback == nil {
+		C.sqlite3_update_hook(c.db, nil, nil)
+	} else {
+		C.sqlite3_update_hook(c.db, (*[0]byte)(unsafe.Pointer(C.updateHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+	}
 }
 
 // RegisterFunc makes a Go function available as a SQLite function.
