@@ -1,3 +1,8 @@
+// Copyright (C) 2014 Yasuhiro Matsumoto <mattn.jp@gmail.com>.
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file.
+
 package sqlite3
 
 import (
@@ -225,6 +230,12 @@ func TestExtendedErrorCodes_Unique(t *testing.T) {
 		if sqliteErr.ExtendedCode != ErrConstraintUnique {
 			t.Errorf("Wrong extended error code: %d != %d",
 				sqliteErr.ExtendedCode, ErrConstraintUnique)
+		}
+		extended := sqliteErr.Code.Extend(3).Error()
+		expected := "constraint failed"
+		if extended != expected {
+			t.Errorf("Wrong basic error code: %q != %q",
+				extended, expected)
 		}
 	}
 
