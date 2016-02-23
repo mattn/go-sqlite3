@@ -130,7 +130,7 @@ func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
 }
 
-// Return SQLite library Version information.
+// Version returns SQLite library version information.
 func Version() (libVersion string, libVersionNumber int, sourceId string) {
 	libVersion = C.GoString(C.sqlite3_libversion())
 	libVersionNumber = int(C.sqlite3_libversion_number())
@@ -598,7 +598,7 @@ func errorString(err Error) string {
 }
 
 // Open database and return a new connection.
-// You can specify DSN string with URI filename.
+// You can specify a DSN string using a URI as the filename.
 //   test.db
 //   file:test.db?cache=shared&mode=memory
 //   :memory:
@@ -715,7 +715,7 @@ func (c *SQLiteConn) Close() error {
 	return nil
 }
 
-// Prepare query string. Return a new statement.
+// Prepare the query string. Return a new statement.
 func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 	pquery := C.CString(query)
 	defer C.free(unsafe.Pointer(pquery))
