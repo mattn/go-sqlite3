@@ -1279,6 +1279,41 @@ func TestAggregatorRegistration(t *testing.T) {
 	}
 }
 
+func TestDeclTypes(t *testing.T) {
+
+	d := SQLiteDriver{}
+
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+	defer conn.Close()
+
+	sqlite3conn := conn.(*SQLiteConn)
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text)", nil)
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = sqlite3conn.Exec("insert into foo(name) values(\"bar\")", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	rs, err := sqlite3conn.Query("select * from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
+	}
+	defer rs.Close()
+
+	declTypes := rs.(*SQLiteRows).DeclTypes()
+
+	if !reflect.DeepEqual(declTypes, []string{"integer", "text"}) {
+		t.Fatal("Unexpected declTypes:", declTypes)
+	}
+}
+
 var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {

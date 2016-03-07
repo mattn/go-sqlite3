@@ -893,6 +893,17 @@ func (rc *SQLiteRows) Columns() []string {
 	return rc.cols
 }
 
+// Return column types.
+func (rc *SQLiteRows) DeclTypes() []string {
+	if rc.decltype == nil {
+		rc.decltype = make([]string, rc.nc)
+		for i := 0; i < rc.nc; i++ {
+			rc.decltype[i] = strings.ToLower(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
+		}
+	}
+	return rc.decltype
+}
+
 // Move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	rv := C.sqlite3_step(rc.s.s)
@@ -907,12 +918,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return nil
 	}
 
-	if rc.decltype == nil {
-		rc.decltype = make([]string, rc.nc)
-		for i := 0; i < rc.nc; i++ {
-			rc.decltype[i] = strings.ToLower(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
-		}
-	}
+	rc.DeclTypes()
 
 	for i := range dest {
 		switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
