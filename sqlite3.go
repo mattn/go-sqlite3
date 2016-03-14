@@ -9,6 +9,47 @@ package sqlite3
 #cgo CFLAGS: -std=gnu99
 #cgo CFLAGS: -DSQLITE_ENABLE_RTREE -DSQLITE_THREADSAFE
 #cgo CFLAGS: -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS -DSQLITE_ENABLE_FTS4_UNICODE61
+
+// Darwin configuration taken from a configure run of SQLite 3.11.0 on OS X El Capitan.
+#cgo darwin CFLAGS: -DHAVE_DECL_STRERROR_R=1
+#cgo darwin CFLAGS: -DHAVE_DLFCN_H=1
+#cgo darwin CFLAGS: -DHAVE_EDITLINE=1
+#cgo darwin CFLAGS: -DHAVE_FDATASYNC=1
+#cgo darwin CFLAGS: -DHAVE_GMTIME_R=1
+#cgo darwin CFLAGS: -DHAVE_INTTYPES_H=1
+#cgo darwin CFLAGS: -DHAVE_LOCALTIME_R=1
+#cgo darwin CFLAGS: -DHAVE_MEMORY_H=1
+#cgo darwin CFLAGS: -DHAVE_STDINT_H=1
+#cgo darwin CFLAGS: -DHAVE_STDLIB_H=1
+#cgo darwin CFLAGS: -DHAVE_STRERROR_R=1
+#cgo darwin CFLAGS: -DHAVE_STRINGS_H=1
+#cgo darwin CFLAGS: -DHAVE_STRING_H=1
+#cgo darwin CFLAGS: -DHAVE_SYS_STAT_H=1
+#cgo darwin CFLAGS: -DHAVE_SYS_TYPES_H=1
+#cgo darwin CFLAGS: -DHAVE_UNISTD_H=1
+#cgo darwin CFLAGS: -DHAVE_USLEEP=1
+#cgo darwin CFLAGS: -DSTDC_HEADERS=1
+
+// Linux configuration taken from a configure run of SQLite 3.11.0 on Ubuntu 14.04.4 LTS.
+#cgo linux CFLAGS: -DHAVE_DECL_STRERROR_R=1
+#cgo linux CFLAGS: -DHAVE_DLFCN_H=1
+#cgo linux CFLAGS: -DHAVE_FDATASYNC=1
+#cgo linux CFLAGS: -DHAVE_GMTIME_R=1
+#cgo linux CFLAGS: -DHAVE_INTTYPES_H=1
+#cgo linux CFLAGS: -DHAVE_LOCALTIME_R=1
+#cgo linux CFLAGS: -DHAVE_MEMORY_H=1
+#cgo linux CFLAGS: -DHAVE_POSIX_FALLOCATE=1
+#cgo linux CFLAGS: -DHAVE_STDINT_H=1
+#cgo linux CFLAGS: -DHAVE_STDLIB_H=1
+#cgo linux CFLAGS: -DHAVE_STRERROR_R=1
+#cgo linux CFLAGS: -DHAVE_STRINGS_H=1
+#cgo linux CFLAGS: -DHAVE_STRING_H=1
+#cgo linux CFLAGS: -DHAVE_SYS_STAT_H=1
+#cgo linux CFLAGS: -DHAVE_SYS_TYPES_H=1
+#cgo linux CFLAGS: -DHAVE_UNISTD_H=1
+#cgo linux CFLAGS: -DHAVE_USLEEP=1
+#cgo linux CFLAGS: -DSTDC_HEADERS=1
+
 #include <sqlite3-binding.h>
 #include <stdlib.h>
 #include <string.h>
