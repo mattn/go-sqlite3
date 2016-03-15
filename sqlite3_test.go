@@ -168,7 +168,7 @@ func TestInsert(t *testing.T) {
 	var result int
 	rows.Scan(&result)
 	if result != 123 {
-		t.Errorf("Fetched %q; expected %q", 123, result)
+		t.Errorf("Expected %d for fetched result, but %d:", 123, result)
 	}
 }
 
@@ -233,7 +233,7 @@ func TestUpdate(t *testing.T) {
 	var result int
 	rows.Scan(&result)
 	if result != 234 {
-		t.Errorf("Fetched %q; expected %q", 234, result)
+		t.Errorf("Expected %d for fetched result, but %d:", 234, result)
 	}
 }
 
