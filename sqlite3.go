@@ -29,6 +29,10 @@ package sqlite3
 # define SQLITE_OPEN_FULLMUTEX 0
 #endif
 
+#ifndef SQLITE_DETERMINISTIC
+# define SQLITE_DETERMINISTIC 0
+#endif
+
 static int
 _sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
 #ifdef SQLITE_OPEN_URI
