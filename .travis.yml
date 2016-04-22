@@ -14,4 +14,4 @@ before_install:
   - go get golang.org/x/tools/cmd/cover
 script:
   - $HOME/gopath/bin/goveralls 
-  - go test -v . -tags "libsqlite3"
+  - go test . -a -tags "libsqlite3"

@@ -38,6 +38,7 @@ FAQ
 * Want to build go-sqlite3 with libsqlite3 on OS X.
 
     Install sqlite3 from homebrew: `brew install sqlite3`
+
     Use `go build --tags "libsqlite3 darwin"`
 
 * Want to build go-sqlite3 with icu extension.
