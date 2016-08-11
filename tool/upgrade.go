@@ -69,6 +69,7 @@ func main() {
 			log.Fatal(err)
 		}
 		_, err = io.Copy(f, zr)
+		f.Close()
 		if err != nil {
 			log.Fatal(err)
 		}
