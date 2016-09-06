@@ -165,10 +165,6 @@ func traceCallbackTrampoline(
 		info.StmtHandle = uintptr(p)
 
 	case TraceClose:
-		// (conn == nil) is the *expected* state for the Close event:
-		// the driver's connection (the Go struct) must be closed
-		// before the underlying SQLite C API object, and very likely
-		// before the Close event is reported to this callback by SQLite.
 		handle := uintptr(p)
 		if handle != info.ConnHandle {
 			panic(fmt.Sprintf("Different conn handle 0x%x (expected 0x%x) in SQLITE_TRACE_CLOSE event.",
