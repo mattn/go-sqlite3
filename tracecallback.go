@@ -33,7 +33,11 @@ const (
 )
 
 type TraceInfo struct {
-	EventCode  uint
+	// Pack together the shorter fields, to keep the struct smaller.
+	// On a 64-bit machine there would be padding
+	// between EventCode and ConnHandle; having AutoCommit here is "free":
+	EventCode  uint32
+	AutoCommit bool
 	ConnHandle uintptr
 
 	// Usually filled, unless EventCode = TraceClose = SQLITE_TRACE_CLOSE:
@@ -122,7 +126,8 @@ func traceCallbackTrampoline(
 
 	var info TraceInfo
 
-	info.EventCode = traceEventCode
+	info.EventCode = uint32(traceEventCode)
+	info.AutoCommit = (int(C.sqlite3_get_autocommit(contextDB)) != 0)
 	info.ConnHandle = connHandle
 
 	switch traceEventCode {
@@ -146,7 +151,13 @@ func traceCallbackTrampoline(
 
 	case TraceProfile:
 		info.StmtHandle = uintptr(p)
-		info.RunTimeNanosec = int64(uintptr(xValue))
+
+		if xValue == nil {
+			panic("NULL pointer in X arg of trace_v2 callback for SQLITE_TRACE_PROFILE event")
+		}
+
+		info.RunTimeNanosec = *(*int64)(xValue)
+
 		// sample the error //TODO: is it safe? is it useful?
 		fillDBError(&info.DBError, contextDB)
 
