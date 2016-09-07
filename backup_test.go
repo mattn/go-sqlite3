@@ -13,7 +13,7 @@ import (
 
 // The number of rows of test data to create in the source database.
 // Can be used to control how many pages are available to be backed up.
-const testRowCount = 1000
+const testRowCount = 100
 
 // The maximum number of seconds after which the page-by-page backup is considered to have taken too long.
 const usePagePerStepsTimeoutSeconds = 30
