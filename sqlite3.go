@@ -101,6 +101,11 @@ void callbackTrampoline(sqlite3_context*, int, sqlite3_value**);
 void stepTrampoline(sqlite3_context*, int, sqlite3_value**);
 void doneTrampoline(sqlite3_context*);
 
+int
+_sqlite3_trace_v2(sqlite3* db, unsigned mask, int(*xc)(unsigned,void*,void*,void*), void *ctx) {
+  return sqlite3_trace_v2(db, mask, xc, ctx);
+}
+
 void traceCallbackTrampoline(unsigned traceEventCode, void *ctx, void *p, void *x);
 */
 import "C"
@@ -553,7 +558,7 @@ func (c *SQLiteConn) SetTrace(requested *TraceConfig) error {
 }
 
 func (c *SQLiteConn) setSQLiteTrace(sqliteEventMask uint) error {
-	rv := C.sqlite3_trace_v2(c.db,
+	rv := C._sqlite3_trace_v2(c.db,
 		C.uint(sqliteEventMask),
 		(*[0]byte)(unsafe.Pointer(C.traceCallbackTrampoline)),
 		unsafe.Pointer(c.db)) // Fourth arg is same as first: we are
