@@ -10,6 +10,7 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_ENABLE_RTREE -DSQLITE_THREADSAFE
 #cgo CFLAGS: -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS -DSQLITE_ENABLE_FTS4_UNICODE61
 #cgo CFLAGS: -DSQLITE_TRACE_SIZE_LIMIT=15
+#cgo CFLAGS: -Wno-deprecated-declarations -Wno-c99-extensions
 #ifndef USE_LIBSQLITE3
 #include <sqlite3-binding.h>
 #else
