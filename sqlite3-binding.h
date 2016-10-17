@@ -30,6 +30,7 @@
 ** the version number) and changes its name to "sqlite3.h" as
 ** part of the build process.
 */
+#ifndef USE_LIBSQLITE3
 #ifndef SQLITE3_H
 #define SQLITE3_H
 #include <stdarg.h>     /* Needed for the definition of va_list */
@@ -10338,5 +10339,9 @@ struct fts5_api {
 #endif
 
 #endif /* _FTS5_H */
+#else // USE_LIBSQLITE3
+// If users really want to link against the system sqlite3 we
+// need to make this file a noop.
+#endif
 
 /******** End of fts5.h *********/
