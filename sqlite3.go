@@ -500,6 +500,8 @@ func errorString(err Error) string {
 //   _txlock=XXX
 //     Specify locking behavior for transactions.  XXX can be "immediate",
 //     "deferred", "exclusive".
+//   _readonly=true
+//     Open database in read-only mode (SQLITE_OPEN_READONLY)
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
@@ -508,6 +510,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var loc *time.Location
 	txlock := "BEGIN"
 	busy_timeout := 5000
+	openflags := C.int(C.SQLITE_OPEN_FULLMUTEX | C.SQLITE_OPEN_READWRITE | C.SQLITE_OPEN_CREATE)
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -550,6 +553,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// _readonly
+		if params.Get("_readonly") == "true" {
+			openflags = C.SQLITE_OPEN_READONLY | C.SQLITE_OPEN_FULLMUTEX
+		}
+
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
@@ -558,11 +566,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var db *C.sqlite3
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
-	rv := C._sqlite3_open_v2(name, &db,
-		C.SQLITE_OPEN_FULLMUTEX|
-			C.SQLITE_OPEN_READWRITE|
-			C.SQLITE_OPEN_CREATE,
-		nil)
+	rv := C._sqlite3_open_v2(name, &db, openflags, nil)
 	if rv != 0 {
 		return nil, Error{Code: ErrNo(rv)}
 	}
