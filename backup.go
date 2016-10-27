@@ -65,10 +65,15 @@ func (b *SQLiteBackup) Finish() error {
 
 func (b *SQLiteBackup) Close() error {
 	ret := C.sqlite3_backup_finish(b.b)
+
+	// sqlite3_backup_finish() never fails, it just returns the
+	// error code from previous operations, so clean up before
+	// checking and returning an error
+	b.b = nil
+	runtime.SetFinalizer(b, nil)
+
 	if ret != 0 {
 		return Error{Code: ErrNo(ret)}
 	}
-	b.b = nil
-	runtime.SetFinalizer(b, nil)
 	return nil
 }
