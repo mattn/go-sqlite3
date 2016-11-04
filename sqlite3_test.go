@@ -993,42 +993,6 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestNamedParams(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-	db, err := sql.Open("sqlite3", tempFilename)
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec(`
-	create table foo (id integer, name text, extra text);
-	`)
-	if err != nil {
-		t.Error("Failed to call db.Query:", err)
-	}
-
-	_, err = db.Exec(`insert into foo(id, name, extra) values(:id, :name, :name)`, sql.Param(":name", "foo"), sql.Param(":id", 1))
-	if err != nil {
-		t.Error("Failed to call db.Exec:", err)
-	}
-
-	row := db.QueryRow(`select id, extra from foo where id = :id and extra = :extra`, sql.Param(":id", 1), sql.Param(":extra", "foo"))
-	if row == nil {
-		t.Error("Failed to call db.QueryRow")
-	}
-	var id int
-	var extra string
-	err = row.Scan(&id, &extra)
-	if err != nil {
-		t.Error("Failed to db.Scan:", err)
-	}
-	if id != 1 || extra != "foo" {
-		t.Error("Failed to db.QueryRow: not matched results")
-	}
-}
-
 func TestStringContainingZero(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
