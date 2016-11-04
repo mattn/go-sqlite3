@@ -993,42 +993,6 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestNumberNamedParams(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-	db, err := sql.Open("sqlite3", tempFilename)
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec(`
-	create table foo (id integer, name text, extra text);
-	`)
-	if err != nil {
-		t.Error("Failed to call db.Query:", err)
-	}
-
-	_, err = db.Exec(`insert into foo(id, name, extra) values($1, $2, $2)`, 1, "foo")
-	if err != nil {
-		t.Error("Failed to call db.Exec:", err)
-	}
-
-	row := db.QueryRow(`select id, extra from foo where id = $1 and extra = $2`, 1, "foo")
-	if row == nil {
-		t.Error("Failed to call db.QueryRow")
-	}
-	var id int
-	var extra string
-	err = row.Scan(&id, &extra)
-	if err != nil {
-		t.Error("Failed to db.Scan:", err)
-	}
-	if id != 1 || extra != "foo" {
-		t.Error("Failed to db.QueryRow: not matched results")
-	}
-}
-
 func TestStringContainingZero(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
@@ -1312,6 +1276,22 @@ func TestDeclTypes(t *testing.T) {
 
 	if !reflect.DeepEqual(declTypes, []string{"integer", "text"}) {
 		t.Fatal("Unexpected declTypes:", declTypes)
+	}
+}
+
+func TestPinger(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	err = db.Ping()
+	if err == nil {
+		t.Fatal("Should be closed")
 	}
 }
 
