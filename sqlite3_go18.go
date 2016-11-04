@@ -37,6 +37,10 @@ func (c *SQLiteConn) PrepareContext(ctx context.Context, query string) (driver.S
 	return c.prepare(ctx, query)
 }
 
+func (c *SQLiteConn) BeginContext(ctx context.Context) (driver.Tx, error) {
+	return c.begin(ctx)
+}
+
 func (s *SQLiteStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	list := make([]namedValue, len(args))
 	for i, nv := range args {

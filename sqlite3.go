@@ -514,6 +514,10 @@ func (c *SQLiteConn) execQuery(cmd string) (driver.Result, error) {
 
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
+	return c.begin(context.Background())
+}
+
+func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
 	if _, err := c.execQuery(c.txlock); err != nil {
 		return nil, err
 	}
