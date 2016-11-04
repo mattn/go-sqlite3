@@ -118,10 +118,10 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Timestamp formats understood by both this module and SQLite.
-// The first format in the slice will be used when saving time values
-// into the database. When parsing a string from a timestamp or
-// datetime column, the formats are tried in order.
+// SQLiteTimestampFormats is timestamp formats understood by both this module
+// and SQLite.  The first format in the slice will be used when saving time
+// values into the database. When parsing a string from a timestamp or datetime
+// column, the formats are tried in order.
 var SQLiteTimestampFormats = []string{
 	// By default, store timestamps with whatever timezone they come with.
 	// When parsed, they will be returned with the same timezone.
@@ -141,20 +141,20 @@ func init() {
 }
 
 // Version returns SQLite library version information.
-func Version() (libVersion string, libVersionNumber int, sourceId string) {
+func Version() (libVersion string, libVersionNumber int, sourceID string) {
 	libVersion = C.GoString(C.sqlite3_libversion())
 	libVersionNumber = int(C.sqlite3_libversion_number())
-	sourceId = C.GoString(C.sqlite3_sourceid())
-	return libVersion, libVersionNumber, sourceId
+	sourceID = C.GoString(C.sqlite3_sourceid())
+	return libVersion, libVersionNumber, sourceID
 }
 
-// Driver struct.
+// SQLiteDriver implement sql.Driver.
 type SQLiteDriver struct {
 	Extensions  []string
 	ConnectHook func(*SQLiteConn) error
 }
 
-// Conn struct.
+// SQLiteConn implement sql.Conn.
 type SQLiteConn struct {
 	db          *C.sqlite3
 	loc         *time.Location
@@ -163,12 +163,12 @@ type SQLiteConn struct {
 	aggregators []*aggInfo
 }
 
-// Tx struct.
+// SQLiteTx implemen sql.Tx.
 type SQLiteTx struct {
 	c *SQLiteConn
 }
 
-// Stmt struct.
+// SQLiteStmt implement sql.Stmt.
 type SQLiteStmt struct {
 	c      *SQLiteConn
 	s      *C.sqlite3_stmt
@@ -177,13 +177,13 @@ type SQLiteStmt struct {
 	cls    bool
 }
 
-// Result struct.
+// SQLiteResult implement sql.Result.
 type SQLiteResult struct {
 	id      int64
 	changes int64
 }
 
-// Rows struct.
+// SQLiteRows implement sql.Rows.
 type SQLiteRows struct {
 	s        *SQLiteStmt
 	nc       int
@@ -401,7 +401,7 @@ func (c *SQLiteConn) lastError() Error {
 	}
 }
 
-// Implements Execer
+// Exec implements Execer.
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if len(args) == 0 {
 		return c.execQuery(query)
@@ -456,7 +456,7 @@ type namedValue struct {
 	Value   driver.Value
 }
 
-// Implements Queryer
+// Query implements Queryer.
 func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	list := make([]namedValue, len(args))
 	for i, v := range args {
@@ -549,7 +549,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	var loc *time.Location
 	txlock := "BEGIN"
-	busy_timeout := 5000
+	busyTimeout := 5000
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -575,7 +575,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			if err != nil {
 				return nil, fmt.Errorf("Invalid _busy_timeout: %v: %v", val, err)
 			}
-			busy_timeout = int(iv)
+			busyTimeout = int(iv)
 		}
 
 		// _txlock
@@ -612,7 +612,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
 
-	rv = C.sqlite3_busy_timeout(db, C.int(busy_timeout))
+	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
 	if rv != C.SQLITE_OK {
 		return nil, Error{Code: ErrNo(rv)}
 	}
@@ -686,7 +686,7 @@ func (s *SQLiteStmt) Close() error {
 	return nil
 }
 
-// Return a number of parameters.
+// NumInput return a number of parameters.
 func (s *SQLiteStmt) NumInput() int {
 	return int(C.sqlite3_bind_parameter_count(s.s))
 }
@@ -769,17 +769,17 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil, s.cls}, nil
 }
 
-// Return last inserted ID.
+// LastInsertId teturn last inserted ID.
 func (r *SQLiteResult) LastInsertId() (int64, error) {
 	return r.id, nil
 }
 
-// Return how many rows affected.
+// RowsAffected return how many rows affected.
 func (r *SQLiteResult) RowsAffected() (int64, error) {
 	return r.changes, nil
 }
 
-// Execute the statement with arguments. Return result object.
+// Exec execute the statement with arguments. Return result object.
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	list := make([]namedValue, len(args))
 	for i, v := range args {
@@ -823,7 +823,7 @@ func (rc *SQLiteRows) Close() error {
 	return nil
 }
 
-// Return column names.
+// Columns return column names.
 func (rc *SQLiteRows) Columns() []string {
 	if rc.nc != len(rc.cols) {
 		rc.cols = make([]string, rc.nc)
@@ -834,7 +834,7 @@ func (rc *SQLiteRows) Columns() []string {
 	return rc.cols
 }
 
-// Return column types.
+// DeclTypes return column types.
 func (rc *SQLiteRows) DeclTypes() []string {
 	if rc.decltype == nil {
 		rc.decltype = make([]string, rc.nc)
@@ -845,7 +845,7 @@ func (rc *SQLiteRows) DeclTypes() []string {
 	return rc.decltype
 }
 
-// Move cursor to next.
+// Next move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	rv := C.sqlite3_step(rc.s.s)
 	if rv == C.SQLITE_DONE {

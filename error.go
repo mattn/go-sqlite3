@@ -7,6 +7,7 @@ package sqlite3
 
 import "C"
 
+// ErrNo inherit errno.
 type ErrNo int
 
 const ErrNoMask C.int = 0xff

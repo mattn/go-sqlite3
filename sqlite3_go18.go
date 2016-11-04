@@ -17,6 +17,7 @@ func (c *SQLiteConn) Ping(ctx context.Context) error {
 	return nil
 }
 
+// QueryContext implement QueryerContext.
 func (c *SQLiteConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	list := make([]namedValue, len(args))
 	for i, nv := range args {
@@ -25,6 +26,7 @@ func (c *SQLiteConn) QueryContext(ctx context.Context, query string, args []driv
 	return c.query(ctx, query, list)
 }
 
+// ExecContext implement ExecerContext.
 func (c *SQLiteConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	list := make([]namedValue, len(args))
 	for i, nv := range args {
@@ -33,14 +35,17 @@ func (c *SQLiteConn) ExecContext(ctx context.Context, query string, args []drive
 	return c.exec(ctx, query, list)
 }
 
+// PrepareContext implement ConnPrepareContext.
 func (c *SQLiteConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
 	return c.prepare(ctx, query)
 }
 
+// BeginContext implement ConnBeginContext.
 func (c *SQLiteConn) BeginContext(ctx context.Context) (driver.Tx, error) {
 	return c.begin(ctx)
 }
 
+// QueryContext implement QueryerContext.
 func (s *SQLiteStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	list := make([]namedValue, len(args))
 	for i, nv := range args {
@@ -49,6 +54,7 @@ func (s *SQLiteStmt) QueryContext(ctx context.Context, args []driver.NamedValue)
 	return s.query(ctx, list)
 }
 
+// ExecContext implement ExecerContext.
 func (s *SQLiteStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	list := make([]namedValue, len(args))
 	for i, nv := range args {
