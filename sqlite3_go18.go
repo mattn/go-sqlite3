@@ -1,3 +1,5 @@
+// +build go1.8
+
 package sqlite3
 
 import (
