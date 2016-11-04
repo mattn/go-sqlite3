@@ -993,7 +993,7 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestNumberNamedParams(t *testing.T) {
+func TestNamedParams(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
@@ -1009,12 +1009,12 @@ func TestNumberNamedParams(t *testing.T) {
 		t.Error("Failed to call db.Query:", err)
 	}
 
-	_, err = db.Exec(`insert into foo(id, name, extra) values($1, $2, $2)`, 1, "foo")
+	_, err = db.Exec(`insert into foo(id, name, extra) values(:id, :name, :name)`, sql.Param(":name", "foo"), sql.Param(":id", 1))
 	if err != nil {
 		t.Error("Failed to call db.Exec:", err)
 	}
 
-	row := db.QueryRow(`select id, extra from foo where id = $1 and extra = $2`, 1, "foo")
+	row := db.QueryRow(`select id, extra from foo where id = :id and extra = :extra`, sql.Param(":id", 1), sql.Param(":extra", "foo"))
 	if row == nil {
 		t.Error("Failed to call db.QueryRow")
 	}
