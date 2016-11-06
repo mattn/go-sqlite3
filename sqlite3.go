@@ -817,6 +817,17 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 		C.sqlite3_clear_bindings(s.s)
 		return nil, err
 	}
+
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			C.sqlite3_interrupt(s.c.db)
+		case <-done:
+		}
+	}()
+
 	var rowid, changes C.longlong
 	rv := C._sqlite3_step(s.s, &rowid, &changes)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
@@ -825,6 +836,7 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 		C.sqlite3_clear_bindings(s.s)
 		return nil, err
 	}
+
 	return &SQLiteResult{int64(rowid), int64(changes)}, nil
 }
 
