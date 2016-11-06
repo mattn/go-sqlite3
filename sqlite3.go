@@ -190,6 +190,7 @@ type SQLiteRows struct {
 	cols     []string
 	decltype []string
 	cls      bool
+	done     chan struct{}
 }
 
 type functionInfo struct {
@@ -766,7 +767,26 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
-	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil, s.cls}, nil
+
+	rows := &SQLiteRows{
+		s:        s,
+		nc:       int(C.sqlite3_column_count(s.s)),
+		cols:     nil,
+		decltype: nil,
+		cls:      s.cls,
+		done:     make(chan struct{}),
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			C.sqlite3_interrupt(s.c.db)
+			rows.Close()
+		case <-rows.done:
+		}
+	}()
+
+	return rows, nil
 }
 
 // LastInsertId teturn last inserted ID.
@@ -812,6 +832,10 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 func (rc *SQLiteRows) Close() error {
 	if rc.s.closed {
 		return nil
+	}
+	if rc.done != nil {
+		close(rc.done)
+		rc.done = nil
 	}
 	if rc.cls {
 		return rc.s.Close()
