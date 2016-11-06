@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// ColumnTypeDatabaseTypeName implement RowsColumnTypeDatabaseTypeName.
 func (rc *SQLiteRows) ColumnTypeDatabaseTypeName(i int) string {
 	return C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i)))
 }
@@ -27,10 +28,12 @@ func (rc *SQLiteRows) ColumnTypePrecisionScale(index int) (precision, scale int6
 }
 */
 
+// ColumnTypeNullable implement RowsColumnTypeNullable.
 func (rc *SQLiteRows) ColumnTypeNullable(i int) (nullable, ok bool) {
 	return true, true
 }
 
+// ColumnTypeScanType implement RowsColumnTypeScanType.
 func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
 	switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
 	case C.SQLITE_INTEGER:
