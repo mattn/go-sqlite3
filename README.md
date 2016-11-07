@@ -64,6 +64,10 @@ FAQ
 
     Use `loc=auto` in SQLite3 filename schema like `file:foo.db?loc=auto`.
 
+* Can use this in multiple routines concurrently?
+
+    Yes for readonly. But, No for writable. See #50, #51, #209.
+
 License
 -------
 
