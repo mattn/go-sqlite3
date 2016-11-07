@@ -114,12 +114,14 @@ import (
 	"strings"
 	"time"
 	"unsafe"
+
+	"golang.org/x/net/context"
 )
 
-// Timestamp formats understood by both this module and SQLite.
-// The first format in the slice will be used when saving time values
-// into the database. When parsing a string from a timestamp or
-// datetime column, the formats are tried in order.
+// SQLiteTimestampFormats is timestamp formats understood by both this module
+// and SQLite.  The first format in the slice will be used when saving time
+// values into the database. When parsing a string from a timestamp or datetime
+// column, the formats are tried in order.
 var SQLiteTimestampFormats = []string{
 	// By default, store timestamps with whatever timezone they come with.
 	// When parsed, they will be returned with the same timezone.
@@ -139,20 +141,20 @@ func init() {
 }
 
 // Version returns SQLite library version information.
-func Version() (libVersion string, libVersionNumber int, sourceId string) {
+func Version() (libVersion string, libVersionNumber int, sourceID string) {
 	libVersion = C.GoString(C.sqlite3_libversion())
 	libVersionNumber = int(C.sqlite3_libversion_number())
-	sourceId = C.GoString(C.sqlite3_sourceid())
-	return libVersion, libVersionNumber, sourceId
+	sourceID = C.GoString(C.sqlite3_sourceid())
+	return libVersion, libVersionNumber, sourceID
 }
 
-// Driver struct.
+// SQLiteDriver implement sql.Driver.
 type SQLiteDriver struct {
 	Extensions  []string
 	ConnectHook func(*SQLiteConn) error
 }
 
-// Conn struct.
+// SQLiteConn implement sql.Conn.
 type SQLiteConn struct {
 	db          *C.sqlite3
 	loc         *time.Location
@@ -161,35 +163,34 @@ type SQLiteConn struct {
 	aggregators []*aggInfo
 }
 
-// Tx struct.
+// SQLiteTx implemen sql.Tx.
 type SQLiteTx struct {
 	c *SQLiteConn
 }
 
-// Stmt struct.
+// SQLiteStmt implement sql.Stmt.
 type SQLiteStmt struct {
 	c      *SQLiteConn
 	s      *C.sqlite3_stmt
-	nv     int
-	nn     []string
 	t      string
 	closed bool
 	cls    bool
 }
 
-// Result struct.
+// SQLiteResult implement sql.Result.
 type SQLiteResult struct {
 	id      int64
 	changes int64
 }
 
-// Rows struct.
+// SQLiteRows implement sql.Rows.
 type SQLiteRows struct {
 	s        *SQLiteStmt
 	nc       int
 	cols     []string
 	decltype []string
 	cls      bool
+	done     chan struct{}
 }
 
 type functionInfo struct {
@@ -295,19 +296,19 @@ func (ai *aggInfo) Done(ctx *C.sqlite3_context) {
 
 // Commit transaction.
 func (tx *SQLiteTx) Commit() error {
-	_, err := tx.c.exec("COMMIT")
+	_, err := tx.c.execQuery("COMMIT")
 	if err != nil && err.(Error).Code == C.SQLITE_BUSY {
 		// sqlite3 will leave the transaction open in this scenario.
 		// However, database/sql considers the transaction complete once we
 		// return from Commit() - we must clean up to honour its semantics.
-		tx.c.exec("ROLLBACK")
+		tx.c.execQuery("ROLLBACK")
 	}
 	return err
 }
 
 // Rollback transaction.
 func (tx *SQLiteTx) Rollback() error {
-	_, err := tx.c.exec("ROLLBACK")
+	_, err := tx.c.execQuery("ROLLBACK")
 	return err
 }
 
@@ -401,12 +402,24 @@ func (c *SQLiteConn) lastError() Error {
 	}
 }
 
-// Implements Execer
+// Exec implements Execer.
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if len(args) == 0 {
-		return c.exec(query)
+		return c.execQuery(query)
 	}
 
+	list := make([]namedValue, len(args))
+	for i, v := range args {
+		list[i] = namedValue{
+			Ordinal: i + 1,
+			Value:   v,
+		}
+	}
+	return c.exec(context.Background(), query, list)
+}
+
+func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) (driver.Result, error) {
+	start := 0
 	for {
 		s, err := c.Prepare(query)
 		if err != nil {
@@ -418,12 +431,16 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 			if len(args) < na {
 				return nil, fmt.Errorf("Not enough args to execute query. Expected %d, got %d.", na, len(args))
 			}
-			res, err = s.Exec(args[:na])
+			for i := 0; i < na; i++ {
+				args[i].Ordinal -= start
+			}
+			res, err = s.(*SQLiteStmt).exec(ctx, args[:na])
 			if err != nil && err != driver.ErrSkip {
 				s.Close()
 				return nil, err
 			}
 			args = args[na:]
+			start += na
 		}
 		tail := s.(*SQLiteStmt).t
 		s.Close()
@@ -434,8 +451,26 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 	}
 }
 
-// Implements Queryer
+type namedValue struct {
+	Name    string
+	Ordinal int
+	Value   driver.Value
+}
+
+// Query implements Queryer.
 func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	list := make([]namedValue, len(args))
+	for i, v := range args {
+		list[i] = namedValue{
+			Ordinal: i + 1,
+			Value:   v,
+		}
+	}
+	return c.query(context.Background(), query, list)
+}
+
+func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue) (driver.Rows, error) {
+	start := 0
 	for {
 		s, err := c.Prepare(query)
 		if err != nil {
@@ -446,12 +481,16 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 		if len(args) < na {
 			return nil, fmt.Errorf("Not enough args to execute query. Expected %d, got %d.", na, len(args))
 		}
-		rows, err := s.Query(args[:na])
+		for i := 0; i < na; i++ {
+			args[i].Ordinal -= start
+		}
+		rows, err := s.(*SQLiteStmt).query(ctx, args[:na])
 		if err != nil && err != driver.ErrSkip {
 			s.Close()
 			return nil, err
 		}
 		args = args[na:]
+		start += na
 		tail := s.(*SQLiteStmt).t
 		if tail == "" {
 			return rows, nil
@@ -462,7 +501,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 	}
 }
 
-func (c *SQLiteConn) exec(cmd string) (driver.Result, error) {
+func (c *SQLiteConn) execQuery(cmd string) (driver.Result, error) {
 	pcmd := C.CString(cmd)
 	defer C.free(unsafe.Pointer(pcmd))
 
@@ -476,7 +515,11 @@ func (c *SQLiteConn) exec(cmd string) (driver.Result, error) {
 
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
-	if _, err := c.exec(c.txlock); err != nil {
+	return c.begin(context.Background())
+}
+
+func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
+	if _, err := c.execQuery(c.txlock); err != nil {
 		return nil, err
 	}
 	return &SQLiteTx{c}, nil
@@ -507,7 +550,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	var loc *time.Location
 	txlock := "BEGIN"
-	busy_timeout := 5000
+	busyTimeout := 5000
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -533,7 +576,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			if err != nil {
 				return nil, fmt.Errorf("Invalid _busy_timeout: %v: %v", val, err)
 			}
-			busy_timeout = int(iv)
+			busyTimeout = int(iv)
 		}
 
 		// _txlock
@@ -570,7 +613,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
 
-	rv = C.sqlite3_busy_timeout(db, C.int(busy_timeout))
+	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
 	if rv != C.SQLITE_OK {
 		return nil, Error{Code: ErrNo(rv)}
 	}
@@ -606,6 +649,10 @@ func (c *SQLiteConn) Close() error {
 
 // Prepare the query string. Return a new statement.
 func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
+	return c.prepare(context.Background(), query)
+}
+
+func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, error) {
 	pquery := C.CString(query)
 	defer C.free(unsafe.Pointer(pquery))
 	var s *C.sqlite3_stmt
@@ -618,15 +665,7 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 	if tail != nil && *tail != '\000' {
 		t = strings.TrimSpace(C.GoString(tail))
 	}
-	nv := int(C.sqlite3_bind_parameter_count(s))
-	var nn []string
-	for i := 0; i < nv; i++ {
-		pn := C.GoString(C.sqlite3_bind_parameter_name(s, C.int(i+1)))
-		if len(pn) > 1 && pn[0] == '$' && 48 <= pn[1] && pn[1] <= 57 {
-			nn = append(nn, C.GoString(C.sqlite3_bind_parameter_name(s, C.int(i+1))))
-		}
-	}
-	ss := &SQLiteStmt{c: c, s: s, nv: nv, nn: nn, t: t}
+	ss := &SQLiteStmt{c: c, s: s, t: t}
 	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
 	return ss, nil
 }
@@ -648,9 +687,9 @@ func (s *SQLiteStmt) Close() error {
 	return nil
 }
 
-// Return a number of parameters.
+// NumInput return a number of parameters.
 func (s *SQLiteStmt) NumInput() int {
-	return s.nv
+	return int(C.sqlite3_bind_parameter_count(s.s))
 }
 
 type bindArg struct {
@@ -658,31 +697,23 @@ type bindArg struct {
 	v driver.Value
 }
 
-func (s *SQLiteStmt) bind(args []driver.Value) error {
+func (s *SQLiteStmt) bind(args []namedValue) error {
 	rv := C.sqlite3_reset(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return s.c.lastError()
 	}
 
-	var vargs []bindArg
-	narg := len(args)
-	vargs = make([]bindArg, narg)
-	if len(s.nn) > 0 {
-		for i, v := range s.nn {
-			if pi, err := strconv.Atoi(v[1:]); err == nil {
-				vargs[i] = bindArg{pi, args[i]}
-			}
-		}
-	} else {
-		for i, v := range args {
-			vargs[i] = bindArg{i + 1, v}
+	for i, v := range args {
+		if v.Name != "" {
+			cname := C.CString(v.Name)
+			args[i].Ordinal = int(C.sqlite3_bind_parameter_index(s.s, cname))
+			C.free(unsafe.Pointer(cname))
 		}
 	}
 
-	for _, varg := range vargs {
-		n := C.int(varg.n)
-		v := varg.v
-		switch v := v.(type) {
+	for _, arg := range args {
+		n := C.int(arg.Ordinal)
+		switch v := arg.Value.(type) {
 		case nil:
 			rv = C.sqlite3_bind_null(s.s, n)
 		case string:
@@ -722,29 +753,81 @@ func (s *SQLiteStmt) bind(args []driver.Value) error {
 
 // Query the statement with arguments. Return records.
 func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
+	list := make([]namedValue, len(args))
+	for i, v := range args {
+		list[i] = namedValue{
+			Ordinal: i + 1,
+			Value:   v,
+		}
+	}
+	return s.query(context.Background(), list)
+}
+
+func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
-	return &SQLiteRows{s, int(C.sqlite3_column_count(s.s)), nil, nil, s.cls}, nil
+
+	rows := &SQLiteRows{
+		s:        s,
+		nc:       int(C.sqlite3_column_count(s.s)),
+		cols:     nil,
+		decltype: nil,
+		cls:      s.cls,
+		done:     make(chan struct{}),
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			C.sqlite3_interrupt(s.c.db)
+			rows.Close()
+		case <-rows.done:
+		}
+	}()
+
+	return rows, nil
 }
 
-// Return last inserted ID.
+// LastInsertId teturn last inserted ID.
 func (r *SQLiteResult) LastInsertId() (int64, error) {
 	return r.id, nil
 }
 
-// Return how many rows affected.
+// RowsAffected return how many rows affected.
 func (r *SQLiteResult) RowsAffected() (int64, error) {
 	return r.changes, nil
 }
 
-// Execute the statement with arguments. Return result object.
+// Exec execute the statement with arguments. Return result object.
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
+	list := make([]namedValue, len(args))
+	for i, v := range args {
+		list[i] = namedValue{
+			Ordinal: i + 1,
+			Value:   v,
+		}
+	}
+	return s.exec(context.Background(), list)
+}
+
+func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
 		C.sqlite3_reset(s.s)
 		C.sqlite3_clear_bindings(s.s)
 		return nil, err
 	}
+
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			C.sqlite3_interrupt(s.c.db)
+		case <-done:
+		}
+	}()
+
 	var rowid, changes C.longlong
 	rv := C._sqlite3_step(s.s, &rowid, &changes)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
@@ -753,6 +836,7 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 		C.sqlite3_clear_bindings(s.s)
 		return nil, err
 	}
+
 	return &SQLiteResult{int64(rowid), int64(changes)}, nil
 }
 
@@ -760,6 +844,10 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 func (rc *SQLiteRows) Close() error {
 	if rc.s.closed {
 		return nil
+	}
+	if rc.done != nil {
+		close(rc.done)
+		rc.done = nil
 	}
 	if rc.cls {
 		return rc.s.Close()
@@ -771,7 +859,7 @@ func (rc *SQLiteRows) Close() error {
 	return nil
 }
 
-// Return column names.
+// Columns return column names.
 func (rc *SQLiteRows) Columns() []string {
 	if rc.nc != len(rc.cols) {
 		rc.cols = make([]string, rc.nc)
@@ -782,7 +870,7 @@ func (rc *SQLiteRows) Columns() []string {
 	return rc.cols
 }
 
-// Return column types.
+// DeclTypes return column types.
 func (rc *SQLiteRows) DeclTypes() []string {
 	if rc.decltype == nil {
 		rc.decltype = make([]string, rc.nc)
@@ -793,7 +881,7 @@ func (rc *SQLiteRows) DeclTypes() []string {
 	return rc.decltype
 }
 
-// Move cursor to next.
+// Next move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	rv := C.sqlite3_step(rc.s.s)
 	if rv == C.SQLITE_DONE {
