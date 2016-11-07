@@ -847,7 +847,6 @@ func (rc *SQLiteRows) Close() error {
 	}
 	if rc.done != nil {
 		close(rc.done)
-		rc.done = nil
 	}
 	if rc.cls {
 		return rc.s.Close()
