@@ -421,7 +421,7 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) (driver.Result, error) {
 	start := 0
 	for {
-		s, err := c.Prepare(query)
+		s, err := c.prepare(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -472,7 +472,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue) (driver.Rows, error) {
 	start := 0
 	for {
-		s, err := c.Prepare(query)
+		s, err := c.prepare(ctx, query)
 		if err != nil {
 			return nil, err
 		}
