@@ -191,6 +191,7 @@ type SQLiteRows struct {
 	decltype []string
 	cls      bool
 	done     chan struct{}
+	next     *SQLiteRows
 }
 
 type functionInfo struct {
@@ -296,19 +297,19 @@ func (ai *aggInfo) Done(ctx *C.sqlite3_context) {
 
 // Commit transaction.
 func (tx *SQLiteTx) Commit() error {
-	_, err := tx.c.execQuery("COMMIT")
+	_, err := tx.c.exec(context.Background(), "COMMIT", nil)
 	if err != nil && err.(Error).Code == C.SQLITE_BUSY {
 		// sqlite3 will leave the transaction open in this scenario.
 		// However, database/sql considers the transaction complete once we
 		// return from Commit() - we must clean up to honour its semantics.
-		tx.c.execQuery("ROLLBACK")
+		tx.c.exec(context.Background(), "ROLLBACK", nil)
 	}
 	return err
 }
 
 // Rollback transaction.
 func (tx *SQLiteTx) Rollback() error {
-	_, err := tx.c.execQuery("ROLLBACK")
+	_, err := tx.c.exec(context.Background(), "ROLLBACK", nil)
 	return err
 }
 
@@ -382,11 +383,15 @@ func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) erro
 	if pure {
 		opts |= C.SQLITE_DETERMINISTIC
 	}
-	rv := C._sqlite3_create_function(c.db, cname, C.int(numArgs), C.int(opts), C.uintptr_t(newHandle(c, &fi)), (*[0]byte)(unsafe.Pointer(C.callbackTrampoline)), nil, nil)
+	rv := sqlite3_create_function(c.db, cname, numArgs, opts, newHandle(c, &fi), C.callbackTrampoline, nil, nil)
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
 	return nil
+}
+
+func sqlite3_create_function(db *C.sqlite3, zFunctionName *C.char, nArg C.int, eTextRep C.int, pApp C.uintptr_t, xFunc unsafe.Pointer, xStep unsafe.Pointer, xFinal unsafe.Pointer) C.int {
+	return C._sqlite3_create_function(db, zFunctionName, nArg, eTextRep, pApp, (*[0]byte)(unsafe.Pointer(xFunc)), (*[0]byte)(unsafe.Pointer(xStep)), (*[0]byte)(unsafe.Pointer(xFinal)))
 }
 
 // AutoCommit return which currently auto commit or not.
@@ -404,10 +409,6 @@ func (c *SQLiteConn) lastError() Error {
 
 // Exec implements Execer.
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	if len(args) == 0 {
-		return c.execQuery(query)
-	}
-
 	list := make([]namedValue, len(args))
 	for i, v := range args {
 		list[i] = namedValue{
@@ -470,6 +471,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 }
 
 func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue) (driver.Rows, error) {
+	var top, cur *SQLiteRows
 	start := 0
 	for {
 		s, err := c.Prepare(query)
@@ -487,7 +489,14 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue)
 		rows, err := s.(*SQLiteStmt).query(ctx, args[:na])
 		if err != nil && err != driver.ErrSkip {
 			s.Close()
-			return nil, err
+			return top, err
+		}
+		if top == nil {
+			top = rows.(*SQLiteRows)
+			cur = top
+		} else {
+			cur.next = rows.(*SQLiteRows)
+			cur = cur.next
 		}
 		args = args[na:]
 		start += na
@@ -501,25 +510,13 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue)
 	}
 }
 
-func (c *SQLiteConn) execQuery(cmd string) (driver.Result, error) {
-	pcmd := C.CString(cmd)
-	defer C.free(unsafe.Pointer(pcmd))
-
-	var rowid, changes C.longlong
-	rv := C._sqlite3_exec(c.db, pcmd, &rowid, &changes)
-	if rv != C.SQLITE_OK {
-		return nil, c.lastError()
-	}
-	return &SQLiteResult{int64(rowid), int64(changes)}, nil
-}
-
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
 	return c.begin(context.Background())
 }
 
 func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
-	if _, err := c.execQuery(c.txlock); err != nil {
+	if _, err := c.exec(ctx, c.txlock, nil); err != nil {
 		return nil, err
 	}
 	return &SQLiteTx{c}, nil
@@ -775,6 +772,7 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 		decltype: nil,
 		cls:      s.cls,
 		done:     make(chan struct{}),
+		next:     nil,
 	}
 
 	go func() {
@@ -837,7 +835,7 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 		return nil, err
 	}
 
-	return &SQLiteResult{int64(rowid), int64(changes)}, nil
+	return &SQLiteResult{id: int64(rowid), changes: int64(changes)}, nil
 }
 
 // Close the rows.
@@ -970,5 +968,17 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 		}
 	}
+	return nil
+}
+
+func (rc *SQLiteRows) HasNextResultSet() bool {
+	return rc.next != nil
+}
+
+func (rc *SQLiteRows) NextResultSet() error {
+	if rc.next == nil {
+		return io.EOF
+	}
+	*rc = *rc.next
 	return nil
 }
