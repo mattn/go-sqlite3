@@ -13,6 +13,7 @@ package sqlite3
 #else
 #include <sqlite3.h>
 #endif
+#include <stdint.h>
 #include <stdlib.h>
 
 void stepTrampoline(sqlite3_context*, int, sqlite3_value**);
