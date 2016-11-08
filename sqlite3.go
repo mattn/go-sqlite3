@@ -191,7 +191,6 @@ type SQLiteRows struct {
 	decltype []string
 	cls      bool
 	done     chan struct{}
-	next     *SQLiteRows
 }
 
 type functionInfo struct {
@@ -471,7 +470,6 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 }
 
 func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue) (driver.Rows, error) {
-	var top, cur *SQLiteRows
 	start := 0
 	for {
 		s, err := c.Prepare(query)
@@ -489,14 +487,7 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue)
 		rows, err := s.(*SQLiteStmt).query(ctx, args[:na])
 		if err != nil && err != driver.ErrSkip {
 			s.Close()
-			return top, err
-		}
-		if top == nil {
-			top = rows.(*SQLiteRows)
-			cur = top
-		} else {
-			cur.next = rows.(*SQLiteRows)
-			cur = cur.next
+			return rows, err
 		}
 		args = args[na:]
 		start += na
@@ -772,7 +763,6 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 		decltype: nil,
 		cls:      s.cls,
 		done:     make(chan struct{}),
-		next:     nil,
 	}
 
 	go func() {
@@ -968,17 +958,5 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 		}
 	}
-	return nil
-}
-
-func (rc *SQLiteRows) HasNextResultSet() bool {
-	return rc.next != nil
-}
-
-func (rc *SQLiteRows) NextResultSet() error {
-	if rc.next == nil {
-		return io.EOF
-	}
-	*rc = *rc.next
 	return nil
 }
