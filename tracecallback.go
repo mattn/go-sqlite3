@@ -396,7 +396,7 @@ func (c *SQLiteConn) SetTrace(requested *TraceConfig) error {
 	// The callback trampoline function does cleanup on Close event,
 	// regardless of the presence or absence of the user callback.
 	// Therefore it needs the Close event to be selected:
-	actualEventMask := reqCopy.EventMask | TraceClose
+	actualEventMask := uint(reqCopy.EventMask | TraceClose)
 	err := c.setSQLiteTrace(actualEventMask)
 	return err
 }
