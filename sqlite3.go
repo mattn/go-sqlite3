@@ -627,11 +627,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 // Close the connection.
 func (c *SQLiteConn) Close() error {
-	deleteHandles(c)
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
+	deleteHandles(c)
 	c.db = nil
 	runtime.SetFinalizer(c, nil)
 	return nil
