@@ -693,7 +693,7 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 
 	for i, v := range args {
 		if v.Name != "" {
-			cname := C.CString(v.Name)
+			cname := C.CString(":" + v.Name)
 			args[i].Ordinal = int(C.sqlite3_bind_parameter_index(s.s, cname))
 			C.free(unsafe.Pointer(cname))
 		}
