@@ -29,12 +29,12 @@ func TestNamedParams(t *testing.T) {
 		t.Error("Failed to call db.Query:", err)
 	}
 
-	_, err = db.Exec(`insert into foo(id, name, extra) values(:id, :name, :name)`, sql.Named(":name", "foo"), sql.Named(":id", 1))
+	_, err = db.Exec(`insert into foo(id, name, extra) values(:id, :name, :name)`, sql.Named("name", "foo"), sql.Named("id", 1))
 	if err != nil {
 		t.Error("Failed to call db.Exec:", err)
 	}
 
-	row := db.QueryRow(`select id, extra from foo where id = :id and extra = :extra`, sql.Named(":id", 1), sql.Named(":extra", "foo"))
+	row := db.QueryRow(`select id, extra from foo where id = :id and extra = :extra`, sql.Named("id", 1), sql.Named("extra", "foo"))
 	if row == nil {
 		t.Error("Failed to call db.QueryRow")
 	}
