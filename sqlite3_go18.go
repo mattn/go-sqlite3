@@ -45,8 +45,8 @@ func (c *SQLiteConn) PrepareContext(ctx context.Context, query string) (driver.S
 	return c.prepare(ctx, query)
 }
 
-// BeginContext implement ConnBeginContext.
-func (c *SQLiteConn) BeginContext(ctx context.Context) (driver.Tx, error) {
+// BeginTx implement ConnBeginTx.
+func (c *SQLiteConn) BeginTx(ctx context.Context) (driver.Tx, error) {
 	return c.begin(ctx)
 }
 
