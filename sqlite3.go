@@ -898,7 +898,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 				} else {
 					val *= int64(time.Second) // convert sec to nsec
 				}
-				t = time.Unix(0, val).UTC()
+				t = time.Unix(0, val)
 				if rc.s.c.loc != nil {
 					t = t.In(rc.s.c.loc)
 				}
