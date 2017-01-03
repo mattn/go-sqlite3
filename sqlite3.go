@@ -808,13 +808,13 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 
 	done := make(chan struct{})
 	defer close(done)
-	go func() {
+	go func(db *C.sqlite3) {
 		select {
 		case <-ctx.Done():
-			C.sqlite3_interrupt(s.c.db)
+			C.sqlite3_interrupt(db)
 		case <-done:
 		}
-	}()
+	}(s.c.db)
 
 	var rowid, changes C.longlong
 	rv := C._sqlite3_step(s.s, &rowid, &changes)
