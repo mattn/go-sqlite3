@@ -429,6 +429,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) 
 		if s.(*SQLiteStmt).s != nil {
 			na := s.NumInput()
 			if len(args) < na {
+				s.Close()
 				return nil, fmt.Errorf("Not enough args to execute query. Expected %d, got %d.", na, len(args))
 			}
 			for i := 0; i < na; i++ {
