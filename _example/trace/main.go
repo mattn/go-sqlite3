@@ -1,3 +1,5 @@
+// +build trace
+
 package main
 
 import (
