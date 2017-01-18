@@ -35,8 +35,6 @@ type TraceInfo struct {
 	// filled when EventCode = TraceProfile = SQLITE_TRACE_PROFILE:
 	// estimated number of nanoseconds that the prepared statement took to run:
 	RunTimeNanosec int64
-
-	DBError Error
 }
 
 type TraceUserCallback func(TraceInfo) int
