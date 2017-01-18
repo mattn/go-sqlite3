@@ -2,8 +2,6 @@
 
 package sqlite3
 
-import "errors"
-
 // Trace... constants identify the possible events causing callback invocation.
 // Values are same as the corresponding SQLite Trace Event Codes.
 const (
@@ -43,13 +41,4 @@ type TraceConfig struct {
 	Callback        TraceUserCallback
 	EventMask       uint
 	WantExpandedSQL bool
-}
-
-// RegisterAggregator register the aggregator.
-func (c *SQLiteConn) RegisterAggregator(name string, impl interface{}, pure bool) error {
-	return errors.New("This feature is not implemented")
-}
-
-func (c *SQLiteConn) SetTrace(requested *TraceConfig) error {
-	return errors.New("This feature is not implemented")
 }
