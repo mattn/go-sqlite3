@@ -68,6 +68,15 @@ FAQ
 
     Yes for readonly. But, No for writable. See #50, #51, #209.
 
+* Why is it racy if I use a `sql.Open("sqlite", ":memory:")` database?
+
+    Each connection to :memory: opens a brand new in-memory sql database, so if
+    the stdlib's sql engine happens to open another connection and you've only
+    specified ":memory:", that connection will see a brand new database. A
+    workaround is to use "file::memory:?mode=memory&cache=shared". Every
+    connection to this string will point to the same in-memory database. See
+    #204 for more info.
+
 License
 -------
 
