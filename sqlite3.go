@@ -766,14 +766,18 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 		done:     make(chan struct{}),
 	}
 
-	go func() {
+	go func(db *C.sqlite3) {
 		select {
 		case <-ctx.Done():
-			C.sqlite3_interrupt(s.c.db)
-			rows.Close()
+			select {
+			case <-rows.done:
+			default:
+				C.sqlite3_interrupt(s.c.db)
+				rows.Close()
+			}
 		case <-rows.done:
 		}
-	}()
+	}(s.c.db)
 
 	return rows, nil
 }
