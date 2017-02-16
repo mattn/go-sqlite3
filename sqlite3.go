@@ -772,7 +772,7 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 			select {
 			case <-rows.done:
 			default:
-				C.sqlite3_interrupt(s.c.db)
+				C.sqlite3_interrupt(db)
 				rows.Close()
 			}
 		case <-rows.done:
