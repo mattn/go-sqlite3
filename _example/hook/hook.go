@@ -2,9 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"github.com/mattn/go-sqlite3"
 	"log"
 	"os"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -19,35 +20,35 @@ func main() {
 	os.Remove("./foo.db")
 	os.Remove("./bar.db")
 
-	destDb, err := sql.Open("sqlite3_with_hook_example", "./foo.db")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer destDb.Close()
-	destDb.Ping()
-
-	_, err = destDb.Exec("create table foo(id int, value text)")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = destDb.Exec("insert into foo values(1, 'foo')")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = destDb.Exec("insert into foo values(2, 'bar')")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = destDb.Query("select * from foo")
-	if err != nil {
-		log.Fatal(err)
-	}
-	srcDb, err := sql.Open("sqlite3_with_hook_example", "./bar.db")
+	srcDb, err := sql.Open("sqlite3_with_hook_example", "./foo.db")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer srcDb.Close()
 	srcDb.Ping()
+
+	_, err = srcDb.Exec("create table foo(id int, value text)")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = srcDb.Exec("insert into foo values(1, 'foo')")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = srcDb.Exec("insert into foo values(2, 'bar')")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = srcDb.Query("select * from foo")
+	if err != nil {
+		log.Fatal(err)
+	}
+	destDb, err := sql.Open("sqlite3_with_hook_example", "./bar.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer destDb.Close()
+	destDb.Ping()
 
 	bk, err := sqlite3conn[1].Backup("main", sqlite3conn[0], "main")
 	if err != nil {
