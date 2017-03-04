@@ -1239,14 +1239,14 @@ var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
 	customFunctionOnce.Do(func() {
-		custom_add := func(a, b int64) int64 {
+		customAdd := func(a, b int64) int64 {
 			return a + b
 		}
 
 		sql.Register("sqlite3_BenchmarkCustomFunctions", &SQLiteDriver{
 			ConnectHook: func(conn *SQLiteConn) error {
 				// Impure function to force sqlite to reexecute it each time.
-				if err := conn.RegisterFunc("custom_add", custom_add, false); err != nil {
+				if err := conn.RegisterFunc("custom_add", customAdd, false); err != nil {
 					return err
 				}
 				return nil
