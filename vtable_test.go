@@ -94,7 +94,7 @@ func (vc *testVTabCursor) EOF() bool {
 	return vc.index >= len(vc.vTab.intarray)
 }
 
-func (vc *testVTabCursor) Column(c *Context, col int) error {
+func (vc *testVTabCursor) Column(c *SQLiteContext, col int) error {
 	if col != 0 {
 		return fmt.Errorf("column index out of bounds: %d", col)
 	}

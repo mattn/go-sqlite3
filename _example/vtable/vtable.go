@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/mattn/go-sqlite3"
+	"github.com/DataDog/go-sqlite3"
 	"io/ioutil"
 	"net/http"
 )
@@ -73,7 +73,7 @@ type ghRepoCursor struct {
 	repos []GithubRepo
 }
 
-func (vc *ghRepoCursor) Column(c *sqlite3.Context, col int) error {
+func (vc *ghRepoCursor) Column(c *sqlite3.SQLiteContext, col int) error {
 	switch col {
 	case 0:
 		c.ResultInt(vc.repos[vc.index].ID)

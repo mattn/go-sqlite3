@@ -294,7 +294,7 @@ func goVEof(pCursor unsafe.Pointer) C.int {
 //export goVColumn
 func goVColumn(pCursor, cp unsafe.Pointer, col int) *C.char {
 	vtc := lookupHandle(uintptr(pCursor)).(*sqliteVTabCursor)
-	c := (*Context)(cp)
+	c := (*SQLiteContext)(cp)
 	err := vtc.vTabCursor.Column(c, col)
 	if err != nil {
 		return mPrintf("%s", err.Error())
@@ -349,7 +349,7 @@ type VTabCursor interface {
 	// http://sqlite.org/vtab.html#xeof
 	EOF() bool
 	// http://sqlite.org/vtab.html#xcolumn
-	Column(c *Context, col int) error
+	Column(c *SQLiteContext, col int) error
 	// http://sqlite.org/vtab.html#xrowid
 	Rowid() (int64, error)
 }

@@ -35,10 +35,10 @@ import (
 const i64 = unsafe.Sizeof(int(0)) > 4
 
 type ZeroBlobLength int32
-type Context C.sqlite3_context
+type SQLiteContext C.sqlite3_context
 
 // ResultBool sets the result of an SQL function.
-func (c *Context) ResultBool(b bool) {
+func (c *SQLiteContext) ResultBool(b bool) {
 	if b {
 		c.ResultInt(1)
 	} else {
@@ -48,7 +48,7 @@ func (c *Context) ResultBool(b bool) {
 
 // ResultBlob sets the result of an SQL function.
 // See: sqlite3_result_blob, http://sqlite.org/c3ref/result_blob.html
-func (c *Context) ResultBlob(b []byte) {
+func (c *SQLiteContext) ResultBlob(b []byte) {
 	if i64 && len(b) > math.MaxInt32 {
 		C.sqlite3_result_error_toobig((*C.sqlite3_context)(c))
 		return
@@ -62,13 +62,13 @@ func (c *Context) ResultBlob(b []byte) {
 
 // ResultDouble sets the result of an SQL function.
 // See: sqlite3_result_double, http://sqlite.org/c3ref/result_blob.html
-func (c *Context) ResultDouble(d float64) {
+func (c *SQLiteContext) ResultDouble(d float64) {
 	C.sqlite3_result_double((*C.sqlite3_context)(c), C.double(d))
 }
 
 // ResultInt sets the result of an SQL function.
 // See: sqlite3_result_int, http://sqlite.org/c3ref/result_blob.html
-func (c *Context) ResultInt(i int) {
+func (c *SQLiteContext) ResultInt(i int) {
 	if i64 && (i > math.MaxInt32 || i < math.MinInt32) {
 		C.sqlite3_result_int64((*C.sqlite3_context)(c), C.sqlite3_int64(i))
 	} else {
@@ -78,19 +78,19 @@ func (c *Context) ResultInt(i int) {
 
 // ResultInt64 sets the result of an SQL function.
 // See: sqlite3_result_int64, http://sqlite.org/c3ref/result_blob.html
-func (c *Context) ResultInt64(i int64) {
+func (c *SQLiteContext) ResultInt64(i int64) {
 	C.sqlite3_result_int64((*C.sqlite3_context)(c), C.sqlite3_int64(i))
 }
 
 // ResultNull sets the result of an SQL function.
 // See: sqlite3_result_null, http://sqlite.org/c3ref/result_blob.html
-func (c *Context) ResultNull() {
+func (c *SQLiteContext) ResultNull() {
 	C.sqlite3_result_null((*C.sqlite3_context)(c))
 }
 
 // ResultText sets the result of an SQL function.
 // See: sqlite3_result_text, http://sqlite.org/c3ref/result_blob.html
-func (c *Context) ResultText(s string) {
+func (c *SQLiteContext) ResultText(s string) {
 	h := (*reflect.StringHeader)(unsafe.Pointer(&s))
 	cs, l := (*C.char)(unsafe.Pointer(h.Data)), C.int(h.Len)
 	C.my_result_text((*C.sqlite3_context)(c), cs, l)
@@ -98,6 +98,6 @@ func (c *Context) ResultText(s string) {
 
 // ResultZeroblob sets the result of an SQL function.
 // See: sqlite3_result_zeroblob, http://sqlite.org/c3ref/result_blob.html
-func (c *Context) ResultZeroblob(n ZeroBlobLength) {
+func (c *SQLiteContext) ResultZeroblob(n ZeroBlobLength) {
 	C.sqlite3_result_zeroblob((*C.sqlite3_context)(c), C.int(n))
 }
