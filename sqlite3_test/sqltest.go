@@ -32,19 +32,19 @@ var db *DB
 var testTables = []string{"foo", "bar", "t", "bench"}
 
 var tests = []testing.InternalTest{
-	{"TestBlobs", TestBlobs},
-	{"TestManyQueryRow", TestManyQueryRow},
-	{"TestTxQuery", TestTxQuery},
-	{"TestPreparedStmt", TestPreparedStmt},
+	{Name: "TestBlobs", F: TestBlobs},
+	{Name: "TestManyQueryRow", F: TestManyQueryRow},
+	{Name: "TestTxQuery", F: TestTxQuery},
+	{Name: "TestPreparedStmt", F: TestPreparedStmt},
 }
 
 var benchmarks = []testing.InternalBenchmark{
-	{"BenchmarkExec", BenchmarkExec},
-	{"BenchmarkQuery", BenchmarkQuery},
-	{"BenchmarkParams", BenchmarkParams},
-	{"BenchmarkStmt", BenchmarkStmt},
-	{"BenchmarkRows", BenchmarkRows},
-	{"BenchmarkStmtRows", BenchmarkStmtRows},
+	{Name: "BenchmarkExec", F: BenchmarkExec},
+	{Name: "BenchmarkQuery", F: BenchmarkQuery},
+	{Name: "BenchmarkParams", F: BenchmarkParams},
+	{Name: "BenchmarkStmt", F: BenchmarkStmt},
+	{Name: "BenchmarkRows", F: BenchmarkRows},
+	{Name: "BenchmarkStmtRows", F: BenchmarkStmtRows},
 }
 
 // RunTests runs the SQL test suite
