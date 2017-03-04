@@ -78,7 +78,7 @@ func (db *DB) tearDown() {
 		case MYSQL, POSTGRESQL:
 			db.mustExec("drop table if exists " + tbl)
 		default:
-			db.Fatal("unkown dialect")
+			db.Fatal("unknown dialect")
 		}
 	}
 }
@@ -106,7 +106,7 @@ func (db *DB) blobType(size int) string {
 	case MYSQL:
 		return fmt.Sprintf("VARBINARY(%d)", size)
 	}
-	panic("unkown dialect")
+	panic("unknown dialect")
 }
 
 func (db *DB) serialPK() string {
@@ -118,7 +118,7 @@ func (db *DB) serialPK() string {
 	case MYSQL:
 		return "integer primary key auto_increment"
 	}
-	panic("unkown dialect")
+	panic("unknown dialect")
 }
 
 func (db *DB) now() string {
@@ -130,7 +130,7 @@ func (db *DB) now() string {
 	case MYSQL:
 		return "now()"
 	}
-	panic("unkown dialect")
+	panic("unknown dialect")
 }
 
 func makeBench() {
