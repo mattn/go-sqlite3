@@ -19,7 +19,7 @@ type GithubRepo struct {
 type githubModule struct {
 }
 
-func (m githubModule) Create(c *sqlite3.SQLiteConn, args []string) (sqlite3.VTab, error) {
+func (m *githubModule) Create(c *sqlite3.SQLiteConn, args []string) (sqlite3.VTab, error) {
 	err := c.DeclareVTab(fmt.Sprintf(`
 		CREATE TABLE %s (
 			id INT,
@@ -33,11 +33,11 @@ func (m githubModule) Create(c *sqlite3.SQLiteConn, args []string) (sqlite3.VTab
 	return &ghRepoTable{}, nil
 }
 
-func (m githubModule) Connect(c *sqlite3.SQLiteConn, args []string) (sqlite3.VTab, error) {
+func (m *githubModule) Connect(c *sqlite3.SQLiteConn, args []string) (sqlite3.VTab, error) {
 	return m.Create(c, args)
 }
 
-func (m githubModule) DestroyModule() {}
+func (m *githubModule) DestroyModule() {}
 
 type ghRepoTable struct {
 	repos []GithubRepo

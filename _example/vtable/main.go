@@ -3,14 +3,15 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/mattn/go-sqlite3"
 	"log"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 func main() {
 	sql.Register("sqlite3_with_extensions", &sqlite3.SQLiteDriver{
 		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-			return conn.CreateModule("github", githubModule{})
+			return conn.CreateModule("github", &githubModule{})
 		},
 	})
 	db, err := sql.Open("sqlite3_with_extensions", ":memory:")
