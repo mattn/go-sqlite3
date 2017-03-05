@@ -431,7 +431,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) 
 			na := s.NumInput()
 			if len(args) < na {
 				s.Close()
-				return nil, fmt.Errorf("Not enough args to execute query. Expected %d, got %d.", na, len(args))
+				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args))
 			}
 			for i := 0; i < na; i++ {
 				args[i].Ordinal -= start
@@ -481,7 +481,7 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue)
 		s.(*SQLiteStmt).cls = true
 		na := s.NumInput()
 		if len(args) < na {
-			return nil, fmt.Errorf("Not enough args to execute query. Expected %d, got %d.", na, len(args))
+			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args))
 		}
 		for i := 0; i < na; i++ {
 			args[i].Ordinal -= start

@@ -133,7 +133,7 @@ func TestCreateModule(t *testing.T) {
 	}
 	_, err = db.Exec("CREATE VIRTUAL TABLE vtab USING test('1', 2, three)")
 	if err != nil {
-		t.Fatal("could not create vtable: %v", err)
+		t.Fatalf("could not create vtable: %v", err)
 	}
 
 	var i, value int
