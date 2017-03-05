@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 type testModule struct {
@@ -29,13 +27,27 @@ type testVTabCursor struct {
 }
 
 func (m testModule) Create(c *SQLiteConn, args []string) (VTab, error) {
-	assert.True(m.t, len(args) == 6, "six arguments expected")
-	assert.Equal(m.t, "test", args[0], "module name")
-	assert.Equal(m.t, "main", args[1], "db name")
-	assert.Equal(m.t, "vtab", args[2], "table name")
-	assert.Equal(m.t, "'1'", args[3], "first arg")
-	assert.Equal(m.t, "2", args[4], "second arg")
-	assert.Equal(m.t, "three", args[5], "third arg")
+	if len(args) != 6 {
+		m.t.Fatal("six arguments expected")
+	}
+	if args[0] != "test" {
+		m.t.Fatal("module name")
+	}
+	if args[1] != "main" {
+		m.t.Fatal("db name")
+	}
+	if args[2] != "vtab" {
+		m.t.Fatal("table name")
+	}
+	if args[3] != "'1'" {
+		m.t.Fatal("first arg")
+	}
+	if args[4] != "2" {
+		m.t.Fatal("second arg")
+	}
+	if args[5] != "three" {
+		m.t.Fatal("third argsecond arg")
+	}
 	err := c.DeclareVTab("CREATE TABLE x(test TEXT)")
 	if err != nil {
 		return nil, err
@@ -116,17 +128,27 @@ func TestCreateModule(t *testing.T) {
 		},
 	})
 	db, err := sql.Open("sqlite3_TestCreateModule", tempFilename)
-	assert.Nil(t, err, "could not open db")
+	if err != nil {
+		t.Fatalf("could not open db: %v", err)
+	}
 	_, err = db.Exec("CREATE VIRTUAL TABLE vtab USING test('1', 2, three)")
-	assert.Nil(t, err, "could not create vtable")
+	if err != nil {
+		t.Fatal("could not create vtable: %v", err)
+	}
 
 	var i, value int
 	rows, err := db.Query("SELECT rowid, * FROM vtab WHERE test = '3'")
-	assert.Nil(t, err, "couldn't select from virtual table")
+	if err != nil {
+		t.Fatalf("couldn't select from virtual table: %v", err)
+	}
 	for rows.Next() {
 		rows.Scan(&i, &value)
-		assert.Equal(t, intarray[i], value)
+		if intarray[i] != value {
+			t.Fatalf("want %v but %v", intarray[i], value)
+		}
 	}
 	_, err = db.Exec("DROP TABLE vtab")
-	assert.Nil(t, err, "couldn't drop virtual table")
+	if err != nil {
+		t.Fatalf("couldn't drop virtual table: %v", err)
+	}
 }
