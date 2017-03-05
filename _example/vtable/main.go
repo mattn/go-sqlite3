@@ -31,8 +31,8 @@ func main() {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, full_name, description, html_url string
-		rows.Scan(&id, &full_name, &description, &html_url)
-		fmt.Printf("%s: %s\n\t%s\n\t%s\n\n", id, full_name, description, html_url)
+		var id, fullName, description, htmlURL string
+		rows.Scan(&id, &fullName, &description, &htmlURL)
+		fmt.Printf("%s: %s\n\t%s\n\t%s\n\n", id, fullName, description, htmlURL)
 	}
 }

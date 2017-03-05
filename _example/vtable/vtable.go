@@ -9,11 +9,11 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-type GithubRepo struct {
+type githubRepo struct {
 	ID          int    `json:"id"`
 	FullName    string `json:"full_name"`
 	Description string `json:"description"`
-	HtmlURL     string `json:"html_url"`
+	HTMLURL     string `json:"html_url"`
 }
 
 type githubModule struct {
@@ -40,7 +40,7 @@ func (m *githubModule) Connect(c *sqlite3.SQLiteConn, args []string) (sqlite3.VT
 func (m *githubModule) DestroyModule() {}
 
 type ghRepoTable struct {
-	repos []GithubRepo
+	repos []githubRepo
 }
 
 func (v *ghRepoTable) Open() (sqlite3.VTabCursor, error) {
@@ -55,7 +55,7 @@ func (v *ghRepoTable) Open() (sqlite3.VTabCursor, error) {
 		return nil, err
 	}
 
-	repos := make([]GithubRepo, 0)
+	var repos []githubRepo
 	if err := json.Unmarshal(body, &repos); err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (v *ghRepoTable) Destroy() error    { return nil }
 
 type ghRepoCursor struct {
 	index int
-	repos []GithubRepo
+	repos []githubRepo
 }
 
 func (vc *ghRepoCursor) Column(c *sqlite3.SQLiteContext, col int) error {
@@ -83,7 +83,7 @@ func (vc *ghRepoCursor) Column(c *sqlite3.SQLiteContext, col int) error {
 	case 2:
 		c.ResultText(vc.repos[vc.index].Description)
 	case 3:
-		c.ResultText(vc.repos[vc.index].HtmlURL)
+		c.ResultText(vc.repos[vc.index].HTMLURL)
 	}
 	return nil
 }
