@@ -5,7 +5,7 @@ env:
   - GOTAGS=
   - GOTAGS=libsqlite3
   - GOTAGS=trace
-  #- GOTAGS="libsqlite3 trace" # trusty is too old for this
+  - GOTAGS=vtable
 go:
   - 1.7
   - 1.8
