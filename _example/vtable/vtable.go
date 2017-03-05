@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/DataDog/go-sqlite3"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 type GithubRepo struct {
