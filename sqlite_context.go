@@ -34,6 +34,7 @@ import (
 
 const i64 = unsafe.Sizeof(int(0)) > 4
 
+// SQLiteContext behave sqlite3_context
 type SQLiteContext C.sqlite3_context
 
 // ResultBool sets the result of an SQL function.

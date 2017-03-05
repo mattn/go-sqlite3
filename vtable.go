@@ -51,8 +51,10 @@ type sqliteVTabCursor struct {
 	vTabCursor VTabCursor
 }
 
+// Op is type of operations.
 type Op uint8
 
+// Op mean identity of operations.
 const (
 	OpEQ         Op = 2
 	OpGT            = 4
@@ -66,12 +68,14 @@ const (
 	OpScanUnique    = 1  /* Scan visits at most 1 row */
 )
 
+// InfoConstraint give information of constraint.
 type InfoConstraint struct {
 	Column int
 	Op     Op
 	Usable bool
 }
 
+// InfoOrderBy give information of order-by.
 type InfoOrderBy struct {
 	Column int
 	Desc   bool
@@ -79,8 +83,7 @@ type InfoOrderBy struct {
 
 func constraints(info *C.sqlite3_index_info) []InfoConstraint {
 	l := info.nConstraint
-	var constraints *C.struct_sqlite3_index_constraint = info.aConstraint
-	slice := (*[1 << 30]C.struct_sqlite3_index_constraint)(unsafe.Pointer(constraints))[:l:l]
+	slice := (*[1 << 30]C.struct_sqlite3_index_constraint)(unsafe.Pointer(info.aConstraint))[:l:l]
 
 	cst := make([]InfoConstraint, 0, l)
 	for _, c := range slice {
@@ -99,8 +102,7 @@ func constraints(info *C.sqlite3_index_info) []InfoConstraint {
 
 func orderBys(info *C.sqlite3_index_info) []InfoOrderBy {
 	l := info.nOrderBy
-	var obys *C.struct_sqlite3_index_orderby = info.aOrderBy
-	slice := (*[1 << 30]C.struct_sqlite3_index_orderby)(unsafe.Pointer(obys))[:l:l]
+	slice := (*[1 << 30]C.struct_sqlite3_index_orderby)(unsafe.Pointer(info.aOrderBy))[:l:l]
 
 	ob := make([]InfoOrderBy, 0, l)
 	for _, c := range slice {
@@ -211,8 +213,7 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 
 	// Get a pointer to constraint_usage struct so we can update in place.
 	l := info.nConstraint
-	var usg *C.struct_sqlite3_index_constraint_usage = info.aConstraintUsage
-	s := (*[1 << 30]C.struct_sqlite3_index_constraint_usage)(unsafe.Pointer(usg))[:l:l]
+	s := (*[1 << 30]C.struct_sqlite3_index_constraint_usage)(unsafe.Pointer(info.aConstraintUsage))[:l:l]
 	index := 1
 	for i := C.int(0); i < info.nConstraint; i++ {
 		if res.Used[i] {
