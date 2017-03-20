@@ -72,7 +72,7 @@ func (err ErrNoExtended) Error() string {
 }
 
 // Error return error message.
-func (err Error) Error() string {
+func (err *Error) Error() string {
 	if err.err != "" {
 		return err.err
 	}

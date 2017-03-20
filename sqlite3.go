@@ -399,7 +399,7 @@ func (c *SQLiteConn) AutoCommit() bool {
 	return int(C.sqlite3_get_autocommit(c.db)) != 0
 }
 
-func (c *SQLiteConn) lastError() Error {
+func (c *SQLiteConn) lastError() *Error {
 	rv := C.sqlite3_errcode(c.db)
 	if rv == C.SQLITE_OK {
 		return nil
