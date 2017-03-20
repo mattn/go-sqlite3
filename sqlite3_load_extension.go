@@ -31,6 +31,7 @@ func (c *SQLiteConn) loadExtensions(extensions []string) error {
 		defer C.free(unsafe.Pointer(cext))
 		rv = C.sqlite3_load_extension(c.db, cext, nil, nil)
 		if rv != C.SQLITE_OK {
+			C.sqlite3_enable_load_extension(c.db, 0)
 			return errors.New(C.GoString(C.sqlite3_errmsg(c.db)))
 		}
 	}
