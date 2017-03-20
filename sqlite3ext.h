@@ -1,4 +1,5 @@
 #ifndef USE_LIBSQLITE3
+#define SQLITE_DISABLE_INTRINSIC 1
 /*
 ** 2006 June 7
 **
@@ -560,6 +561,6 @@ typedef int (*sqlite3_loadext_entry)(
 
 #endif /* SQLITE3EXT_H */
 #else // USE_LIBSQLITE3
- // If users really want to link against the system sqlite3 we
+// If users really want to link against the system sqlite3 we
 // need to make this file a noop.
- #endif
+#endif

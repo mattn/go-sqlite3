@@ -1,4 +1,5 @@
 #ifndef USE_LIBSQLITE3
+#define SQLITE_DISABLE_INTRINSIC 1
 /*
 ** 2001 September 15
 **
@@ -10470,6 +10471,6 @@ struct fts5_api {
 
 /******** End of fts5.h *********/
 #else // USE_LIBSQLITE3
- // If users really want to link against the system sqlite3 we
+// If users really want to link against the system sqlite3 we
 // need to make this file a noop.
- #endif
+#endif
