@@ -400,8 +400,12 @@ func (c *SQLiteConn) AutoCommit() bool {
 }
 
 func (c *SQLiteConn) lastError() Error {
+	rv := C.sqlite3_errcode(c.db)
+	if rv == C.SQLITE_OK {
+		return nil
+	}
 	return Error{
-		Code:         ErrNo(C.sqlite3_errcode(c.db)),
+		Code:         ErrNo(rv),
 		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(c.db)),
 		err:          C.GoString(C.sqlite3_errmsg(c.db)),
 	}
