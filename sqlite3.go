@@ -404,7 +404,7 @@ func (c *SQLiteConn) lastError() *Error {
 	if rv == C.SQLITE_OK {
 		return nil
 	}
-	return Error{
+	return &Error{
 		Code:         ErrNo(rv),
 		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(c.db)),
 		err:          C.GoString(C.sqlite3_errmsg(c.db)),
@@ -601,7 +601,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			C.SQLITE_OPEN_CREATE,
 		nil)
 	if rv != 0 {
-		return nil, Error{Code: ErrNo(rv)}
+		return nil, &Error{Code: ErrNo(rv)}
 	}
 	if db == nil {
 		return nil, errors.New("sqlite succeeded without returning a database")
@@ -609,7 +609,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
 	if rv != C.SQLITE_OK {
-		return nil, Error{Code: ErrNo(rv)}
+		return nil, &Error{Code: ErrNo(rv)}
 	}
 
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}

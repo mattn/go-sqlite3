@@ -48,7 +48,7 @@ func (b *SQLiteBackup) Step(p int) (bool, error) {
 	if ret == C.SQLITE_DONE {
 		return true, nil
 	} else if ret != 0 && ret != C.SQLITE_LOCKED && ret != C.SQLITE_BUSY {
-		return false, Error{Code: ErrNo(ret)}
+		return false, &Error{Code: ErrNo(ret)}
 	}
 	return false, nil
 }
@@ -79,7 +79,7 @@ func (b *SQLiteBackup) Close() error {
 	runtime.SetFinalizer(b, nil)
 
 	if ret != 0 {
-		return Error{Code: ErrNo(ret)}
+		return &Error{Code: ErrNo(ret)}
 	}
 	return nil
 }
