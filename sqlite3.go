@@ -298,7 +298,7 @@ func (ai *aggInfo) Done(ctx *C.sqlite3_context) {
 // Commit transaction.
 func (tx *SQLiteTx) Commit() error {
 	_, err := tx.c.exec(context.Background(), "COMMIT", nil)
-	if err != nil && err.(*Error).Code == C.SQLITE_BUSY {
+	if err != nil && err.(Error).Code == C.SQLITE_BUSY {
 		// sqlite3 will leave the transaction open in this scenario.
 		// However, database/sql considers the transaction complete once we
 		// return from Commit() - we must clean up to honour its semantics.
@@ -399,12 +399,12 @@ func (c *SQLiteConn) AutoCommit() bool {
 	return int(C.sqlite3_get_autocommit(c.db)) != 0
 }
 
-func (c *SQLiteConn) lastError() *Error {
+func (c *SQLiteConn) lastError() error {
 	rv := C.sqlite3_errcode(c.db)
 	if rv == C.SQLITE_OK {
 		return nil
 	}
-	return &Error{
+	return Error{
 		Code:         ErrNo(rv),
 		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(c.db)),
 		err:          C.GoString(C.sqlite3_errmsg(c.db)),
@@ -519,7 +519,7 @@ func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
 	return &SQLiteTx{c}, nil
 }
 
-func errorString(err *Error) string {
+func errorString(err Error) string {
 	return C.GoString(C.sqlite3_errstr(C.int(err.Code)))
 }
 
@@ -601,7 +601,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			C.SQLITE_OPEN_CREATE,
 		nil)
 	if rv != 0 {
-		return nil, &Error{Code: ErrNo(rv)}
+		return nil, Error{Code: ErrNo(rv)}
 	}
 	if db == nil {
 		return nil, errors.New("sqlite succeeded without returning a database")
@@ -609,7 +609,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
 	if rv != C.SQLITE_OK {
-		return nil, &Error{Code: ErrNo(rv)}
+		return nil, Error{Code: ErrNo(rv)}
 	}
 
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}

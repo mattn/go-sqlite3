@@ -40,7 +40,7 @@ func TestCorruptDbErrors(t *testing.T) {
 		_, err = db.Exec("drop table foo")
 	}
 
-	sqliteErr := err.(*Error)
+	sqliteErr := err.(Error)
 	if sqliteErr.Code != ErrNotADB {
 		t.Error("wrong error code for corrupted DB")
 	}
@@ -110,7 +110,7 @@ func TestExtendedErrorCodes_ForeignKey(t *testing.T) {
 	if err == nil {
 		t.Error("No error!")
 	} else {
-		sqliteErr := err.(*Error)
+		sqliteErr := err.(Error)
 		if sqliteErr.Code != ErrConstraint {
 			t.Errorf("Wrong basic error code: %d != %d",
 				sqliteErr.Code, ErrConstraint)
@@ -166,7 +166,7 @@ func TestExtendedErrorCodes_NotNull(t *testing.T) {
 	if err == nil {
 		t.Error("No error!")
 	} else {
-		sqliteErr := err.(*Error)
+		sqliteErr := err.(Error)
 		if sqliteErr.Code != ErrConstraint {
 			t.Errorf("Wrong basic error code: %d != %d",
 				sqliteErr.Code, ErrConstraint)
@@ -222,7 +222,7 @@ func TestExtendedErrorCodes_Unique(t *testing.T) {
 	if err == nil {
 		t.Error("No error!")
 	} else {
-		sqliteErr := err.(*Error)
+		sqliteErr := err.(Error)
 		if sqliteErr.Code != ErrConstraint {
 			t.Errorf("Wrong basic error code: %d != %d",
 				sqliteErr.Code, ErrConstraint)

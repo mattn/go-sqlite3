@@ -58,7 +58,7 @@ var (
 
 // Error return error message from errno.
 func (err ErrNo) Error() string {
-	return (&Error{Code: err}).Error()
+	return Error{Code: err}.Error()
 }
 
 // Extend return extended errno.
@@ -68,11 +68,10 @@ func (err ErrNo) Extend(by int) ErrNoExtended {
 
 // Error return error message that is extended code.
 func (err ErrNoExtended) Error() string {
-	return (&Error{Code: ErrNo(C.int(err) & ErrNoMask), ExtendedCode: err}).Error()
+	return Error{Code: ErrNo(C.int(err) & ErrNoMask), ExtendedCode: err}.Error()
 }
 
-// Error return error message.
-func (err *Error) Error() string {
+func (err Error) Error() string {
 	if err.err != "" {
 		return err.err
 	}
