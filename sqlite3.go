@@ -609,6 +609,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
 	if rv != C.SQLITE_OK {
+		conn.Close()
 		return nil, Error{Code: ErrNo(rv)}
 	}
 
@@ -616,12 +617,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	if len(d.Extensions) > 0 {
 		if err := conn.loadExtensions(d.Extensions); err != nil {
+			conn.Close()
 			return nil, err
 		}
 	}
 
 	if d.ConnectHook != nil {
 		if err := d.ConnectHook(conn); err != nil {
+			conn.Close()
 			return nil, err
 		}
 	}
