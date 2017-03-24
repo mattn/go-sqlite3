@@ -182,6 +182,19 @@ static int cXRowid(sqlite3_vtab_cursor *pCursor, sqlite3_int64 *pRowid) {
 	return SQLITE_OK;
 }
 
+char* goVUpdate(void *pVTab, int argc, sqlite3_value **argv, sqlite3_int64 *pRowid);
+
+static int cXUpdate(sqlite3_vtab *pVTab, int argc, sqlite3_value **argv, sqlite3_int64 *pRowid) {
+	char *pzErr = goVUpdate(((goVTab*)pVTab)->vTab, argc, argv, pRowid);
+	if (pzErr) {
+		if (pVTab->zErrMsg)
+			sqlite3_free(pVTab->zErrMsg);
+		pVTab->zErrMsg = pzErr;
+		return SQLITE_ERROR;
+	}
+	return SQLITE_OK;
+}
+
 static sqlite3_module goModule = {
 	0,                       // iVersion
 	cXCreate,                // xCreate - create a table
@@ -196,8 +209,8 @@ static sqlite3_module goModule = {
 	cXEof,                   // xEof
 	cXColumn,                // xColumn - read data
 	cXRowid,                 // xRowid - read data
+	cXUpdate,                // xUpdate - write data
 // Not implemented
-	0,                       // xUpdate - write data
 	0,                       // xBegin - begin transaction
 	0,                       // xSync - sync transaction
 	0,                       // xCommit - commit transaction
@@ -218,6 +231,7 @@ static int _sqlite3_create_module(sqlite3 *db, const char *zName, uintptr_t pCli
 import "C"
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"unsafe"
@@ -306,7 +320,7 @@ func orderBys(info *C.sqlite3_index_info) []InfoOrderBy {
 	return ob
 }
 
-// IndexResult is a Go struct represetnation of what eventually ends up in the
+// IndexResult is a Go struct representation of what eventually ends up in the
 // output fields for `sqlite3_index_info`
 // See: https://www.sqlite.org/c3ref/index_info.html
 type IndexResult struct {
@@ -502,6 +516,53 @@ func goVRowid(pCursor unsafe.Pointer, pRowid *C.sqlite3_int64) *C.char {
 	return nil
 }
 
+//export goVUpdate
+func goVUpdate(pVTab unsafe.Pointer, argc C.int, argv **C.sqlite3_value, pRowid *C.sqlite3_int64) *C.char {
+	vt := lookupHandle(uintptr(pVTab)).(*sqliteVTab)
+
+	var tname string
+	if n, ok := vt.vTab.(interface {
+		TableName() string
+	}); ok {
+		tname = n.TableName() + " "
+	}
+
+	err := fmt.Errorf("virtual %s table %sis read-only", vt.module.name, tname)
+	if v, ok := vt.vTab.(VTabUpdater); ok {
+		// convert argv
+		args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
+		vals := make([]interface{}, 0, argc)
+		for _, v := range args {
+			conv, err := callbackArgGeneric(v)
+			if err != nil {
+				return mPrintf("%s", err.Error())
+			}
+			vals = append(vals, conv.Interface())
+		}
+
+		switch {
+		case argc == 1:
+			err = v.Delete(vals[0])
+
+		case argc > 1 && vals[0] == nil:
+			var id int64
+			id, err = v.Insert(vals[1], vals[2:])
+			if err == nil {
+				*pRowid = C.sqlite3_int64(id)
+			}
+
+		case argc > 1:
+			err = v.Update(vals[1], vals[2:])
+		}
+	}
+
+	if err != nil {
+		return mPrintf("%s", err.Error())
+	}
+
+	return nil
+}
+
 // Module is a "virtual table module", it defines the implementation of a
 // virtual tables. See: http://sqlite.org/c3ref/module.html
 type Module interface {
@@ -524,6 +585,15 @@ type VTab interface {
 	Destroy() error
 	// http://sqlite.org/vtab.html#xopen
 	Open() (VTabCursor, error)
+}
+
+// VTabUpdater is a type that allows a VTab to be inserted, updated, or
+// deleted.
+// See: https://sqlite.org/vtab.html#xupdate
+type VTabUpdater interface {
+	Delete(interface{}) error
+	Insert(interface{}, []interface{}) (int64, error)
+	Update(interface{}, []interface{}) error
 }
 
 // VTabCursor describes cursors that point into the virtual table and are used
