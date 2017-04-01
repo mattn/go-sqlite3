@@ -400,14 +400,18 @@ func (c *SQLiteConn) AutoCommit() bool {
 }
 
 func (c *SQLiteConn) lastError() error {
-	rv := C.sqlite3_errcode(c.db)
+	return lastError(c.db)
+}
+
+func lastError(db *C.sqlite3) error {
+	rv := C.sqlite3_errcode(db)
 	if rv == C.SQLITE_OK {
 		return nil
 	}
 	return Error{
 		Code:         ErrNo(rv),
-		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(c.db)),
-		err:          C.GoString(C.sqlite3_errmsg(c.db)),
+		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(db)),
+		err:          C.GoString(C.sqlite3_errmsg(db)),
 	}
 }
 
@@ -537,6 +541,8 @@ func errorString(err Error) string {
 //   _txlock=XXX
 //     Specify locking behavior for transactions.  XXX can be "immediate",
 //     "deferred", "exclusive".
+//   _foreign_keys=X
+//     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
@@ -545,6 +551,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var loc *time.Location
 	txlock := "BEGIN"
 	busyTimeout := 5000
+	foreignKeys := -1
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -587,6 +594,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// _foreign_keys
+		if val := params.Get("_foreign_keys"); val != "" {
+			switch val {
+			case "1":
+				foreignKeys = 1
+			case "0":
+				foreignKeys = 0
+			default:
+				return nil, fmt.Errorf("Invalid _foreign_keys: %v", val)
+			}
+		}
+
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
@@ -610,6 +629,27 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
 	if rv != C.SQLITE_OK {
 		return nil, Error{Code: ErrNo(rv)}
+	}
+
+	exec := func(s string) error {
+		cs := C.CString(s)
+		rv := C.sqlite3_exec(db, cs, nil, nil, nil)
+		C.free(unsafe.Pointer(cs))
+		if rv != C.SQLITE_OK {
+			return lastError(db)
+		}
+		return nil
+	}
+	if foreignKeys == 0 {
+		if err := exec("PRAGMA foreign_keys = OFF;"); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	} else if foreignKeys == 1 {
+		if err := exec("PRAGMA foreign_keys = ON;"); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
