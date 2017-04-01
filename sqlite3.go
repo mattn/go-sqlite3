@@ -116,7 +116,10 @@ import (
 	"time"
 	"unsafe"
 
-	"golang.org/x/net/context"
+	/// before Go 1.7, contexts used to be in "golang.org/x/net/context"
+
+	/// but in Go 1.7 and Go 1.8, they are provided by the standard library
+	"context"
 )
 
 // SQLiteTimestampFormats is timestamp formats understood by both this module
