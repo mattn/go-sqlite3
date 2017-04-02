@@ -609,6 +609,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
 	if rv != C.SQLITE_OK {
+		C.sqlite3_close_v2(db)
 		return nil, Error{Code: ErrNo(rv)}
 	}
 
