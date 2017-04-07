@@ -537,7 +537,14 @@ func goVUpdate(pVTab unsafe.Pointer, argc C.int, argv **C.sqlite3_value, pRowid 
 			if err != nil {
 				return mPrintf("%s", err.Error())
 			}
-			vals = append(vals, conv.Interface())
+
+			// work around for SQLITE_NULL
+			x := conv.Interface()
+			if z, ok := x.([]byte); ok && z == nil {
+				x = nil
+			}
+
+			vals = append(vals, x)
 		}
 
 		switch {
