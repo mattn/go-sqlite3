@@ -17,11 +17,11 @@ Installation
 This package can be installed with the go get command:
 
     go get github.com/mattn/go-sqlite3
-    
+
 _go-sqlite3_ is *cgo* package.
 If you want to build your app using go-sqlite3, you need gcc.
 However, if you install _go-sqlite3_ with `go install github.com/mattn/go-sqlite3`, you don't need gcc to build your app anymore.
-    
+
 Documentation
 -------------
 
@@ -50,7 +50,7 @@ FAQ
 
 * Can't build go-sqlite3 on windows 64bit.
 
-    > Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit. 
+    > Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit.
     > See: [#27](https://github.com/mattn/go-sqlite3/issues/27)
 
 * Getting insert error while query is opened.
@@ -67,11 +67,11 @@ FAQ
 
     Use `loc=auto` in SQLite3 filename schema like `file:foo.db?loc=auto`.
 
-* Can use this in multiple routines concurrently?
+* Can I use this in multiple routines concurrently?
 
     Yes for readonly. But, No for writable. See [#50](https://github.com/mattn/go-sqlite3/issues/50), [#51](https://github.com/mattn/go-sqlite3/issues/51), [#209](https://github.com/mattn/go-sqlite3/issues/209).
 
-* Why is it racy if I use a `sql.Open("sqlite", ":memory:")` database?
+* Why is it racy if I use a `sql.Open("sqlite3", ":memory:")` database?
 
     Each connection to :memory: opens a brand new in-memory sql database, so if
     the stdlib's sql engine happens to open another connection and you've only
