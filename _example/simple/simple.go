@@ -18,7 +18,7 @@ func main() {
 	defer db.Close()
 
 	sqlStmt := `
-	create table foo (id integer not null primary key, name text);
+	create table foo ([id] integer not null primary key, [name] text);
 	delete from foo;
 	`
 	_, err = db.Exec(sqlStmt)
