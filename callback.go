@@ -53,6 +53,12 @@ func doneTrampoline(ctx *C.sqlite3_context) {
 	ai.Done(ctx)
 }
 
+//export compareTrampoline
+func compareTrampoline(handlePtr uintptr, la C.int, a *C.char, lb C.int, b *C.char) C.int {
+	cmp := lookupHandle(handlePtr).(func(string, string) int)
+	return C.int(cmp(C.GoStringN(a, la), C.GoStringN(b, lb)))
+}
+
 // Use handles to avoid passing Go pointers to C.
 
 type handleVal struct {
