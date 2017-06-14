@@ -772,11 +772,13 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 		case float64:
 			rv = C.sqlite3_bind_double(s.s, n, C.double(v))
 		case []byte:
+			var ptr *byte
 			if len(v) == 0 {
-				rv = C._sqlite3_bind_blob(s.s, n, nil, 0)
+				ptr = &(make([]byte, 1)[0])
 			} else {
-				rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(&v[0]), C.int(len(v)))
+				ptr = &v[0]
 			}
+			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(ptr), C.int(len(v)))
 		case time.Time:
 			b := []byte(v.Format(SQLiteTimestampFormats[0]))
 			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
