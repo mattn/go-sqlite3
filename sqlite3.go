@@ -734,6 +734,8 @@ type bindArg struct {
 	v driver.Value
 }
 
+var placeHolder byte = 0
+
 func (s *SQLiteStmt) bind(args []namedValue) error {
 	rv := C.sqlite3_reset(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
@@ -755,8 +757,7 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 			rv = C.sqlite3_bind_null(s.s, n)
 		case string:
 			if len(v) == 0 {
-				b := []byte{0}
-				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(0))
+				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&placeHolder)), C.int(0))
 			} else {
 				b := []byte(v)
 				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
@@ -774,7 +775,7 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 		case []byte:
 			var ptr *byte
 			if len(v) == 0 {
-				ptr = &(make([]byte, 1)[0])
+				ptr = &placeHolder
 			} else {
 				ptr = &v[0]
 			}
