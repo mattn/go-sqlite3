@@ -107,6 +107,35 @@ func TestReadonly(t *testing.T) {
 	}
 }
 
+func TestForeignKeys(t *testing.T) {
+	cases := map[string]bool{
+		"?_foreign_keys=1": true,
+		"?_foreign_keys=0": false,
+	}
+	for option, want := range cases {
+		fname := TempFilename(t)
+		uri := "file:" + fname + option
+		db, err := sql.Open("sqlite3", uri)
+		if err != nil {
+			os.Remove(fname)
+			t.Errorf("sql.Open(\"sqlite3\", %q): %v", uri, err)
+			continue
+		}
+		var enabled bool
+		err = db.QueryRow("PRAGMA foreign_keys;").Scan(&enabled)
+		db.Close()
+		os.Remove(fname)
+		if err != nil {
+			t.Errorf("query foreign_keys for %s: %v", uri, err)
+			continue
+		}
+		if enabled != want {
+			t.Errorf("\"PRAGMA foreign_keys;\" for %q = %t; want %t", uri, enabled, want)
+			continue
+		}
+	}
+}
+
 func TestClose(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
@@ -168,7 +197,7 @@ func TestInsert(t *testing.T) {
 	var result int
 	rows.Scan(&result)
 	if result != 123 {
-		t.Errorf("Fetched %q; expected %q", 123, result)
+		t.Errorf("Expected %d for fetched result, but %d:", 123, result)
 	}
 }
 
@@ -207,12 +236,12 @@ func TestUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to update record:", err)
 	}
-	lastId, err := res.LastInsertId()
+	lastID, err := res.LastInsertId()
 	if err != nil {
 		t.Fatal("Failed to get LastInsertId:", err)
 	}
-	if expected != lastId {
-		t.Errorf("Expected %q for last Id, but %q:", expected, lastId)
+	if expected != lastID {
+		t.Errorf("Expected %q for last Id, but %q:", expected, lastID)
 	}
 	affected, _ = res.RowsAffected()
 	if err != nil {
@@ -233,7 +262,7 @@ func TestUpdate(t *testing.T) {
 	var result int
 	rows.Scan(&result)
 	if result != 234 {
-		t.Errorf("Fetched %q; expected %q", 234, result)
+		t.Errorf("Expected %d for fetched result, but %d:", 234, result)
 	}
 }
 
@@ -272,12 +301,12 @@ func TestDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to delete record:", err)
 	}
-	lastId, err := res.LastInsertId()
+	lastID, err := res.LastInsertId()
 	if err != nil {
 		t.Fatal("Failed to get LastInsertId:", err)
 	}
-	if expected != lastId {
-		t.Errorf("Expected %q for last Id, but %q:", expected, lastId)
+	if expected != lastID {
+		t.Errorf("Expected %q for last Id, but %q:", expected, lastID)
 	}
 	affected, err = res.RowsAffected()
 	if err != nil {
@@ -993,42 +1022,6 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestNumberNamedParams(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-	db, err := sql.Open("sqlite3", tempFilename)
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec(`
-	create table foo (id integer, name text, extra text);
-	`)
-	if err != nil {
-		t.Error("Failed to call db.Query:", err)
-	}
-
-	_, err = db.Exec(`insert into foo(id, name, extra) values($1, $2, $2)`, 1, "foo")
-	if err != nil {
-		t.Error("Failed to call db.Exec:", err)
-	}
-
-	row := db.QueryRow(`select id, extra from foo where id = $1 and extra = $2`, 1, "foo")
-	if row == nil {
-		t.Error("Failed to call db.QueryRow")
-	}
-	var id int
-	var extra string
-	err = row.Scan(&id, &extra)
-	if err != nil {
-		t.Error("Failed to db.Scan:", err)
-	}
-	if id != 1 || extra != "foo" {
-		t.Error("Failed to db.QueryRow: not matched results")
-	}
-}
-
 func TestStringContainingZero(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
@@ -1106,12 +1099,12 @@ func TestDateTimeNow(t *testing.T) {
 }
 
 func TestFunctionRegistration(t *testing.T) {
-	addi_8_16_32 := func(a int8, b int16) int32 { return int32(a) + int32(b) }
-	addi_64 := func(a, b int64) int64 { return a + b }
-	addu_8_16_32 := func(a uint8, b uint16) uint32 { return uint32(a) + uint32(b) }
-	addu_64 := func(a, b uint64) uint64 { return a + b }
+	addi8_16_32 := func(a int8, b int16) int32 { return int32(a) + int32(b) }
+	addi64 := func(a, b int64) int64 { return a + b }
+	addu8_16_32 := func(a uint8, b uint16) uint32 { return uint32(a) + uint32(b) }
+	addu64 := func(a, b uint64) uint64 { return a + b }
 	addiu := func(a int, b uint) int64 { return int64(a) + int64(b) }
-	addf_32_64 := func(a float32, b float64) float64 { return float64(a) + b }
+	addf32_64 := func(a float32, b float64) float64 { return float64(a) + b }
 	not := func(a bool) bool { return !a }
 	regex := func(re, s string) (bool, error) {
 		return regexp.MatchString(re, s)
@@ -1143,22 +1136,22 @@ func TestFunctionRegistration(t *testing.T) {
 
 	sql.Register("sqlite3_FunctionRegistration", &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
-			if err := conn.RegisterFunc("addi_8_16_32", addi_8_16_32, true); err != nil {
+			if err := conn.RegisterFunc("addi8_16_32", addi8_16_32, true); err != nil {
 				return err
 			}
-			if err := conn.RegisterFunc("addi_64", addi_64, true); err != nil {
+			if err := conn.RegisterFunc("addi64", addi64, true); err != nil {
 				return err
 			}
-			if err := conn.RegisterFunc("addu_8_16_32", addu_8_16_32, true); err != nil {
+			if err := conn.RegisterFunc("addu8_16_32", addu8_16_32, true); err != nil {
 				return err
 			}
-			if err := conn.RegisterFunc("addu_64", addu_64, true); err != nil {
+			if err := conn.RegisterFunc("addu64", addu64, true); err != nil {
 				return err
 			}
 			if err := conn.RegisterFunc("addiu", addiu, true); err != nil {
 				return err
 			}
-			if err := conn.RegisterFunc("addf_32_64", addf_32_64, true); err != nil {
+			if err := conn.RegisterFunc("addf32_64", addf32_64, true); err != nil {
 				return err
 			}
 			if err := conn.RegisterFunc("not", not, true); err != nil {
@@ -1189,12 +1182,12 @@ func TestFunctionRegistration(t *testing.T) {
 		query    string
 		expected interface{}
 	}{
-		{"SELECT addi_8_16_32(1,2)", int32(3)},
-		{"SELECT addi_64(1,2)", int64(3)},
-		{"SELECT addu_8_16_32(1,2)", uint32(3)},
-		{"SELECT addu_64(1,2)", uint64(3)},
+		{"SELECT addi8_16_32(1,2)", int32(3)},
+		{"SELECT addi64(1,2)", int64(3)},
+		{"SELECT addu8_16_32(1,2)", uint32(3)},
+		{"SELECT addu64(1,2)", uint64(3)},
 		{"SELECT addiu(1,2)", int64(3)},
-		{"SELECT addf_32_64(1.5,1.5)", float64(3)},
+		{"SELECT addf32_64(1.5,1.5)", float64(3)},
 		{"SELECT not(1)", false},
 		{"SELECT not(0)", true},
 		{`SELECT regex("^foo.*", "foobar")`, true},
@@ -1220,62 +1213,54 @@ func TestFunctionRegistration(t *testing.T) {
 	}
 }
 
-type sumAggregator int64
+func TestDeclTypes(t *testing.T) {
 
-func (s *sumAggregator) Step(x int64) {
-	*s += sumAggregator(x)
-}
+	d := SQLiteDriver{}
 
-func (s *sumAggregator) Done() int64 {
-	return int64(*s)
-}
-
-func TestAggregatorRegistration(t *testing.T) {
-	customSum := func() *sumAggregator {
-		var ret sumAggregator
-		return &ret
-	}
-
-	sql.Register("sqlite3_AggregatorRegistration", &SQLiteDriver{
-		ConnectHook: func(conn *SQLiteConn) error {
-			if err := conn.RegisterAggregator("customSum", customSum, true); err != nil {
-				return err
-			}
-			return nil
-		},
-	})
-	db, err := sql.Open("sqlite3_AggregatorRegistration", ":memory:")
+	conn, err := d.Open(":memory:")
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("Failed to begin transaction:", err)
 	}
-	defer db.Close()
+	defer conn.Close()
 
-	_, err = db.Exec("create table foo (department integer, profits integer)")
+	sqlite3conn := conn.(*SQLiteConn)
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text)", nil)
 	if err != nil {
 		t.Fatal("Failed to create table:", err)
 	}
 
-	_, err = db.Exec("insert into foo values (1, 10), (1, 20), (2, 42)")
+	_, err = sqlite3conn.Exec("insert into foo(name) values(\"bar\")", nil)
 	if err != nil {
-		t.Fatal("Failed to insert records:", err)
+		t.Fatal("Failed to insert:", err)
 	}
 
-	tests := []struct {
-		dept, sum int64
-	}{
-		{1, 30},
-		{2, 42},
+	rs, err := sqlite3conn.Query("select * from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
 	}
+	defer rs.Close()
 
-	for _, test := range tests {
-		var ret int64
-		err = db.QueryRow("select customSum(profits) from foo where department = $1 group by department", test.dept).Scan(&ret)
-		if err != nil {
-			t.Fatal("Query failed:", err)
-		}
-		if ret != test.sum {
-			t.Fatalf("Custom sum returned wrong value, got %d, want %d", ret, test.sum)
-		}
+	declTypes := rs.(*SQLiteRows).DeclTypes()
+
+	if !reflect.DeepEqual(declTypes, []string{"integer", "text"}) {
+		t.Fatal("Unexpected declTypes:", declTypes)
+	}
+}
+
+func TestPinger(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	err = db.Ping()
+	if err == nil {
+		t.Fatal("Should be closed")
 	}
 }
 
@@ -1283,14 +1268,14 @@ var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
 	customFunctionOnce.Do(func() {
-		custom_add := func(a, b int64) int64 {
+		customAdd := func(a, b int64) int64 {
 			return a + b
 		}
 
 		sql.Register("sqlite3_BenchmarkCustomFunctions", &SQLiteDriver{
 			ConnectHook: func(conn *SQLiteConn) error {
 				// Impure function to force sqlite to reexecute it each time.
-				if err := conn.RegisterFunc("custom_add", custom_add, false); err != nil {
+				if err := conn.RegisterFunc("custom_add", customAdd, false); err != nil {
 					return err
 				}
 				return nil
