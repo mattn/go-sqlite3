@@ -113,6 +113,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -157,6 +158,7 @@ type SQLiteDriver struct {
 
 // SQLiteConn implement sql.Conn.
 type SQLiteConn struct {
+	dbMu        sync.Mutex
 	db          *C.sqlite3
 	loc         *time.Location
 	txlock      string
@@ -679,9 +681,20 @@ func (c *SQLiteConn) Close() error {
 		return c.lastError()
 	}
 	deleteHandles(c)
+	c.dbMu.Lock()
 	c.db = nil
+	c.dbMu.Unlock()
 	runtime.SetFinalizer(c, nil)
 	return nil
+}
+
+func (c *SQLiteConn) dbConnOpen() bool {
+	if c == nil {
+		return false
+	}
+	c.dbMu.Lock()
+	defer c.dbMu.Unlock()
+	return c.db != nil
 }
 
 // Prepare the query string. Return a new statement.
@@ -713,7 +726,7 @@ func (s *SQLiteStmt) Close() error {
 		return nil
 	}
 	s.closed = true
-	if s.c == nil || s.c.db == nil {
+	if !s.c.dbConnOpen() {
 		return errors.New("sqlite statement with already closed database connection")
 	}
 	rv := C.sqlite3_finalize(s.s)
