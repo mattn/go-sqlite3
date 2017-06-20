@@ -71,7 +71,6 @@ func (err ErrNoExtended) Error() string {
 	return Error{Code: ErrNo(C.int(err) & ErrNoMask), ExtendedCode: err}.Error()
 }
 
-// Error return error message.
 func (err Error) Error() string {
 	if err.err != "" {
 		return err.err

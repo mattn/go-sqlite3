@@ -5,10 +5,10 @@ env:
   - GOTAGS=
   - GOTAGS=libsqlite3
   - GOTAGS=trace
-  #- GOTAGS="libsqlite3 trace" # trusty is too old for this
+  - GOTAGS=vtable
 go:
-  - 1.5
-  - 1.6
+  - 1.7
+  - 1.8
   - tip
 before_install:
   - go get github.com/mattn/goveralls

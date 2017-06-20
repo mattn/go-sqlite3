@@ -9,20 +9,21 @@ import (
 )
 
 func main() {
-	sql.Register("sqlite3_with_extensions",
-		&sqlite3.SQLiteDriver{
-			Extensions: []string{
-				"sqlite3_mod_vtable",
-			},
-		})
-
+	sql.Register("sqlite3_with_extensions", &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			return conn.CreateModule("github", &githubModule{})
+		},
+	})
 	db, err := sql.Open("sqlite3_with_extensions", ":memory:")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	db.Exec("create virtual table repo using github(id, full_name, description, html_url)")
+	_, err = db.Exec("create virtual table repo using github(id, full_name, description, html_url)")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	rows, err := db.Query("select id, full_name, description, html_url from repo")
 	if err != nil {
