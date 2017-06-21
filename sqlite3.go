@@ -747,7 +747,7 @@ type bindArg struct {
 	v driver.Value
 }
 
-var placeHolder byte = 0
+var placeHolder = []byte{0}
 
 func (s *SQLiteStmt) bind(args []namedValue) error {
 	rv := C.sqlite3_reset(s.s)
@@ -770,7 +770,7 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 			rv = C.sqlite3_bind_null(s.s, n)
 		case string:
 			if len(v) == 0 {
-				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&placeHolder)), C.int(0))
+				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.int(0))
 			} else {
 				b := []byte(v)
 				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
@@ -786,13 +786,10 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 		case float64:
 			rv = C.sqlite3_bind_double(s.s, n, C.double(v))
 		case []byte:
-			var ptr *byte
 			if len(v) == 0 {
-				ptr = &placeHolder
-			} else {
-				ptr = &v[0]
+				v = placeHolder
 			}
-			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(ptr), C.int(len(v)))
+			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(&v[0]), C.int(len(v)))
 		case time.Time:
 			b := []byte(v.Format(SQLiteTimestampFormats[0]))
 			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
