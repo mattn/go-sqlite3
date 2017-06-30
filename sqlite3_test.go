@@ -403,6 +403,7 @@ func TestTimestamp(t *testing.T) {
 	}{
 		{"nonsense", time.Time{}},
 		{"0000-00-00 00:00:00", time.Time{}},
+		{time.Time{}.Unix(), time.Time{}},
 		{timestamp1, timestamp1},
 		{timestamp2.Unix(), timestamp2.Truncate(time.Second)},
 		{timestamp2.UnixNano() / int64(time.Millisecond), timestamp2.Truncate(time.Millisecond)},
