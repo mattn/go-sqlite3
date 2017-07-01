@@ -961,10 +961,11 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 				// large to be a reasonable timestamp in seconds.
 				if val > 1e12 || val < -1e12 {
 					val *= int64(time.Millisecond) // convert ms to nsec
+					t = time.Unix(0, val)
 				} else {
-					val *= int64(time.Second) // convert sec to nsec
+					t = time.Unix(val, 0)
 				}
-				t = time.Unix(0, val).UTC()
+				t = t.UTC()
 				if rc.s.c.loc != nil {
 					t = t.In(rc.s.c.loc)
 				}
