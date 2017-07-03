@@ -14,6 +14,12 @@ func main() {
 		&sqlite3.SQLiteDriver{
 			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
 				sqlite3conn = append(sqlite3conn, conn)
+				conn.RegisterUpdateHook(func(op int, db string, table string, rowid int64) {
+					switch op {
+					case sqlite3.SQLITE_INSERT:
+						log.Println("Notified of insert on db", db, "table", table, "rowid", rowid)
+					}
+				})
 				return nil
 			},
 		})
