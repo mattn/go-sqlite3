@@ -136,6 +136,35 @@ func TestForeignKeys(t *testing.T) {
 	}
 }
 
+func TestRecursiveTriggers(t *testing.T) {
+	cases := map[string]bool{
+		"?_recursive_triggers=1": true,
+		"?_recursive_triggers=0": false,
+	}
+	for option, want := range cases {
+		fname := TempFilename(t)
+		uri := "file:" + fname + option
+		db, err := sql.Open("sqlite3", uri)
+		if err != nil {
+			os.Remove(fname)
+			t.Errorf("sql.Open(\"sqlite3\", %q): %v", uri, err)
+			continue
+		}
+		var enabled bool
+		err = db.QueryRow("PRAGMA recursive_triggers;").Scan(&enabled)
+		db.Close()
+		os.Remove(fname)
+		if err != nil {
+			t.Errorf("query recursive_triggers for %s: %v", uri, err)
+			continue
+		}
+		if enabled != want {
+			t.Errorf("\"PRAGMA recursive_triggers;\" for %q = %t; want %t", uri, enabled, want)
+			continue
+		}
+	}
+}
+
 func TestClose(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
