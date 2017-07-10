@@ -599,6 +599,8 @@ func errorString(err Error) string {
 //     "deferred", "exclusive".
 //   _foreign_keys=X
 //     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
+//   _recursive_triggers=X
+//     Enable or disable recursive triggers.  X can be 1 or 0.
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
@@ -608,6 +610,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	txlock := "BEGIN"
 	busyTimeout := 5000
 	foreignKeys := -1
+	recursiveTriggers := -1
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -662,6 +665,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// _recursive_triggers
+		if val := params.Get("_recursive_triggers"); val != "" {
+			switch val {
+			case "1":
+				recursiveTriggers = 1
+			case "0":
+				recursiveTriggers = 0
+			default:
+				return nil, fmt.Errorf("Invalid _recursive_triggers: %v", val)
+			}
+		}
+
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
@@ -704,6 +719,17 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 	} else if foreignKeys == 1 {
 		if err := exec("PRAGMA foreign_keys = ON;"); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+	if recursiveTriggers == 0 {
+		if err := exec("PRAGMA recursive_triggers = OFF;"); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	} else if recursiveTriggers == 1 {
+		if err := exec("PRAGMA recursive_triggers = ON;"); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
