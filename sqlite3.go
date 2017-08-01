@@ -167,7 +167,7 @@ type SQLiteDriver struct {
 
 // SQLiteConn implement sql.Conn.
 type SQLiteConn struct {
-	dbMu        sync.Mutex
+	mu          sync.Mutex
 	db          *C.sqlite3
 	loc         *time.Location
 	txlock      string
@@ -197,6 +197,7 @@ type SQLiteResult struct {
 
 // SQLiteRows implement sql.Rows.
 type SQLiteRows struct {
+	mu       sync.Mutex
 	s        *SQLiteStmt
 	nc       int
 	cols     []string
@@ -761,9 +762,9 @@ func (c *SQLiteConn) Close() error {
 		return c.lastError()
 	}
 	deleteHandles(c)
-	c.dbMu.Lock()
+	c.mu.Lock()
 	c.db = nil
-	c.dbMu.Unlock()
+	c.mu.Unlock()
 	runtime.SetFinalizer(c, nil)
 	return nil
 }
@@ -772,8 +773,8 @@ func (c *SQLiteConn) dbConnOpen() bool {
 	if c == nil {
 		return false
 	}
-	c.dbMu.Lock()
-	defer c.dbMu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.db != nil
 }
 
@@ -980,7 +981,10 @@ func (rc *SQLiteRows) Close() error {
 		return nil
 	}
 	if rc.done != nil {
+		rc.mu.Lock()
 		close(rc.done)
+		rc.done = nil
+		rc.mu.Unlock()
 	}
 	if rc.cls {
 		return rc.s.Close()
