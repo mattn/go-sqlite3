@@ -1451,9 +1451,9 @@ func (db *TestDB) tearDown() {
 	for _, tbl := range testTables {
 		switch db.dialect {
 		case SQLITE:
-			db.mustExec("drop table if exists " + tbl)
+			db.Exec("drop table if exists " + tbl)
 		case MYSQL, POSTGRESQL:
-			db.mustExec("drop table if exists " + tbl)
+			db.Exec("drop table if exists " + tbl)
 		default:
 			db.Fatal("unknown dialect")
 		}
