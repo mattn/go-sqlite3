@@ -1424,19 +1424,20 @@ var db *TestDB
 var testTables = []string{"foo", "bar", "t", "bench"}
 
 var tests = []testing.InternalTest{
-	{Name: "TestBlobs", F: TestBlobs},
-	{Name: "TestManyQueryRow", F: TestManyQueryRow},
-	{Name: "TestTxQuery", F: TestTxQuery},
-	{Name: "TestPreparedStmt", F: TestPreparedStmt},
+	{Name: "TestResult", F: testResult},
+	{Name: "TestBlobs", F: testBlobs},
+	{Name: "TestManyQueryRow", F: testManyQueryRow},
+	{Name: "TestTxQuery", F: testTxQuery},
+	{Name: "TestPreparedStmt", F: testPreparedStmt},
 }
 
 var benchmarks = []testing.InternalBenchmark{
-	{Name: "BenchmarkExec", F: BenchmarkExec},
-	{Name: "BenchmarkQuery", F: BenchmarkQuery},
-	{Name: "BenchmarkParams", F: BenchmarkParams},
-	{Name: "BenchmarkStmt", F: BenchmarkStmt},
-	{Name: "BenchmarkRows", F: BenchmarkRows},
-	{Name: "BenchmarkStmtRows", F: BenchmarkStmtRows},
+	{Name: "BenchmarkExec", F: benchmarkExec},
+	{Name: "BenchmarkQuery", F: benchmarkQuery},
+	{Name: "BenchmarkParams", F: benchmarkParams},
+	{Name: "BenchmarkStmt", F: benchmarkStmt},
+	{Name: "BenchmarkRows", F: benchmarkRows},
+	{Name: "BenchmarkStmtRows", F: benchmarkStmtRows},
 }
 
 func (db *TestDB) mustExec(sql string, args ...interface{}) sql.Result {
@@ -1451,9 +1452,9 @@ func (db *TestDB) tearDown() {
 	for _, tbl := range testTables {
 		switch db.dialect {
 		case SQLITE:
-			db.Exec("drop table if exists " + tbl)
+			db.mustExec("drop table if exists " + tbl)
 		case MYSQL, POSTGRESQL:
-			db.Exec("drop table if exists " + tbl)
+			db.mustExec("drop table if exists " + tbl)
 		default:
 			db.Fatal("unknown dialect")
 		}
@@ -1526,8 +1527,8 @@ func makeBench() {
 	}
 }
 
-// TestResult is test for result
-func TestResult(t *testing.T) {
+// testResult is test for result
+func testResult(t *testing.T) {
 	db.tearDown()
 	db.mustExec("create temporary table test (id " + db.serialPK() + ", name varchar(10))")
 
@@ -1553,8 +1554,8 @@ func TestResult(t *testing.T) {
 	}
 }
 
-// TestBlobs is test for blobs
-func TestBlobs(t *testing.T) {
+// testBlobs is test for blobs
+func testBlobs(t *testing.T) {
 	db.tearDown()
 	var blob = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	db.mustExec("create table foo (id integer primary key, bar " + db.blobType(16) + ")")
@@ -1580,8 +1581,8 @@ func TestBlobs(t *testing.T) {
 	}
 }
 
-// TestManyQueryRow is test for many query row
-func TestManyQueryRow(t *testing.T) {
+// testManyQueryRow is test for many query row
+func testManyQueryRow(t *testing.T) {
 	if testing.Short() {
 		t.Log("skipping in short mode")
 		return
@@ -1598,8 +1599,8 @@ func TestManyQueryRow(t *testing.T) {
 	}
 }
 
-// TestTxQuery is test for transactional query
-func TestTxQuery(t *testing.T) {
+// testTxQuery is test for transactional query
+func testTxQuery(t *testing.T) {
 	db.tearDown()
 	tx, err := db.Begin()
 	if err != nil {
@@ -1637,8 +1638,8 @@ func TestTxQuery(t *testing.T) {
 	}
 }
 
-// TestPreparedStmt is test for prepared statement
-func TestPreparedStmt(t *testing.T) {
+// testPreparedStmt is test for prepared statement
+func testPreparedStmt(t *testing.T) {
 	db.tearDown()
 	db.mustExec("CREATE TABLE t (count INT)")
 	sel, err := db.Prepare("SELECT count FROM t ORDER BY count DESC")
@@ -1683,8 +1684,8 @@ func TestPreparedStmt(t *testing.T) {
 // test -bench but calling Benchmark() from a benchmark test
 // currently hangs go.
 
-// BenchmarkExec is benchmark for exec
-func BenchmarkExec(b *testing.B) {
+// benchmarkExec is benchmark for exec
+func benchmarkExec(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if _, err := db.Exec("select 1"); err != nil {
 			panic(err)
@@ -1692,8 +1693,8 @@ func BenchmarkExec(b *testing.B) {
 	}
 }
 
-// BenchmarkQuery is benchmark for query
-func BenchmarkQuery(b *testing.B) {
+// benchmarkQuery is benchmark for query
+func benchmarkQuery(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var n sql.NullString
 		var i int
@@ -1706,8 +1707,8 @@ func BenchmarkQuery(b *testing.B) {
 	}
 }
 
-// BenchmarkParams is benchmark for params
-func BenchmarkParams(b *testing.B) {
+// benchmarkParams is benchmark for params
+func benchmarkParams(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var n sql.NullString
 		var i int
@@ -1720,8 +1721,8 @@ func BenchmarkParams(b *testing.B) {
 	}
 }
 
-// BenchmarkStmt is benchmark for statement
-func BenchmarkStmt(b *testing.B) {
+// benchmarkStmt is benchmark for statement
+func benchmarkStmt(b *testing.B) {
 	st, err := db.Prepare("select ?, ?, ?, ?")
 	if err != nil {
 		panic(err)
@@ -1740,8 +1741,8 @@ func BenchmarkStmt(b *testing.B) {
 	}
 }
 
-// BenchmarkRows is benchmark for rows
-func BenchmarkRows(b *testing.B) {
+// benchmarkRows is benchmark for rows
+func benchmarkRows(b *testing.B) {
 	db.once.Do(makeBench)
 
 	for n := 0; n < b.N; n++ {
@@ -1765,8 +1766,8 @@ func BenchmarkRows(b *testing.B) {
 	}
 }
 
-// BenchmarkStmtRows is benchmark for statement rows
-func BenchmarkStmtRows(b *testing.B) {
+// benchmarkStmtRows is benchmark for statement rows
+func benchmarkStmtRows(b *testing.B) {
 	db.once.Do(makeBench)
 
 	st, err := db.Prepare("select * from bench")
