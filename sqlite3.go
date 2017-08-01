@@ -197,12 +197,12 @@ type SQLiteResult struct {
 
 // SQLiteRows implement sql.Rows.
 type SQLiteRows struct {
-	mu       sync.Mutex
 	s        *SQLiteStmt
 	nc       int
 	cols     []string
 	decltype []string
 	cls      bool
+	closed   bool
 	done     chan struct{}
 }
 
@@ -905,6 +905,7 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 		cols:     nil,
 		decltype: nil,
 		cls:      s.cls,
+		closed:   false,
 		done:     make(chan struct{}),
 	}
 
@@ -977,14 +978,12 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 
 // Close the rows.
 func (rc *SQLiteRows) Close() error {
-	if rc.s.closed {
+	if rc.s.closed || rc.closed {
 		return nil
 	}
+	rc.closed = true
 	if rc.done != nil {
-		rc.mu.Lock()
 		close(rc.done)
-		rc.done = nil
-		rc.mu.Unlock()
 	}
 	if rc.cls {
 		return rc.s.Close()
