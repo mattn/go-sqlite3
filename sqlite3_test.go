@@ -1391,7 +1391,9 @@ func TestNilAndEmptyBytes(t *testing.T) {
 		if err = rows.Err(); err != nil {
 			t.Fatal(tst.name, err)
 		}
-		if !bytes.Equal(scanBytes, tst.expectedBytes) {
+		if tst.expectedBytes == nil && scanBytes != nil {
+			t.Errorf("%s: %#v != %#v", tst.name, scanBytes, tst.expectedBytes)
+		} else if !bytes.Equal(scanBytes, tst.expectedBytes) {
 			t.Errorf("%s: %#v != %#v", tst.name, scanBytes, tst.expectedBytes)
 		}
 	}
