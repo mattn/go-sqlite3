@@ -6,6 +6,7 @@
 package sqlite3
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -1340,6 +1341,61 @@ func TestUpdateAndTransactionHooks(t *testing.T) {
 	}
 	if !reflect.DeepEqual(events, expected) {
 		t.Errorf("Expected notifications %v but got %v", expected, events)
+	}
+}
+
+func TestNilAndEmptyBytes(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	actualNil := []byte("use this to use an actual nil not a reference to nil")
+	emptyBytes := []byte{}
+	for tsti, tst := range []struct {
+		name          string
+		columnType    string
+		insertBytes   []byte
+		expectedBytes []byte
+	}{
+		{"actual nil blob", "blob", actualNil, nil},
+		{"referenced nil blob", "blob", nil, nil},
+		{"empty blob", "blob", emptyBytes, emptyBytes},
+		{"actual nil text", "text", actualNil, nil},
+		{"referenced nil text", "text", nil, nil},
+		{"empty text", "text", emptyBytes, emptyBytes},
+	} {
+		if _, err = db.Exec(fmt.Sprintf("create table tbl%d (txt %s)", tsti, tst.columnType)); err != nil {
+			t.Fatal(tst.name, err)
+		}
+		if bytes.Equal(tst.insertBytes, actualNil) {
+			if _, err = db.Exec(fmt.Sprintf("insert into tbl%d (txt) values (?)", tsti), nil); err != nil {
+				t.Fatal(tst.name, err)
+			}
+		} else {
+			if _, err = db.Exec(fmt.Sprintf("insert into tbl%d (txt) values (?)", tsti), &tst.insertBytes); err != nil {
+				t.Fatal(tst.name, err)
+			}
+		}
+		rows, err := db.Query(fmt.Sprintf("select txt from tbl%d", tsti))
+		if err != nil {
+			t.Fatal(tst.name, err)
+		}
+		if !rows.Next() {
+			t.Fatal(tst.name, "no rows")
+		}
+		var scanBytes []byte
+		if err = rows.Scan(&scanBytes); err != nil {
+			t.Fatal(tst.name, err)
+		}
+		if err = rows.Err(); err != nil {
+			t.Fatal(tst.name, err)
+		}
+		if tst.expectedBytes == nil && scanBytes != nil {
+			t.Errorf("%s: %#v != %#v", tst.name, scanBytes, tst.expectedBytes)
+		} else if !bytes.Equal(scanBytes, tst.expectedBytes) {
+			t.Errorf("%s: %#v != %#v", tst.name, scanBytes, tst.expectedBytes)
+		}
 	}
 }
 
