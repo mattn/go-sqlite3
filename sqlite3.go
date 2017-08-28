@@ -811,6 +811,7 @@ func (s *SQLiteStmt) Close() error {
 		return errors.New("sqlite statement with already closed database connection")
 	}
 	rv := C.sqlite3_finalize(s.s)
+	s.s = nil
 	if rv != C.SQLITE_OK {
 		return s.c.lastError()
 	}
