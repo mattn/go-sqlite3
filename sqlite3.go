@@ -1048,7 +1048,6 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		if rv != C.SQLITE_OK {
 			return rc.s.c.lastError()
 		}
-		rc.s.mu.Unlock()
 		return nil
 	}
 
