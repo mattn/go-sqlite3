@@ -182,6 +182,7 @@ type SQLiteTx struct {
 
 // SQLiteStmt implement sql.Stmt.
 type SQLiteStmt struct {
+	mu     sync.Mutex
 	c      *SQLiteConn
 	s      *C.sqlite3_stmt
 	t      string
@@ -803,6 +804,8 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 
 // Close the statement.
 func (s *SQLiteStmt) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.closed {
 		return nil
 	}
@@ -980,7 +983,9 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 
 // Close the rows.
 func (rc *SQLiteRows) Close() error {
+	rc.s.mu.Lock()
 	if rc.s.closed || rc.closed {
+		rc.s.mu.Unlock()
 		return nil
 	}
 	rc.closed = true
@@ -988,18 +993,23 @@ func (rc *SQLiteRows) Close() error {
 		close(rc.done)
 	}
 	if rc.cls {
+		rc.s.mu.Unlock()
 		return rc.s.Close()
 	}
 	rv := C.sqlite3_reset(rc.s.s)
 	if rv != C.SQLITE_OK {
+		rc.s.mu.Unlock()
 		return rc.s.c.lastError()
 	}
+	rc.s.mu.Unlock()
 	return nil
 }
 
 // Columns return column names.
 func (rc *SQLiteRows) Columns() []string {
-	if rc.nc != len(rc.cols) {
+	rc.s.mu.Lock()
+	defer rc.s.mu.Unlock()
+	if rc.s.s != nil && rc.nc != len(rc.cols) {
 		rc.cols = make([]string, rc.nc)
 		for i := 0; i < rc.nc; i++ {
 			rc.cols[i] = C.GoString(C.sqlite3_column_name(rc.s.s, C.int(i)))
@@ -1008,9 +1018,8 @@ func (rc *SQLiteRows) Columns() []string {
 	return rc.cols
 }
 
-// DeclTypes return column types.
-func (rc *SQLiteRows) DeclTypes() []string {
-	if rc.decltype == nil {
+func (rc *SQLiteRows) declTypes() []string {
+	if rc.s.s != nil && rc.decltype == nil {
 		rc.decltype = make([]string, rc.nc)
 		for i := 0; i < rc.nc; i++ {
 			rc.decltype[i] = strings.ToLower(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
@@ -1019,8 +1028,20 @@ func (rc *SQLiteRows) DeclTypes() []string {
 	return rc.decltype
 }
 
+// DeclTypes return column types.
+func (rc *SQLiteRows) DeclTypes() []string {
+	rc.s.mu.Lock()
+	defer rc.s.mu.Unlock()
+	return rc.declTypes()
+}
+
 // Next move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
+	if rc.s.closed {
+		return io.EOF
+	}
+	rc.s.mu.Lock()
+	defer rc.s.mu.Unlock()
 	rv := C.sqlite3_step(rc.s.s)
 	if rv == C.SQLITE_DONE {
 		return io.EOF
@@ -1033,7 +1054,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return nil
 	}
 
-	rc.DeclTypes()
+	rc.declTypes()
 
 	for i := range dest {
 		switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
