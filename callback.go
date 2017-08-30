@@ -59,6 +59,24 @@ func compareTrampoline(handlePtr uintptr, la C.int, a *C.char, lb C.int, b *C.ch
 	return C.int(cmp(C.GoStringN(a, la), C.GoStringN(b, lb)))
 }
 
+//export commitHookTrampoline
+func commitHookTrampoline(handle uintptr) int {
+	callback := lookupHandle(handle).(func() int)
+	return callback()
+}
+
+//export rollbackHookTrampoline
+func rollbackHookTrampoline(handle uintptr) {
+	callback := lookupHandle(handle).(func())
+	callback()
+}
+
+//export updateHookTrampoline
+func updateHookTrampoline(handle uintptr, op int, db *C.char, table *C.char, rowid int64) {
+	callback := lookupHandle(handle).(func(int, string, string, int64))
+	callback(op, C.GoString(db), C.GoString(table), rowid)
+}
+
 // Use handles to avoid passing Go pointers to C.
 
 type handleVal struct {
