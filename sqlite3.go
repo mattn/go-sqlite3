@@ -100,6 +100,8 @@ int _sqlite3_create_function(
 }
 
 void callbackTrampoline(sqlite3_context*, int, sqlite3_value**);
+
+int compareTrampoline(void*, int, char*, int, char*);
 int commitHookTrampoline(void*);
 void rollbackHookTrampoline(void*);
 void updateHookTrampoline(void*, int, char*, char*, sqlite3_int64);
@@ -324,6 +326,29 @@ func (tx *SQLiteTx) Commit() error {
 func (tx *SQLiteTx) Rollback() error {
 	_, err := tx.c.exec(context.Background(), "ROLLBACK", nil)
 	return err
+}
+
+// RegisterCollation makes a Go function available as a collation.
+//
+// cmp receives two UTF-8 strings, a and b. The result should be 0 if
+// a==b, -1 if a < b, and +1 if a > b.
+//
+// cmp must always return the same result given the same
+// inputs. Additionally, it must have the following properties for all
+// strings A, B and C: if A==B then B==A; if A==B and B==C then A==C;
+// if A<B then B>A; if A<B and B<C then A<C.
+//
+// If cmp does not obey these constraints, sqlite3's behavior is
+// undefined when the collation is used.
+func (c *SQLiteConn) RegisterCollation(name string, cmp func(string, string) int) error {
+	handle := newHandle(c, cmp)
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	rv := C.sqlite3_create_collation(c.db, cname, C.SQLITE_UTF8, unsafe.Pointer(handle), (*[0]byte)(unsafe.Pointer(C.compareTrampoline)))
+	if rv != C.SQLITE_OK {
+		return c.lastError()
+	}
+	return nil
 }
 
 // RegisterCommitHook sets the commit hook for a connection.
