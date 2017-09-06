@@ -108,6 +108,7 @@ void updateHookTrampoline(void*, int, char*, char*, sqlite3_int64);
 */
 import "C"
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -121,8 +122,6 @@ import (
 	"sync"
 	"time"
 	"unsafe"
-
-	"golang.org/x/net/context"
 )
 
 // SQLiteTimestampFormats is timestamp formats understood by both this module
