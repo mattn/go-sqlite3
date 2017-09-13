@@ -712,11 +712,17 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var db *C.sqlite3
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
-	rv := C._sqlite3_open_v2(name, &db,
-		C.SQLITE_OPEN_FULLMUTEX|
-			C.SQLITE_OPEN_READWRITE|
-			C.SQLITE_OPEN_CREATE,
-		nil)
+	var rv C.int
+	if strings.Contains(dsn, "immutable") {
+		rv = C._sqlite3_open_v2(name, &db, C.SQLITE_OPEN_NOMUTEX|C.SQLITE_OPEN_READONLY, nil)
+	} else {
+		rv = C._sqlite3_open_v2(name, &db,
+			C.SQLITE_OPEN_FULLMUTEX|
+				C.SQLITE_OPEN_READWRITE|
+				C.SQLITE_OPEN_CREATE,
+			nil)
+	}
+
 	if rv != 0 {
 		return nil, Error{Code: ErrNo(rv)}
 	}
