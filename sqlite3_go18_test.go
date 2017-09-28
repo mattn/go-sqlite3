@@ -127,11 +127,11 @@ func TestShortTimeout(t *testing.T) {
 		FROM test_table
 		ORDER BY key2 ASC`
 	rows, err := db.QueryContext(ctx, query)
-	if err != nil {
+	if err != nil && context.DeadlineExceeded {
 		t.Fatal(err)
 	}
 	if ctx.Err() != nil && context.DeadlineExceeded != ctx.Err() {
-		t.Fatalf("%v", ctx.Err())
+		t.Fatalf(ctx.Err())
 	}
 	rows.Close()
 }
