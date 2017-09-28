@@ -126,7 +126,7 @@ func TestShortTimeout(t *testing.T) {
 	query := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
 		FROM test_table
 		ORDER BY key2 ASC`
-	rows, err := db.QueryContext(ctx, query)
+	_, err = db.QueryContext(ctx, query)
 	if err != nil && err != context.DeadlineExceeded {
 		t.Fatal(err)
 	}
