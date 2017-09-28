@@ -111,14 +111,17 @@ func initDatabase(t *testing.T, db *sql.DB, rowCount int64) {
 }
 
 func TestShortTimeout(t *testing.T) {
-	db, err := sql.Open("sqlite3", "file::memory:?mode=memory&cache=shared")
+	srcTempFilename := TempFilename(t)
+	defer os.Remove(srcTempFilename)
+
+	db, err := sql.Open("sqlite3", srcTempFilename)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	initDatabase(t, db, 10000)
+	initDatabase(t, db, 100)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Microsecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
 	defer cancel()
 	query := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
 		FROM test_table
@@ -127,16 +130,8 @@ func TestShortTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var key1, keyid, key2, key3, key4, key5, key6 string
-		var data []byte
-		err = rows.Scan(&key1, &keyid, &key2, &key3, &key4, &key5, &key6, &data)
-		if err != nil {
-			break
-		}
+	if ctx.Err() != nil && context.DeadlineExceeded != ctx.Err() {
+		t.Fatalf("%v", ctx.Err())
 	}
-	if context.DeadlineExceeded != ctx.Err() {
-		t.Fatal(ctx.Err())
-	}
+	rows.Close()
 }
