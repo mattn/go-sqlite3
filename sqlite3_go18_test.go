@@ -133,5 +133,4 @@ func TestShortTimeout(t *testing.T) {
 	if ctx.Err() != nil && ctx.Err() != context.DeadlineExceeded {
 		t.Fatal(ctx.Err())
 	}
-	rows.Close()
 }
