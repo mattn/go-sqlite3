@@ -1150,6 +1150,27 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 					t = t.In(rc.s.c.loc)
 				}
 				dest[i] = t
+				// this case is for a nullable datetime typed colomn a chance to be parsed
+				// to resolve the problem in issue #190 and issue #316
+			case "":
+				var t time.Time
+				s = strings.TrimSuffix(s, "Z")
+				for _, format := range SQLiteTimestampFormats {
+					if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
+						t = timeVal
+						break
+					}
+				}
+				// if not parsed as a datetime type successfully, do as the default case does
+				if err != nil {
+					dest[i] = []byte(s)
+				} else {
+					if rc.s.c.loc != nil {
+						t = t.In(rc.s.c.loc)
+					}
+					dest[i] = t
+				}
+
 			default:
 				dest[i] = []byte(s)
 			}
