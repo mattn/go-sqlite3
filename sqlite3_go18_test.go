@@ -8,9 +8,13 @@
 package sqlite3
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
+	"math/rand"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestNamedParams(t *testing.T) {
@@ -46,5 +50,87 @@ func TestNamedParams(t *testing.T) {
 	}
 	if id != 1 || extra != "foo" {
 		t.Error("Failed to db.QueryRow: not matched results")
+	}
+}
+
+var (
+	testTableStatements = []string{
+		`DROP TABLE IF EXISTS test_table`,
+		`
+CREATE TABLE IF NOT EXISTS test_table (
+	key1      VARCHAR(64) PRIMARY KEY,
+	key_id    VARCHAR(64) NOT NULL,
+	key2      VARCHAR(64) NOT NULL,
+	key3      VARCHAR(64) NOT NULL,
+	key4      VARCHAR(64) NOT NULL,
+	key5      VARCHAR(64) NOT NULL,
+	key6      VARCHAR(64) NOT NULL,
+	data      BLOB        NOT NULL
+);`,
+	}
+	letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+)
+
+func randStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
+func initDatabase(t *testing.T, db *sql.DB, rowCount int64) {
+	t.Logf("Executing db initializing statements")
+	for _, query := range testTableStatements {
+		_, err := db.Exec(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := int64(0); i < rowCount; i++ {
+		query := `INSERT INTO test_table
+			(key1, key_id, key2, key3, key4, key5, key6, data)
+			VALUES
+			(?, ?, ?, ?, ?, ?, ?, ?);`
+		args := []interface{}{
+			randStringBytes(50),
+			fmt.Sprint(i),
+			randStringBytes(50),
+			randStringBytes(50),
+			randStringBytes(50),
+			randStringBytes(50),
+			randStringBytes(50),
+			randStringBytes(50),
+			randStringBytes(2048),
+		}
+		_, err := db.Exec(query, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestShortTimeout(t *testing.T) {
+	srcTempFilename := TempFilename(t)
+	defer os.Remove(srcTempFilename)
+
+	db, err := sql.Open("sqlite3", srcTempFilename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	initDatabase(t, db, 100)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
+	defer cancel()
+	query := `SELECT key1, key_id, key2, key3, key4, key5, key6, data
+		FROM test_table
+		ORDER BY key2 ASC`
+	_, err = db.QueryContext(ctx, query)
+	if err != nil && err != context.DeadlineExceeded {
+		t.Fatal(err)
+	}
+	if ctx.Err() != nil && ctx.Err() != context.DeadlineExceeded {
+		t.Fatal(ctx.Err())
 	}
 }

@@ -65,7 +65,7 @@ FAQ
 
 * Want to get time.Time with current locale
 
-    Use `loc=auto` in SQLite3 filename schema like `file:foo.db?loc=auto`.
+    Use `_loc=auto` in SQLite3 filename schema like `file:foo.db?_loc=auto`.
 
 * Can I use this in multiple routines concurrently?
 
