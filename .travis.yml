@@ -7,9 +7,10 @@ env:
   - GOTAGS=trace
   - GOTAGS=vtable
 go:
-  - 1.7
-  - 1.8
-  - tip
+  - 1.7.x
+  - 1.8.x
+  - 1.9.x
+  - master
 before_install:
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
