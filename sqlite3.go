@@ -120,6 +120,8 @@ void updateHookTrampoline(void*, int, char*, char*, sqlite3_int64);
 # define SQLITE_LIMIT_VARIABLE_NUMBER           9
 # define SQLITE_LIMIT_TRIGGER_DEPTH            10
 # define SQLITE_LIMIT_WORKER_THREADS           11
+# else
+# define SQLITE_LIMIT_WORKER_THREADS           11
 #endif
 
 static int _sqlite3_limit(sqlite3* db, int limitId, int newLimit) {
