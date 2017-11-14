@@ -105,6 +105,32 @@ int compareTrampoline(void*, int, char*, int, char*);
 int commitHookTrampoline(void*);
 void rollbackHookTrampoline(void*);
 void updateHookTrampoline(void*, int, char*, char*, sqlite3_int64);
+
+#ifdef SQLITE_LIMIT_WORKER_THREADS
+# define _SQLITE_HAS_LIMIT
+# define SQLITE_LIMIT_LENGTH                    0
+# define SQLITE_LIMIT_SQL_LENGTH                1
+# define SQLITE_LIMIT_COLUMN                    2
+# define SQLITE_LIMIT_EXPR_DEPTH                3
+# define SQLITE_LIMIT_COMPOUND_SELECT           4
+# define SQLITE_LIMIT_VDBE_OP                   5
+# define SQLITE_LIMIT_FUNCTION_ARG              6
+# define SQLITE_LIMIT_ATTACHED                  7
+# define SQLITE_LIMIT_LIKE_PATTERN_LENGTH       8
+# define SQLITE_LIMIT_VARIABLE_NUMBER           9
+# define SQLITE_LIMIT_TRIGGER_DEPTH            10
+# define SQLITE_LIMIT_WORKER_THREADS           11
+# else
+# define SQLITE_LIMIT_WORKER_THREADS           11
+#endif
+
+static int _sqlite3_limit(sqlite3* db, int limitId, int newLimit) {
+#ifndef _SQLITE_HAS_LIMIT
+  return -1;
+#else
+  return sqlite3_limit(db, limitId, newLimit);
+#endif
+}
 */
 import "C"
 import (
@@ -825,6 +851,36 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 	ss := &SQLiteStmt{c: c, s: s, t: t}
 	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
 	return ss, nil
+}
+
+// Run-Time Limit Categories.
+// See: http://www.sqlite.org/c3ref/c_limit_attached.html
+const (
+	SQLITE_LIMIT_LENGTH              = C.SQLITE_LIMIT_LENGTH
+	SQLITE_LIMIT_SQL_LENGTH          = C.SQLITE_LIMIT_SQL_LENGTH
+	SQLITE_LIMIT_COLUMN              = C.SQLITE_LIMIT_COLUMN
+	SQLITE_LIMIT_EXPR_DEPTH          = C.SQLITE_LIMIT_EXPR_DEPTH
+	SQLITE_LIMIT_COMPOUND_SELECT     = C.SQLITE_LIMIT_COMPOUND_SELECT
+	SQLITE_LIMIT_VDBE_OP             = C.SQLITE_LIMIT_VDBE_OP
+	SQLITE_LIMIT_FUNCTION_ARG        = C.SQLITE_LIMIT_FUNCTION_ARG
+	SQLITE_LIMIT_ATTACHED            = C.SQLITE_LIMIT_ATTACHED
+	SQLITE_LIMIT_LIKE_PATTERN_LENGTH = C.SQLITE_LIMIT_LIKE_PATTERN_LENGTH
+	SQLITE_LIMIT_VARIABLE_NUMBER     = C.SQLITE_LIMIT_VARIABLE_NUMBER
+	SQLITE_LIMIT_TRIGGER_DEPTH       = C.SQLITE_LIMIT_TRIGGER_DEPTH
+	SQLITE_LIMIT_WORKER_THREADS      = C.SQLITE_LIMIT_WORKER_THREADS
+)
+
+// GetLimit returns the current value of a run-time limit.
+// See: sqlite3_limit, http://www.sqlite.org/c3ref/limit.html
+func (c *SQLiteConn) GetLimit(id int) int {
+	return int(C._sqlite3_limit(c.db, C.int(id), -1))
+}
+
+// SetLimit changes the value of a run-time limits.
+// Then this method returns the prior value of the limit.
+// See: sqlite3_limit, http://www.sqlite.org/c3ref/limit.html
+func (c *SQLiteConn) SetLimit(id int, newVal int) int {
+	return int(C._sqlite3_limit(c.db, C.int(id), C.int(newVal)))
 }
 
 // Close the statement.
