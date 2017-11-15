@@ -46,7 +46,7 @@ FAQ
 
    Use `go build --tags "icu"`
 
-   Available extensions: `json1`, `fts5`, `icu`
+   Available extensions: `json1`, `fts5`, `icu`, `see`
 
 * Can't build go-sqlite3 on windows 64bit.
 
