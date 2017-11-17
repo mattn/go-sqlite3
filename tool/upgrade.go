@@ -4,6 +4,7 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -80,7 +81,18 @@ func main() {
 			f.Close()
 			log.Fatal(err)
 		}
-		_, err = io.Copy(f, zr)
+		scanner := bufio.NewScanner(zr)
+		for scanner.Scan() {
+			text := scanner.Text()
+			if text == `#include "sqlite3.h"` {
+				text = `#include "sqlite3-binding.h"`
+			}
+			_, err = fmt.Fprintln(f, text)
+			if err != nil {
+				break
+			}
+		}
+		err = scanner.Err()
 		if err != nil {
 			zr.Close()
 			f.Close()
