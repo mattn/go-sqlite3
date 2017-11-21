@@ -1111,7 +1111,7 @@ func TestDateTimeNow(t *testing.T) {
 	defer db.Close()
 
 	var d time.Time
-	err = db.QueryRow("SELECT datetime('now')").Scan(TimeStamp{&d})
+	err = db.QueryRow("SELECT datetime('now')").Scan(&d)
 	if err != nil {
 		t.Fatal("Failed to scan datetime:", err)
 	}
