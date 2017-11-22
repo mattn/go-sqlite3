@@ -1171,9 +1171,13 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 	defer close(done)
 	go func(db *C.sqlite3) {
 		select {
-		case <-ctx.Done():
-			C.sqlite3_interrupt(db)
 		case <-done:
+		case <-ctx.Done():
+			select {
+			case <-done:
+			default:
+				C.sqlite3_interrupt(db)
+			}
 		}
 	}(s.c.db)
 
