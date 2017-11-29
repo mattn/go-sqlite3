@@ -355,6 +355,11 @@ func TestDelete(t *testing.T) {
 	if rows.Next() {
 		t.Error("Fetched row but expected not rows")
 	}
+
+	res, err = db.Exec("delete from foo where id = 123 limit 2 offset 4")
+	if err != nil {
+		t.Fatal("Failed to delete with limit:", err)
+	}
 }
 
 func TestBooleanRoundtrip(t *testing.T) {
