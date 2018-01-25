@@ -3,9 +3,11 @@
 package main
 
 import (
-	"archive/zip"
+	"archive/tar"
 	"bufio"
 	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,28 +17,40 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-
-	"github.com/PuerkitoBio/goquery"
 )
 
 func main() {
-	site := "https://www.sqlite.org/download.html"
+	site := "https://api.github.com/repos/CanonicalLtd/sqlite/releases/latest"
 	fmt.Printf("scraping %v\n", site)
-	doc, err := goquery.NewDocument(site)
+	resp, err := http.Get(site)
 	if err != nil {
 		log.Fatal(err)
 	}
+	latest := &struct {
+		Assets []struct {
+			URL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}{}
+	err = json.NewDecoder(resp.Body).Decode(latest)
+	resp.Body.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	var url string
-	doc.Find("a").Each(func(_ int, s *goquery.Selection) {
-		if url == "" && strings.HasPrefix(s.Text(), "sqlite-amalgamation-") {
-			url = "https://www.sqlite.org/2017/" + s.Text()
+	for _, asset := range latest.Assets {
+		if !strings.Contains(asset.URL, "sqlite-src-") {
+			continue
 		}
-	})
+		url = asset.URL
+		break
+	}
+
 	if url == "" {
 		return
 	}
 	fmt.Printf("downloading %v\n", url)
-	resp, err := http.Get(url)
+	resp, err = http.Get(url)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,16 +62,27 @@ func main() {
 	}
 
 	fmt.Printf("extracting %v\n", path.Base(url))
-	r, err := zip.NewReader(bytes.NewReader(b), resp.ContentLength)
+	r, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
 		resp.Body.Close()
 		log.Fatal(err)
 	}
 	resp.Body.Close()
+	tr := tar.NewReader(r)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	for _, zf := range r.File {
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
 		var f *os.File
-		switch path.Base(zf.Name) {
+		switch path.Base(header.Name) {
 		case "sqlite3.c":
 			f, err = os.Create("sqlite3-binding.c")
 		case "sqlite3.h":
@@ -70,18 +95,13 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		zr, err := zf.Open()
-		if err != nil {
-			log.Fatal(err)
-		}
 
 		_, err = io.WriteString(f, "#ifndef USE_LIBSQLITE3\n")
 		if err != nil {
-			zr.Close()
 			f.Close()
 			log.Fatal(err)
 		}
-		scanner := bufio.NewScanner(zr)
+		scanner := bufio.NewScanner(tr)
 		for scanner.Scan() {
 			text := scanner.Text()
 			if text == `#include "sqlite3.h"` {
@@ -94,17 +114,14 @@ func main() {
 		}
 		err = scanner.Err()
 		if err != nil {
-			zr.Close()
 			f.Close()
 			log.Fatal(err)
 		}
 		_, err = io.WriteString(f, "#else // USE_LIBSQLITE3\n // If users really want to link against the system sqlite3 we\n// need to make this file a noop.\n #endif")
 		if err != nil {
-			zr.Close()
 			f.Close()
 			log.Fatal(err)
 		}
-		zr.Close()
 		f.Close()
 		fmt.Printf("extracted %v\n", filepath.Base(f.Name()))
 	}
