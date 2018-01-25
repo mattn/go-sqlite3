@@ -14,6 +14,13 @@ go:
 before_install:
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
+  - mkdir -p /tmp/sqlite
+  - cd /tmp/sqlite
+  - wget https://github.com/CanonicalLtd/sqlite/releases/download/replication-support-3.19.2/release--enable-debug.tar.gz -O - | tar xfz -
+  - sudo cp libsqlite3.so.0 libsqlite3.so.0.8.6 /usr/lib/x86_64-linux-gnu
+  - sudo cp sqlite3.h /usr/include/sqlite3.h
+  - cd -
+
 script:
-  - $HOME/gopath/bin/goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx
+  - $HOME/gopath/bin/goveralls -service=travis-ci 
   - go test -race -v . -tags "$GOTAGS"
