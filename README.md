@@ -1,10 +1,10 @@
 go-sqlite3
 ==========
 
-[![GoDoc Reference](https://godoc.org/github.com/mattn/go-sqlite3?status.svg)](http://godoc.org/github.com/mattn/go-sqlite3)
-[![Build Status](https://travis-ci.org/mattn/go-sqlite3.svg?branch=master)](https://travis-ci.org/mattn/go-sqlite3)
-[![Coverage Status](https://coveralls.io/repos/mattn/go-sqlite3/badge.svg?branch=master)](https://coveralls.io/r/mattn/go-sqlite3?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
+[![GoDoc Reference](https://godoc.org/github.com/CanonicalLtd/go-sqlite3?status.svg)](http://godoc.org/github.com/CanonicalLtd/go-sqlite3)
+[![Build Status](https://travis-ci.org/CanonicalLtd/go-sqlite3.svg?branch=master)](https://travis-ci.org/CanonicalLtd/go-sqlite3)
+[![Coverage Status](https://coveralls.io/repos/CanonicalLtd/go-sqlite3/badge.svg?branch=master)](https://coveralls.io/r/CanonicalLtd/go-sqlite3?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/CanonicalLtd/go-sqlite3)](https://goreportcard.com/report/github.com/CanonicalLtd/go-sqlite3)
 
 Description
 -----------
