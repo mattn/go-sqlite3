@@ -283,23 +283,6 @@ func ReplicationCheckpoint(conn *SQLiteConn, mode WalCheckpointMode, log *int, c
 	return nil
 }
 
-// ReplicationAutoCheckpoint can be used to enable autocheckpoint of
-// the replicated WAL.
-func ReplicationAutoCheckpoint(conn *SQLiteConn, n int) {
-
-	callback := func(arg unsafe.Pointer, conn *SQLiteConn, database string, frame int) error {
-		if frame >= n {
-			_, _, err := WalCheckpointV2(conn, WalCheckpointTruncate)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	WalHook(conn, callback, nil)
-}
-
 // PassthroughReplicationMethods returns a new instance of a ReplicationMethods
 // implementation whose hooks just invoke the relevant replication APIs against
 // whatever conn.SQLiteConn connection was used to at registration time. If any
