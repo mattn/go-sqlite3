@@ -5,6 +5,13 @@
 
 package sqlite3
 
+/*
+#ifndef USE_LIBSQLITE3
+#include <sqlite3-binding.h>
+#else
+#include <sqlite3.h>
+#endif
+*/
 import "C"
 
 // ErrNo inherit errno.
@@ -54,6 +61,12 @@ var (
 	ErrNotADB     = ErrNo(26) /* File opened that is not a database file */
 	ErrNotice     = ErrNo(27) /* Notifications from sqlite3_log() */
 	ErrWarning    = ErrNo(28) /* Warnings from sqlite3_log() */
+)
+
+// replication errors
+var (
+	ErrNotLeader   = ErrNo(C.SQLITE_NOTLEADER)
+	ErrReplication = ErrNo(C.SQLITE_REPLICATION)
 )
 
 // Error return error message from errno.
@@ -133,3 +146,8 @@ var (
 	ErrNoticeRecoverRollback  = ErrNotice.Extend(2)
 	ErrWarningAutoIndex       = ErrWarning.Extend(1)
 )
+
+// ErrorString returns the error message for the given error code.
+func ErrorString(code ErrNo) string {
+	return C.GoString(C.sqlite3_errstr(C.int(code)))
+}
