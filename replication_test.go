@@ -235,10 +235,72 @@ func TestReplicationMethods_Rollback(t *testing.T) {
 	}
 }
 
+func TestReplicationCheckpoint(t *testing.T) {
+	cluster, cleanup := newReplicationCluster()
+	defer cleanup()
+
+	sqlite3.ReplicationAutoCheckpoint(cluster.Leader, 1)
+
+	mustExec(cluster.Leader, "CREATE TABLE test (n INT)", nil)
+	if sqlite3.WalSize(cluster.Leader) != 0 {
+		t.Fatal("leader WAL file was not truncated")
+	}
+	if sqlite3.WalSize(cluster.Follower) != 0 {
+		t.Fatal("follower WAL file was not truncated")
+	}
+}
+
+func TestReplicationCheckpoint_Error(t *testing.T) {
+	conn1, cleanup1 := newLeaderSQLiteConn(sqlite3.PassthroughReplicationMethods())
+	defer cleanup1()
+
+	conn2 := newSQLiteConn(sqlite3.DatabaseFilename(conn1))
+
+	if _, err := conn1.Exec("CREATE TABLE test (n INT)", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	sqlite3.ReplicationAutoCheckpoint(conn1, 1)
+	if err := sqlite3.BusyTimeoutPragma(conn1, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := conn1.Exec("BEGIN", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := conn2.Exec("BEGIN", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn2.Exec("SELECT * FROM test", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := conn1.Exec("INSERT INTO test VALUES(1)", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// The PassthroughReplicationMethods.Checkpoint callback should panic
+	// on error.
+	defer func() {
+		err, ok := recover().(sqlite3.Error)
+		if !ok {
+			t.Fatal("expected checkpoint to panic with a sqlite3.Error")
+		}
+		if err.Code != sqlite3.ErrBusy {
+			t.Fatalf("expected SQLite ErrBusy, got %d", err.Code)
+		}
+	}()
+	mustExec(conn1, "COMMIT", nil)
+}
+
 func TestPassthroughReplicationMethods(t *testing.T) {
 	methods := sqlite3.PassthroughReplicationMethods()
 	conn, cleanup := newLeaderSQLiteConn(methods)
 	defer cleanup()
+
+	// Set auto-checkpoint to 1 so we trigger the checkpoint hook too.
+	sqlite3.ReplicationAutoCheckpoint(conn, 1)
 
 	mustExec(conn, "BEGIN; CREATE TABLE test (n INT); COMMIT", nil)
 	mustQuery(conn, "BEGIN; SELECT * FROM test; COMMIT;", nil)
