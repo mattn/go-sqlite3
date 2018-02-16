@@ -222,6 +222,7 @@ func ReplicationMode(conn *SQLiteConn) (Replication, error) {
 // meant to replicate the "leader" one.
 func ReplicationBegin(conn *SQLiteConn) error {
 	if rc := C.sqlite3_replication_begin(conn.db, C.CString("main")); rc != C.SQLITE_OK {
+		fmt.Printf("REPLICATION: BEGIN ERROR: %d\n", rc)
 		return Error{Code: ErrNo(rc)}
 	}
 	return nil
