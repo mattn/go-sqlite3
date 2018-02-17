@@ -415,7 +415,7 @@ type replicationMethodsInstance struct {
 // value a replicationMethodsInstance holding a pointer to the C callbacks
 // were registered against that db, and the Methods object that those
 // callbacks will be dispatched to.
-var replicationMethodsRegistry = make(map[*C.sqlite3]*replicationMethodsInstance)
+var replicationMethodsRegistry = make(map[uintptr]*replicationMethodsInstance)
 
 // Serialize access to the methods registry
 var replicationMethodsMutex sync.RWMutex
@@ -425,7 +425,8 @@ func registerMethodsInstance(conn *SQLiteConn, pMethods *C.sqlite3_replication_m
 	replicationMethodsMutex.Lock()
 	defer replicationMethodsMutex.Unlock()
 
-	replicationMethodsRegistry[conn.db] = &replicationMethodsInstance{
+	pointer := uintptr(unsafe.Pointer(conn.db))
+	replicationMethodsRegistry[pointer] = &replicationMethodsInstance{
 		pMethods: pMethods,
 		conn:     conn,
 		methods:  methods,
@@ -437,7 +438,8 @@ func unregisterMethodsInstance(conn *SQLiteConn) {
 	replicationMethodsMutex.Lock()
 	defer replicationMethodsMutex.Unlock()
 
-	delete(replicationMethodsRegistry, conn.db)
+	pointer := uintptr(unsafe.Pointer(conn.db))
+	delete(replicationMethodsRegistry, pointer)
 }
 
 // Find the replication methods instance for the given database.
@@ -445,8 +447,8 @@ func findMethodsInstance(db *C.sqlite3) *replicationMethodsInstance {
 	replicationMethodsMutex.RLock()
 	defer replicationMethodsMutex.RUnlock()
 
-	instance, _ := replicationMethodsRegistry[db]
-	return instance
+	pointer := uintptr(unsafe.Pointer(db))
+	return replicationMethodsRegistry[pointer]
 }
 
 // Find the replication methods instance for the given database and
