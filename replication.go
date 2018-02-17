@@ -161,7 +161,7 @@ func ReplicationLeader(conn *SQLiteConn, methods ReplicationMethods) error {
 
 	if rc := C.sqlite3_replication_leader(db, C.CString("main"), pMethods); rc != C.SQLITE_OK {
 		C.sqlite3_free(unsafe.Pointer(pMethods))
-		return Error{Code: ErrNo(int(rc))}
+		return newError(rc)
 	}
 
 	registerMethodsInstance(conn, pMethods, methods)
@@ -177,7 +177,7 @@ func ReplicationLeader(conn *SQLiteConn, methods ReplicationMethods) error {
 func ReplicationFollower(conn *SQLiteConn) error {
 	db := conn.db
 	if rc := C.sqlite3_replication_follower(db, C.CString("main")); rc != C.SQLITE_OK {
-		return Error{Code: ErrNo(int(rc))}
+		return newError(rc)
 	}
 	return nil
 }
@@ -195,7 +195,7 @@ func ReplicationNone(conn *SQLiteConn) (ReplicationMethods, error) {
 	}
 
 	if rc := C.sqlite3_replication_none(db, C.CString("main")); rc != C.SQLITE_OK {
-		return nil, Error{Code: ErrNo(rc)}
+		return nil, newError(rc)
 	}
 
 	C.sqlite3_free(unsafe.Pointer(instance.pMethods))
@@ -212,7 +212,7 @@ func ReplicationMode(conn *SQLiteConn) (Replication, error) {
 	// Convert to C pointer
 	eMode := (*C.int)(unsafe.Pointer(mode))
 	if rc := C.sqlite3_replication_mode(db, C.CString("main"), eMode); rc != C.SQLITE_OK {
-		return 0, Error{Code: ErrNo(int(rc))}
+		return 0, newError(rc)
 	}
 	return Replication(*mode), nil
 }
@@ -222,8 +222,7 @@ func ReplicationMode(conn *SQLiteConn) (Replication, error) {
 // meant to replicate the "leader" one.
 func ReplicationBegin(conn *SQLiteConn) error {
 	if rc := C.sqlite3_replication_begin(conn.db, C.CString("main")); rc != C.SQLITE_OK {
-		fmt.Printf("REPLICATION: BEGIN ERROR: %d\n", rc)
-		return Error{Code: ErrNo(rc)}
+		return newError(rc)
 	}
 	return nil
 }
@@ -244,7 +243,7 @@ func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) 
 	syncFlags := C.int(params.SyncFlags)
 
 	if rc := C.sqlite3_replication_wal_frames(db, zDb, szPage, nList, pList, nTruncate, isCommit, syncFlags); rc != C.SQLITE_OK {
-		return Error{Code: ErrNo(rc)}
+		return newError(rc)
 	}
 	return nil
 }
@@ -254,7 +253,7 @@ func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) 
 // meant to replicate the "leader" one.
 func ReplicationUndo(conn *SQLiteConn) error {
 	if rc := C.sqlite3_replication_undo(conn.db, C.CString("main")); rc != C.SQLITE_OK {
-		return Error{Code: ErrNo(rc)}
+		return newError(rc)
 	}
 	return nil
 }
@@ -264,7 +263,7 @@ func ReplicationUndo(conn *SQLiteConn) error {
 // meant to replicate the "leader" one.
 func ReplicationEnd(conn *SQLiteConn) error {
 	if rc := C.sqlite3_replication_end(conn.db, C.CString("main")); rc != C.SQLITE_OK {
-		return Error{Code: ErrNo(rc)}
+		return newError(rc)
 	}
 	return nil
 }
@@ -279,7 +278,7 @@ func ReplicationCheckpoint(conn *SQLiteConn, mode WalCheckpointMode, log *int, c
 	pnCkpt := (*C.int)(unsafe.Pointer(ckpt))
 
 	if rc := C.sqlite3_replication_checkpoint(db, zDb, eMode, pnLog, pnCkpt); rc != C.SQLITE_OK {
-		return Error{Code: ErrNo(rc)}
+		return newError(rc)
 	}
 	return nil
 }

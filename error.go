@@ -151,3 +151,10 @@ var (
 func ErrorString(code ErrNo) string {
 	return C.GoString(C.sqlite3_errstr(C.int(code)))
 }
+
+func newError(rv C.int) error {
+	return Error{
+		Code:         ErrNo(rv & ErrNoMask),
+		ExtendedCode: ErrNoExtended(rv),
+	}
+}
