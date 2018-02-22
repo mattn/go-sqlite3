@@ -7,6 +7,7 @@ package sqlite3
 #else
 #include <sqlite3.h>
 #endif
+#include <stdlib.h>
 
 // SQLite replication hooks
 extern int replicationBegin(void *pArg);
@@ -153,7 +154,10 @@ func ReplicationLeader(conn *SQLiteConn, methods ReplicationMethods) error {
 	pMethods.xEnd = (*[0]byte)(unsafe.Pointer(C.replicationEnd))
 	pMethods.xCheckpoint = (*[0]byte)(unsafe.Pointer(C.replicationCheckpoint))
 
-	if rc := C.sqlite3_replication_leader(db, C.CString("main"), pMethods); rc != C.SQLITE_OK {
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
+
+	if rc := C.sqlite3_replication_leader(db, zSchema, pMethods); rc != C.SQLITE_OK {
 		C.sqlite3_free(unsafe.Pointer(pMethods))
 		return newError(rc)
 	}
@@ -170,7 +174,10 @@ func ReplicationLeader(conn *SQLiteConn, methods ReplicationMethods) error {
 // ReplicationRollback APIs.
 func ReplicationFollower(conn *SQLiteConn) error {
 	db := conn.db
-	if rc := C.sqlite3_replication_follower(db, C.CString("main")); rc != C.SQLITE_OK {
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
+
+	if rc := C.sqlite3_replication_follower(db, zSchema); rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 	return nil
@@ -188,7 +195,10 @@ func ReplicationNone(conn *SQLiteConn) (ReplicationMethods, error) {
 		return nil, fmt.Errorf("leader replication is not enabled for this connection")
 	}
 
-	if rc := C.sqlite3_replication_none(db, C.CString("main")); rc != C.SQLITE_OK {
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
+
+	if rc := C.sqlite3_replication_none(db, zSchema); rc != C.SQLITE_OK {
 		return nil, newError(rc)
 	}
 
@@ -205,7 +215,10 @@ func ReplicationMode(conn *SQLiteConn) (Replication, error) {
 
 	// Convert to C pointer
 	eMode := (*C.int)(unsafe.Pointer(mode))
-	if rc := C.sqlite3_replication_mode(db, C.CString("main"), eMode); rc != C.SQLITE_OK {
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
+
+	if rc := C.sqlite3_replication_mode(db, zSchema, eMode); rc != C.SQLITE_OK {
 		return 0, newError(rc)
 	}
 	return Replication(*mode), nil
@@ -215,7 +228,10 @@ func ReplicationMode(conn *SQLiteConn) (Replication, error) {
 // connection. This should be called against a "follower" connection,
 // meant to replicate the "leader" one.
 func ReplicationBegin(conn *SQLiteConn) error {
-	if rc := C.sqlite3_replication_begin(conn.db, C.CString("main")); rc != C.SQLITE_OK {
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
+
+	if rc := C.sqlite3_replication_begin(conn.db, zSchema); rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 	return nil
@@ -228,7 +244,8 @@ func ReplicationBegin(conn *SQLiteConn) error {
 func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) error {
 	// Convert to C types
 	db := conn.db
-	zDb := C.CString("main")
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
 	szPage := C.int(params.PageSize)
 	nList := C.int(len(params.Pages))
 	nTruncate := C.uint(params.Truncate)
@@ -258,7 +275,8 @@ func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) 
 		pPage.pgno = page.pgno
 	}
 
-	if rc := C.sqlite3_replication_wal_frames(db, zDb, szPage, nList, pList, nTruncate, isCommit, syncFlags); rc != C.SQLITE_OK {
+	if rc := C.sqlite3_replication_wal_frames(
+		db, zSchema, szPage, nList, pList, nTruncate, isCommit, syncFlags); rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 	return nil
@@ -268,7 +286,10 @@ func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) 
 // connection. This should be called with a "follower" connection,
 // meant to replicate the "leader" one.
 func ReplicationUndo(conn *SQLiteConn) error {
-	if rc := C.sqlite3_replication_undo(conn.db, C.CString("main")); rc != C.SQLITE_OK {
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
+
+	if rc := C.sqlite3_replication_undo(conn.db, zSchema); rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 	return nil
@@ -278,7 +299,10 @@ func ReplicationUndo(conn *SQLiteConn) error {
 // connection. This should be called with a "follower" connection,
 // meant to replicate the "leader" one.
 func ReplicationEnd(conn *SQLiteConn) error {
-	if rc := C.sqlite3_replication_end(conn.db, C.CString("main")); rc != C.SQLITE_OK {
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
+
+	if rc := C.sqlite3_replication_end(conn.db, zSchema); rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 	return nil
@@ -288,12 +312,14 @@ func ReplicationEnd(conn *SQLiteConn) error {
 func ReplicationCheckpoint(conn *SQLiteConn, mode WalCheckpointMode, log *int, ckpt *int) error {
 	// Convert to C types
 	db := conn.db
-	zDb := C.CString("main")
+	zSchema := C.CString("main")
+	defer C.free(unsafe.Pointer(zSchema))
+
 	eMode := C.int(mode)
 	pnLog := (*C.int)(unsafe.Pointer(log))
 	pnCkpt := (*C.int)(unsafe.Pointer(ckpt))
 
-	if rc := C.sqlite3_replication_checkpoint(db, zDb, eMode, pnLog, pnCkpt); rc != C.SQLITE_OK {
+	if rc := C.sqlite3_replication_checkpoint(db, zSchema, eMode, pnLog, pnCkpt); rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 	return nil
