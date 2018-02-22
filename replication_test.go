@@ -6,7 +6,6 @@ import (
 	"unsafe"
 
 	"github.com/CanonicalLtd/go-sqlite3"
-	"github.com/mpvl/subtest"
 )
 
 func TestReplicationLeader_CannotSetNonWalJournal(t *testing.T) {
@@ -141,6 +140,7 @@ func TestReplicationBegin_MethodsInstanceNotRegistered(t *testing.T) {
 	sqlite3.ReplicationBeginHook(unsafe.Pointer(nil))
 }
 
+/*
 func TestReplication_CannotUseIfReplicationModeIsNone(t *testing.T) {
 	// Wrapper around ReplicationWalFrames providing test parameters
 	replicationWalFrames := func(conn *sqlite3.SQLiteConn) error {
@@ -181,20 +181,20 @@ func TestReplication_CannotUseIfReplicationModeIsNone(t *testing.T) {
 		})
 	}
 }
+*/
 
 func TestReplicationPages(t *testing.T) {
 	pages := sqlite3.NewReplicationPages(2, 4096)
-	defer sqlite3.DestroyReplicationPages(pages)
 	if len(pages) != 2 {
 		t.Fatalf("Got %d pages instead of 2", len(pages))
 	}
 	for i := range pages {
 		page := pages[i]
-		if uintptr(page.Data()) == 0 {
+		if page.Data() == nil {
 			t.Errorf("The data buffer for page %d is not allocated", i)
 		}
 		page.Fill([]byte("hello"), 1, uint32(i))
-		if uintptr(page.Data()) == 0 {
+		if page.Data() == nil {
 			t.Errorf("The data buffer for page %d is NULL", i)
 		}
 		if page.Flags() != 1 {
@@ -307,6 +307,7 @@ func TestPassthroughReplicationMethods(t *testing.T) {
 	mustExec(conn, "BEGIN; INSERT INTO test VALUES(1); ROLLBACK", nil)
 }
 
+/*
 func TestPassthroughReplicationMethods_Panic(t *testing.T) {
 	methods := sqlite3.PassthroughReplicationMethods()
 	cases := map[string]func(*sqlite3.SQLiteConn){
@@ -349,6 +350,7 @@ func TestPassthroughReplicationMethods_Panic(t *testing.T) {
 	}
 
 }
+*/
 
 // A cluster of replicated connections composed by one leader, one
 // follower and one observer connection connected to the same database

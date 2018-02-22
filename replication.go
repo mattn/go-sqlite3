@@ -33,18 +33,25 @@ const (
 	ReplicationModeFollower = Replication(int(C.SQLITE_REPLICATION_FOLLOWER))
 )
 
-// ReplicationPage is just a Go land alias of the low-level C type.
-type ReplicationPage C.sqlite3_replication_page
+// ReplicationPage is just a Go land equivalent of the low-level
+// sqlite3_replication_page C type.
+//
+// FIXME: we should find a cgo-safe way to not copy the memory.
+type ReplicationPage struct {
+	pBuf  []byte
+	flags C.uint
+	pgno  C.uint
+}
 
 // Fill sets the page attribute using the given parameters.
 func (p *ReplicationPage) Fill(data []byte, flags uint16, number uint32) {
-	C.memcpy(p.pBuf, unsafe.Pointer(reflect.ValueOf(data).Pointer()), C.size_t(len(data)))
+	p.pBuf = data
 	p.flags = C.uint(flags)
 	p.pgno = C.uint(number)
 }
 
 // Data returns a pointer to the page data.
-func (p *ReplicationPage) Data() unsafe.Pointer {
+func (p *ReplicationPage) Data() []byte {
 	return p.pBuf
 }
 
@@ -61,24 +68,11 @@ func (p *ReplicationPage) Number() uint32 {
 // NewReplicationPages returns a new slice of n ReplicationPage
 // objects, allocated in C memory.
 func NewReplicationPages(n int, pageSize int) []ReplicationPage {
-	size := C.int(unsafe.Sizeof(C.sqlite3_replication_page{}))
-	pList := unsafe.Pointer(C.sqlite3_malloc(size * C.int(n)))
-	pages := unsafePointerToSlice(pList, n)
+	pages := make([]ReplicationPage, n)
 	for i := range pages {
-		page := &(pages[i])
-		page.pBuf = unsafe.Pointer(C.sqlite3_malloc(C.int(pageSize)))
+		pages[i].pBuf = make([]byte, pageSize)
 	}
 	return pages
-}
-
-// DestroyReplicationPages deallocates the memory of the given
-// ReplicationPage slice.
-func DestroyReplicationPages(pages []ReplicationPage) {
-	for i := range pages {
-		page := &(pages[i])
-		C.sqlite3_free(page.pBuf)
-	}
-	C.sqlite3_free(unsafe.Pointer(&pages[0]))
 }
 
 // ReplicationWalFramesParams holds information about a single batch
@@ -238,9 +232,31 @@ func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) 
 	szPage := C.int(params.PageSize)
 	nList := C.int(len(params.Pages))
 	nTruncate := C.uint(params.Truncate)
-	pList := (*C.sqlite3_replication_page)(unsafe.Pointer(&params.Pages[0]))
 	isCommit := C.int(params.IsCommit)
 	syncFlags := C.int(params.SyncFlags)
+
+	// FIXME: avoid the copy
+	size := unsafe.Sizeof(C.sqlite3_replication_page{})
+	pList := (*C.sqlite3_replication_page)(C.sqlite3_malloc(C.int(size) * nList))
+	if pList == nil {
+		return ErrNomem
+	}
+	defer C.sqlite3_free(unsafe.Pointer(pList))
+
+	for i, page := range params.Pages {
+		pPage := (*C.sqlite3_replication_page)(
+			unsafe.Pointer((uintptr(unsafe.Pointer(pList)) + size*uintptr(i))))
+
+		pPage.pBuf = unsafe.Pointer(C.sqlite3_malloc(szPage))
+		if pPage.pBuf == nil {
+			return ErrNomem
+		}
+		defer C.sqlite3_free(pPage.pBuf)
+		C.memcpy(pPage.pBuf, unsafe.Pointer(reflect.ValueOf(page.pBuf).Pointer()), C.size_t(szPage))
+
+		pPage.flags = page.flags
+		pPage.pgno = page.pgno
+	}
 
 	if rc := C.sqlite3_replication_wal_frames(db, zDb, szPage, nList, pList, nTruncate, isCommit, syncFlags); rc != C.SQLITE_OK {
 		return newError(rc)
@@ -355,11 +371,15 @@ func replicationBegin(pArg unsafe.Pointer) C.int {
 func replicationWalFrames(pArg unsafe.Pointer, szPage C.int, nList C.int, pList *C.sqlite3_replication_page, nTruncate C.uint, isCommit C.int, syncFlags C.uint) C.int {
 	instance := mustFindMethodsInstance((*C.sqlite3)(pArg))
 
-	// This seems the easiest way to convert a C pointer to a slice without
-	// copying the data https://github.com/golang/go/issues/13656. Note that
-	// the size of the array is 2^30, which should be virtually enough for
-	// any situation.
-	pages := unsafePointerToSlice(unsafe.Pointer(pList), int(nList))
+	pages := NewReplicationPages(int(nList), int(szPage))
+	size := unsafe.Sizeof(C.sqlite3_replication_page{})
+	for i := range pages {
+		pPage := (*C.sqlite3_replication_page)(
+			unsafe.Pointer((uintptr(unsafe.Pointer(pList)) + size*uintptr(i))))
+		pages[i].pBuf = C.GoBytes(unsafe.Pointer(pPage.pBuf), szPage)
+		pages[i].pgno = pPage.pgno
+		pages[i].flags = pPage.flags
+	}
 
 	params := &ReplicationWalFramesParams{
 		PageSize:  int(szPage),
