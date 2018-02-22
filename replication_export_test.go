@@ -11,7 +11,7 @@ func ReplicationBeginHook(pArg unsafe.Pointer) {
 
 // Expose registerMethodsInstance for testing internal details.
 func ReplicationRegisterMethodsInstance(conn *SQLiteConn) func() {
-	registerMethodsInstance(conn, nil, nil)
+	registerMethodsInstance(conn, nil)
 	return func() {
 		unregisterMethodsInstance(conn)
 	}

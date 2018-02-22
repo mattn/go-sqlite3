@@ -15,6 +15,19 @@ extern int replicationWalFrames(void *pArg, int szPage, int nList, sqlite3_repli
 extern int replicationUndo(void *pArg);
 extern int replicationEnd(void *pArg);
 extern int replicationCheckpoint(void *pArg, int eMode, int *pnLog, int *pnCkpt);
+
+// SQLite replication implementation
+static sqlite3_replication_methods replicationMethods = {
+  replicationBegin,
+  replicationWalFrames,
+  replicationUndo,
+  replicationEnd,
+  replicationCheckpoint
+};
+
+static int replicationLeader(sqlite3 *db) {
+  return sqlite3_replication_leader(db, "main", &replicationMethods, db);
+}
 */
 import "C"
 import (
@@ -137,32 +150,11 @@ func ReplicationLeader(conn *SQLiteConn, methods ReplicationMethods) error {
 		return fmt.Errorf("leader replication already enabled for this connection")
 	}
 
-	// The cgo specification forbids to store Go pointers in C memory (see
-	// https://golang.org/cmd/cgo/#hdr-Passing_pointers), so we perform
-	// the memory allocation of the sqlite3_replication_methods C structure
-	// using sqlite3_malloc, and set its pArg to be itself. Then, we use
-	// a registry in Go memory for mapping the sqlite3_replication_methods pointers
-	// created here to the associated SQLiteConn and Methods objects.
-	size := C.int(unsafe.Sizeof(C.sqlite3_replication_methods{}))
-	pMethods := (*C.sqlite3_replication_methods)(unsafe.Pointer(C.sqlite3_malloc(size)))
-
-	// Set the callbacks
-	pMethods.pArg = unsafe.Pointer(db)
-	pMethods.xBegin = (*[0]byte)(unsafe.Pointer(C.replicationBegin))
-	pMethods.xWalFrames = (*[0]byte)(unsafe.Pointer(C.replicationWalFrames))
-	pMethods.xUndo = (*[0]byte)(unsafe.Pointer(C.replicationUndo))
-	pMethods.xEnd = (*[0]byte)(unsafe.Pointer(C.replicationEnd))
-	pMethods.xCheckpoint = (*[0]byte)(unsafe.Pointer(C.replicationCheckpoint))
-
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
-
-	if rc := C.sqlite3_replication_leader(db, zSchema, pMethods); rc != C.SQLITE_OK {
-		C.sqlite3_free(unsafe.Pointer(pMethods))
+	if rc := C.replicationLeader(db); rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 
-	registerMethodsInstance(conn, pMethods, methods)
+	registerMethodsInstance(conn, methods)
 
 	return nil
 }
@@ -202,7 +194,6 @@ func ReplicationNone(conn *SQLiteConn) (ReplicationMethods, error) {
 		return nil, newError(rc)
 	}
 
-	C.sqlite3_free(unsafe.Pointer(instance.pMethods))
 	unregisterMethodsInstance(conn)
 	return instance.methods, nil
 }
@@ -449,9 +440,8 @@ func replicationCheckpoint(pArg unsafe.Pointer, eMode C.int, pnLog *C.int, pnCkp
 // allocated by this module using C.sqlite3_malloc in ReplicationLeader,
 // and its associated ReplicationMethods hooks in Go land.
 type replicationMethodsInstance struct {
-	pMethods *C.sqlite3_replication_methods
-	conn     *SQLiteConn
-	methods  ReplicationMethods
+	conn    *SQLiteConn
+	methods ReplicationMethods
 }
 
 // A registry for tracking instances of C.sqlite3_replication_methods
@@ -467,15 +457,14 @@ var replicationMethodsRegistry = make(map[uintptr]*replicationMethodsInstance)
 var replicationMethodsMutex sync.RWMutex
 
 // Register a new replication for the given connection and methods.
-func registerMethodsInstance(conn *SQLiteConn, pMethods *C.sqlite3_replication_methods, methods ReplicationMethods) {
+func registerMethodsInstance(conn *SQLiteConn, methods ReplicationMethods) {
 	replicationMethodsMutex.Lock()
 	defer replicationMethodsMutex.Unlock()
 
 	pointer := uintptr(unsafe.Pointer(conn.db))
 	replicationMethodsRegistry[pointer] = &replicationMethodsInstance{
-		pMethods: pMethods,
-		conn:     conn,
-		methods:  methods,
+		conn:    conn,
+		methods: methods,
 	}
 }
 
