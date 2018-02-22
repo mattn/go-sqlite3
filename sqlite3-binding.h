@@ -126,7 +126,7 @@ extern "C" {
 */
 #define SQLITE_VERSION        "3.22.0"
 #define SQLITE_VERSION_NUMBER 3022000
-#define SQLITE_SOURCE_ID      "2018-01-25 14:46:59 ad4d45e9ef3cfc797d6bdc983a2793fcd6c06429f26b842185cdfc7d286cb451"
+#define SQLITE_SOURCE_ID      "2018-02-22 22:06:10 e423678975735665819f6ece52befe489398d191ac930907195e63fa694000bd"
 
 /*
 ** CAPI3REF: Run-Time Library Version Numbers
@@ -8804,7 +8804,7 @@ SQLITE_API SQLITE_EXPERIMENTAL int sqlite3_snapshot_recover(sqlite3 *db, const c
 #define SQLITE_REPLICATION_LEADER      1   /* Fire replication commands */
 #define SQLITE_REPLICATION_FOLLOWER    2   /* Execute replication commands */
 
-  typedef struct sqlite3_replication_page sqlite3_replication_page;
+typedef struct sqlite3_replication_page sqlite3_replication_page;
 struct sqlite3_replication_page {
   void *pBuf;        /* The content of the page */
   unsigned flags;    /* Page flags used internaly by the WAL */
@@ -8813,7 +8813,6 @@ struct sqlite3_replication_page {
 
 typedef struct sqlite3_replication_methods sqlite3_replication_methods;
 struct sqlite3_replication_methods {
-  void *pArg;                           /* Custom pointer that will be passed back to methods */
   int (*xBegin)(void *pArg);
   int (*xWalFrames)(void *pArg, int szPage, int nList, sqlite3_replication_page *pList, unsigned nTruncate, int isCommit, unsigned sync_flags);
   int (*xUndo)(void *pArg);
@@ -8828,7 +8827,8 @@ struct sqlite3_replication_methods {
 SQLITE_API int sqlite3_replication_leader(
   sqlite3 *db,                          /* The db handle to use */
   const char *zDbName,                  /* Enable leader replication on this backend */
-  sqlite3_replication_methods *methods  /* Replication interface */
+  sqlite3_replication_methods *methods,  /* Replication interface */
+  void *pCtx
 );
 
 SQLITE_API int sqlite3_replication_follower(
