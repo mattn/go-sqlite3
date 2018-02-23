@@ -27,13 +27,14 @@ type WalHookFunc func(unsafe.Pointer, *SQLiteConn, string, int) error
 // is written into the write-ahead-log by the given connection.
 func WalHook(conn *SQLiteConn, callback WalHookFunc, arg unsafe.Pointer) {
 	db := conn.db
+	handle := uintptr(unsafe.Pointer(db))
 	var pointer *[0]byte
 	if callback == nil {
-		delete(walHooks, db)
+		delete(walHooks, handle)
 	} else {
 		walHookMu.Lock()
 		defer walHookMu.Unlock()
-		walHooks[db] = &walHookInfo{conn: conn, callback: callback}
+		walHooks[handle] = &walHookInfo{conn: conn, callback: callback}
 		pointer = (*[0]byte)(unsafe.Pointer(C.walHook))
 	}
 	C.sqlite3_wal_hook(db, pointer, arg)
@@ -118,7 +119,7 @@ func WalAutoCheckpointPragma(conn *SQLiteConn, pages int64) error {
 //export walHook
 func walHook(pArg unsafe.Pointer, db *C.sqlite3, zDb *C.char, nFrame C.int) C.int {
 	walHookMu.RLock()
-	info, ok := walHooks[db]
+	info, ok := walHooks[uintptr(unsafe.Pointer(db))]
 	walHookMu.RUnlock()
 	if !ok {
 		panic("WAL hook not found")
@@ -139,5 +140,5 @@ type walHookInfo struct {
 
 // Map C.sqlite3 pointers objects to their registered callbacks and
 // connections.
-var walHooks = map[*C.sqlite3]*walHookInfo{}
+var walHooks = map[uintptr]*walHookInfo{}
 var walHookMu = sync.RWMutex{}
