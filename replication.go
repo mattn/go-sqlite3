@@ -27,7 +27,30 @@ static sqlite3_replication_methods replicationMethods = {
 
 static int replicationLeader(sqlite3 *db) {
   return sqlite3_replication_leader(db, "main", &replicationMethods, db);
-}
+};
+
+static sqlite3_replication_page* replicationPagesAlloc(int nList) {
+  return (sqlite3_replication_page*)sqlite3_malloc(sizeof(sqlite3_replication_page) * (nList));
+};
+
+static void replicationPagesFill(sqlite3_replication_page* pList,
+  int i, int szPage, void* pData, unsigned flags, unsigned pgno) {
+  sqlite3_replication_page* pReplPg = pList + i;
+  pReplPg->pBuf = sqlite3_malloc(szPage);
+  pReplPg->flags = flags;
+  pReplPg->pgno = pgno;
+  memcpy(pReplPg->pBuf, pData, szPage);
+};
+
+static void replicationPagesFree(sqlite3_replication_page* pList, int nList) {
+  sqlite3_replication_page* pReplPg = pList;
+  int i;
+  for (i = 0; i < nList; i++) {
+     sqlite3_free(pReplPg->pBuf);
+     pReplPg += 1;
+  }
+  sqlite3_free(pList);
+};
 */
 import "C"
 import (
@@ -244,26 +267,13 @@ func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) 
 	syncFlags := C.int(params.SyncFlags)
 
 	// FIXME: avoid the copy
-	size := unsafe.Sizeof(C.sqlite3_replication_page{})
-	pList := (*C.sqlite3_replication_page)(C.sqlite3_malloc(C.int(size) * nList))
-	if pList == nil {
-		return ErrNomem
-	}
-	defer C.sqlite3_free(unsafe.Pointer(pList))
+	pList := C.replicationPagesAlloc(nList)
+	defer C.replicationPagesFree(pList, nList)
 
-	for i, page := range params.Pages {
-		pPage := (*C.sqlite3_replication_page)(
-			unsafe.Pointer((uintptr(unsafe.Pointer(pList)) + size*uintptr(i))))
-
-		pPage.pBuf = unsafe.Pointer(C.sqlite3_malloc(szPage))
-		if pPage.pBuf == nil {
-			return ErrNomem
-		}
-		defer C.sqlite3_free(pPage.pBuf)
-		C.memcpy(pPage.pBuf, unsafe.Pointer(reflect.ValueOf(page.pBuf).Pointer()), C.size_t(szPage))
-
-		pPage.flags = page.flags
-		pPage.pgno = page.pgno
+	for i := range params.Pages {
+		C.replicationPagesFill(
+			pList, C.int(i), szPage, unsafe.Pointer(reflect.ValueOf(params.Pages[i].pBuf).Pointer()),
+			params.Pages[i].flags, params.Pages[i].pgno)
 	}
 
 	if rc := C.sqlite3_replication_wal_frames(
@@ -393,7 +403,7 @@ func replicationWalFrames(pArg unsafe.Pointer, szPage C.int, nList C.int, pList 
 	for i := range pages {
 		pPage := (*C.sqlite3_replication_page)(
 			unsafe.Pointer((uintptr(unsafe.Pointer(pList)) + size*uintptr(i))))
-		pages[i].pBuf = C.GoBytes(unsafe.Pointer(pPage.pBuf), szPage)
+		C.memcpy(unsafe.Pointer(reflect.ValueOf(pages[i].pBuf).Pointer()), pPage.pBuf, C.size_t(szPage))
 		pages[i].pgno = pPage.pgno
 		pages[i].flags = pPage.flags
 	}
