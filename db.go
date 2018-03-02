@@ -33,7 +33,6 @@ import "C"
 import (
 	"os"
 	"time"
-	"unsafe"
 )
 
 // DatabaseFilename returns the path to the database file associated with the
@@ -68,16 +67,15 @@ func DatabaseModTime(conn *SQLiteConn) time.Time {
 // database is closed.
 func DatabaseNoCheckpointOnClose(conn *SQLiteConn) error {
 	db := conn.db
-	value := 0
-	pValue := (*C.int)(unsafe.Pointer(&value))
-	if rc := C.databaseNoCheckpointOnClose(db, 1, pValue); rc != 0 {
+	var value C.int
+	if rc := C.databaseNoCheckpointOnClose(db, 1, &value); rc != 0 {
 		return Error{Code: ErrNo(rc)}
 	}
 
 	// The SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE opcode is supposed to save back
 	// to our variable the current value of the setting. So let's double
 	// check that it was actually changed to 1.
-	if *pValue != 1 {
+	if int(value) != 1 {
 		return Error{Code: ErrInternal}
 	}
 

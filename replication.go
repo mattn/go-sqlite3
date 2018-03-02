@@ -225,17 +225,15 @@ func ReplicationNone(conn *SQLiteConn) (ReplicationMethods, error) {
 // transaction.
 func ReplicationMode(conn *SQLiteConn) (Replication, error) {
 	db := conn.db
-	mode := new(int)
+	var mode C.int
 
-	// Convert to C pointer
-	eMode := (*C.int)(unsafe.Pointer(mode))
 	zSchema := C.CString("main")
 	defer C.free(unsafe.Pointer(zSchema))
 
-	if rc := C.sqlite3_replication_mode(db, zSchema, eMode); rc != C.SQLITE_OK {
+	if rc := C.sqlite3_replication_mode(db, zSchema, &mode); rc != C.SQLITE_OK {
 		return 0, newError(rc)
 	}
-	return Replication(*eMode), nil
+	return Replication(int(mode)), nil
 }
 
 // ReplicationBegin starts a new write transaction in the given sqlite
