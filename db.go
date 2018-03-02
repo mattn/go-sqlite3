@@ -77,7 +77,7 @@ func DatabaseNoCheckpointOnClose(conn *SQLiteConn) error {
 	// The SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE opcode is supposed to save back
 	// to our variable the current value of the setting. So let's double
 	// check that it was actually changed to 1.
-	if value != 1 {
+	if *pValue != 1 {
 		return Error{Code: ErrInternal}
 	}
 

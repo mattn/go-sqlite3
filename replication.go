@@ -235,7 +235,7 @@ func ReplicationMode(conn *SQLiteConn) (Replication, error) {
 	if rc := C.sqlite3_replication_mode(db, zSchema, eMode); rc != C.SQLITE_OK {
 		return 0, newError(rc)
 	}
-	return Replication(*mode), nil
+	return Replication(*eMode), nil
 }
 
 // ReplicationBegin starts a new write transaction in the given sqlite
