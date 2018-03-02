@@ -77,6 +77,12 @@ func updateHookTrampoline(handle uintptr, op int, db *C.char, table *C.char, row
 	callback(op, C.GoString(db), C.GoString(table), rowid)
 }
 
+//export walHookTrampoline
+func walHookTrampoline(handle uintptr, db *C.sqlite3, schema *C.char, n C.int) C.int {
+	callback := lookupHandle(handle).(func(string, int) int)
+	return C.int(callback(C.GoString(schema), int(n)))
+}
+
 // Use handles to avoid passing Go pointers to C.
 
 type handleVal struct {
@@ -97,7 +103,7 @@ func newHandle(db *SQLiteConn, v interface{}) uintptr {
 	return i
 }
 
-func lookupHandle(handle uintptr) interface{} {
+func lookupHandleVal(handle uintptr) handleVal {
 	handleLock.Lock()
 	defer handleLock.Unlock()
 	r, ok := handleVals[handle]
@@ -108,6 +114,11 @@ func lookupHandle(handle uintptr) interface{} {
 			panic("invalid handle")
 		}
 	}
+	return r
+}
+
+func lookupHandle(handle uintptr) interface{} {
+	r := lookupHandleVal(handle)
 	return r.val
 }
 

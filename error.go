@@ -63,12 +63,6 @@ var (
 	ErrWarning    = ErrNo(28) /* Warnings from sqlite3_log() */
 )
 
-// replication errors
-var (
-	ErrNotLeader   = ErrNo(C.SQLITE_NOTLEADER)
-	ErrReplication = ErrNo(C.SQLITE_REPLICATION)
-)
-
 // Error return error message from errno.
 func (err ErrNo) Error() string {
 	return Error{Code: err}.Error()
@@ -119,6 +113,8 @@ var (
 	ErrIoErrMMap              = ErrIoErr.Extend(24)
 	ErrIoErrGetTempPath       = ErrIoErr.Extend(25)
 	ErrIoErrConvPath          = ErrIoErr.Extend(26)
+	ErrIoErrNotLeader         = ErrIoErr.Extend(32)
+	ErrIoErrLeadershipLost    = ErrIoErr.Extend(33)
 	ErrLockedSharedCache      = ErrLocked.Extend(1)
 	ErrBusyRecovery           = ErrBusy.Extend(1)
 	ErrBusySnapshot           = ErrBusy.Extend(2)
@@ -146,11 +142,6 @@ var (
 	ErrNoticeRecoverRollback  = ErrNotice.Extend(2)
 	ErrWarningAutoIndex       = ErrWarning.Extend(1)
 )
-
-// ErrorString returns the error message for the given error code.
-func ErrorString(code ErrNo) string {
-	return C.GoString(C.sqlite3_errstr(C.int(code)))
-}
 
 func newError(rv C.int) error {
 	return Error{

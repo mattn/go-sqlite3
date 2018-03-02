@@ -1,233 +1,99 @@
-package sqlite3_test
+package sqlite3
 
 import (
-	"fmt"
-	"strconv"
+	"os"
 	"testing"
-	"unsafe"
-
-	"github.com/CanonicalLtd/go-sqlite3"
-	"github.com/mpvl/subtest"
 )
 
-func TestWalHook_Register(t *testing.T) {
-	conn, cleanup := newWalSQLiteConn()
-	defer cleanup()
+func TestWalHook(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	driver := &SQLiteDriver{}
+	conn, err := driver.Open(tempFilename)
+	if err != nil {
+		t.Fatalf("can't open connection to %s: %v", tempFilename, err)
+	}
+	defer conn.Close()
 
-	arg := unsafe.Pointer(new(int))
+	conni := conn.(*SQLiteConn)
+	pragmaWAL(t, conni)
 
 	triggered := false
-	walHook := func(hookArg unsafe.Pointer, hookConn *sqlite3.SQLiteConn, dbName string, frames int) error {
-		if hookArg != arg {
-			t.Errorf("wal hook invoked with unexpected arg")
-		}
-		if hookConn != conn {
-			t.Errorf("wal hook invoked with unexpected connection")
-		}
-		if dbName != "main" {
-			t.Errorf("wal hook invoked with unexpected database name:\n want: main\n  got: %s", dbName)
+	walHook := func(db string, n int) int {
+		if db != "main" {
+			t.Errorf("wal hook invoked with unexpected database name:\n want: main\n  got: %s", db)
 		}
 		triggered = true
-		return nil
+		return 0
 	}
 
-	sqlite3.WalHook(conn, walHook, arg)
+	conni.RegisterWalHook(walHook)
 
-	mustExec(conn, "CREATE TABLE test (n INT)", nil)
+	if _, err := conni.Exec("CREATE TABLE a (n INT)", nil); err != nil {
+		t.Fatal("failed to execute CREATE TABLE:", err)
+	}
 
 	if !triggered {
-		t.Error("wal hook was not triggered")
-	}
-}
-
-func TestWalHook_Unregister(t *testing.T) {
-	conn, cleanup := newWalSQLiteConn()
-	defer cleanup()
-
-	triggered := false
-
-	walHook := func(hookArg unsafe.Pointer, hookConn *sqlite3.SQLiteConn, dbName string, frames int) error {
-		triggered = true
-		return nil
+		t.Error("wal hook was not triggered after registration")
 	}
 
-	sqlite3.WalHook(conn, walHook, nil)
-	sqlite3.WalHook(conn, nil, nil)
+	triggered = false
+	conni.RegisterWalHook(nil)
 
-	mustExec(conn, "CREATE TABLE test (n INT)", nil)
+	if _, err := conni.Exec("CREATE TABLE b (n INT)", nil); err != nil {
+		t.Fatal("failed to execute CREATE TABLE:", err)
+	}
 
 	if triggered {
-		t.Error("wal hook was triggered")
+		t.Error("wal hook was triggered after unregistration")
 	}
 }
 
-func TestWalHook_ReturningAnError(t *testing.T) {
-	cases := []struct {
-		name string
-		err  error
-		want string
-	}{
-		{
-			name: "generic error",
-			err:  fmt.Errorf("boom"),
-			want: sqlite3.ErrorString(sqlite3.ErrError),
-		},
-		{
-			name: "SQLite error",
-			err:  sqlite3.Error{Code: sqlite3.ErrMisuse},
-			want: sqlite3.ErrorString(sqlite3.ErrMisuse),
-		},
+func TestWalCheckpoint(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	driver := &SQLiteDriver{}
+	conn, err := driver.Open(tempFilename)
+	if err != nil {
+		t.Fatalf("can't open connection to %s: %v", tempFilename, err)
 	}
-	for _, c := range cases {
-		subtest.Run(t, c.name, func(t *testing.T) {
-			conn, cleanup := newWalSQLiteConn()
-			defer cleanup()
+	defer conn.Close()
 
-			walHook := func(hookArg unsafe.Pointer, hookConn *sqlite3.SQLiteConn, dbName string, frames int) error {
-				return c.err // return the test case error
-			}
-			sqlite3.WalHook(conn, walHook, nil)
+	conni := conn.(*SQLiteConn)
+	pragmaWAL(t, conni)
 
-			_, err := conn.Exec("CREATE TABLE test (n INT)", nil)
-
-			if err == nil {
-				t.Fatal("hook error was not propagated")
-			}
-			got := err.Error()
-			if got != c.want {
-				t.Errorf("expected\n%q\ngot\n%q", c.want, got)
-			}
-		})
+	if _, err := conni.Exec("CREATE TABLE a (n INT)", nil); err != nil {
+		t.Fatal("failed to execute CREATE TABLE:", err)
 	}
-}
 
-func TestWalHook_NotFound(t *testing.T) {
-	conn, cleanup := newWalSQLiteConn()
-	defer cleanup()
-
-	walHook := func(hookArg unsafe.Pointer, hookConn *sqlite3.SQLiteConn, dbName string, frames int) error {
-		return nil
+	// Trying to use an invalid checkpoint mode results in an error
+	_, _, err = conni.WalCheckpoint("main", WalCheckpointMode(-1))
+	if err == nil {
+		t.Error("expected error when trying to set an invalid checkpoint mode")
 	}
-	sqlite3.WalHook(conn, walHook, nil)
-
-	// Pretend that the hook for this connection is not registered
-	sqlite3.WalHookInternalDelete(conn)
-
-	const want = "WAL hook not found"
-	defer func() {
-		got := recover()
-		if got != want {
-			t.Errorf("expected\n%q\ngot\n%q", want, got)
-		}
-	}()
-	mustExec(conn, "CREATE TABLE foo (n INT)", nil)
-}
-
-func TestWalSize_WalFileDoesNotExists(t *testing.T) {
-	conn, cleanup := newWalSQLiteConn()
-	defer cleanup()
-
-	if sqlite3.WalSize(conn) != -1 {
-		t.Errorf("did not return -1, meaning missing file")
+	if err.Error() != ErrMisuse.Error() {
+		t.Errorf(
+			"expected invalid checkpoint mode to fail with\n%q\ngot\n%q",
+			ErrMisuse.Error(), err.Error())
 	}
-}
-
-func TestWalCheckpointV2(t *testing.T) {
-	conn, cleanup := newWalSQLiteConn()
-	defer cleanup()
-
-	mustExec(conn, "CREATE TABLE test (n INT)", nil)
 
 	// Run the checkpoint.
-	size, checkpointed, err := sqlite3.WalCheckpointV2(conn, sqlite3.WalCheckpointTruncate)
+	size, ckpt, err := conni.WalCheckpoint("main", WalCheckpointTruncate)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("failed to checkpoint WAL:", err)
 	}
 
 	// Check that all frames were transferred to the database file.
 	if size != 0 {
 		t.Fatalf("%d frames still in the WAL", size)
 	}
-	if checkpointed != 0 {
-		t.Fatalf("%d frames were checkpointed", checkpointed)
-	}
-
-	// Make sure the WAL got truncated.
-	if sqlite3.WalSize(conn) != 0 {
-		t.Fatal("WAL file size is not zero after checkpoint")
-	}
-
-	// The frames containing the table have been actually
-	// checkpointed and are available in the main database file
-	mustQuery(conn, "SELECT * FROM test", nil)
-}
-
-func TestWalCheckpointV2_Error(t *testing.T) {
-	conn, cleanup := newWalSQLiteConn()
-	defer cleanup()
-
-	_, _, err := sqlite3.WalCheckpointV2(conn, sqlite3.WalCheckpointMode(-1))
-
-	if err == nil {
-		t.Fatal("expected error when trying to set an invalid checkpoint mode")
-	}
-	want := sqlite3.ErrorString(sqlite3.ErrMisuse)
-	got := err.Error()
-	if got != want {
-		t.Errorf("expected\n%q\ngot\n%q", want, got)
+	if ckpt != 0 {
+		t.Fatalf("only %d frames were checkpointed", ckpt)
 	}
 }
 
-func TestWalAutoCheckpointPragma(t *testing.T) {
-	pages := []int64{2000, 0}
-
-	for _, p := range pages {
-		subtest.Run(t, strconv.Itoa(int(p)), func(t *testing.T) {
-			conn, cleanup := newFileSQLiteConn()
-			defer cleanup()
-
-			if err := sqlite3.WalAutoCheckpointPragma(conn, p); err != nil {
-				t.Error(err)
-			}
-		})
+func pragmaWAL(t *testing.T, conn *SQLiteConn) {
+	if _, err := conn.Exec("PRAGMA journal_mode=WAL;", nil); err != nil {
+		t.Fatal("Failed to Exec PRAGMA journal_mode:", err)
 	}
-}
-
-func TestWalAutoCheckpointPragma_Invalid(t *testing.T) {
-	conn, cleanup := newFileSQLiteConn()
-	defer cleanup()
-
-	err := sqlite3.WalAutoCheckpointPragma(conn, -1)
-
-	if err == nil {
-		t.Fatal("expected error when trying to set auto-checkpoint threshold to -1")
-	}
-	const want = "failed to set wal auto checkpoint to '-1': query 'PRAGMA wal_autocheckpoint=-1' returned '0' instead of '-1'"
-	got := err.Error()
-	if got != want {
-		t.Errorf("expected\n%q\ngot\n%q", want, got)
-	}
-}
-
-func TestShmFilename(t *testing.T) {
-	conn, cleanup := newFileSQLiteConn()
-	defer cleanup()
-
-	got := sqlite3.ShmFilename(conn)
-	want := sqlite3.DatabaseFilename(conn) + "-shm"
-	if got != want {
-		t.Errorf("got shm filename '%s', want '%s'", got, want)
-	}
-}
-
-// Return a SQLiteConn opened against a temporary database filename
-// and set to WAL journal mode.
-func newWalSQLiteConn() (*sqlite3.SQLiteConn, func()) {
-	conn, cleanup := newFileSQLiteConn()
-
-	if err := sqlite3.JournalModePragma(conn, sqlite3.JournalWal); err != nil {
-		panic(fmt.Sprintf("failed to set WAL journal mode: %v", err))
-	}
-
-	return conn, cleanup
 }

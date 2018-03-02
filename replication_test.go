@@ -1,201 +1,26 @@
-package sqlite3_test
+package sqlite3
 
 import (
 	"fmt"
+	"os"
 	"testing"
-	"unsafe"
-
-	"github.com/CanonicalLtd/go-sqlite3"
 )
 
-func TestReplicationLeader_CannotSetNonWalJournal(t *testing.T) {
-	conn, cleanup := newFileSQLiteConn()
-	defer cleanup()
-
-	err := sqlite3.ReplicationLeader(conn, sqlite3.PassthroughReplicationMethods())
-
-	if err == nil {
-		t.Fatal("expected error when trying to set replication leader mode on non-WAL database")
-	}
-	want := sqlite3.ErrorString(sqlite3.ErrMisuse)
-	got := err.Error()
-	if got != want {
-		t.Errorf("expected\n%q\ngot\n%q", want, got)
-	}
-}
-
-func TestReplicationLeader_CannotSetTwice(t *testing.T) {
-	methods := sqlite3.PassthroughReplicationMethods()
-	conn, cleanup := newLeaderSQLiteConn(methods)
-	defer cleanup()
-
-	err := sqlite3.ReplicationLeader(conn, methods)
-
-	if err == nil {
-		t.Fatal("expected error when trying to set replication leader mode twice")
-	}
-	const want = "leader replication already enabled for this connection"
-	got := err.Error()
-	if got != want {
-		t.Errorf("expected\n%q\ngot\n%q", want, got)
-	}
-}
-
-func TestReplicationNone_CannotSetWithNonLeader(t *testing.T) {
-	conn, cleanup := newFileSQLiteConn()
-	defer cleanup()
-
-	_, err := sqlite3.ReplicationNone(conn)
-
-	if err == nil {
-		t.Fatal("expected error when trying to set replication none on non-leader connection")
-	}
-	const want = "leader replication is not enabled for this connection"
-	got := err.Error()
-	if got != want {
-		t.Errorf("expected\n%q\ngot\n%q", want, got)
-	}
-}
-
-func TestReplicationFollower_CannotSetWithNonWalJournal(t *testing.T) {
-	conn, cleanup := newFileSQLiteConn()
-	defer cleanup()
-
-	err := sqlite3.ReplicationFollower(conn)
-
-	if err == nil {
-		t.Fatal("expected error when trying to set replication follower mode on non-WAL database")
-	}
-	want := sqlite3.ErrorString(sqlite3.ErrMisuse)
-	got := err.Error()
-	if got != want {
-		t.Errorf("expected\n%q\ngot\n%q", want, got)
-	}
-}
-
-func TestReplicationFollower_DisableRegularOperations(t *testing.T) {
-	conn, cleanup := newFollowerSQLiteConn()
-	defer cleanup()
-
-	_, err := conn.Exec("SELECT * FROM sqlite_master", nil)
-
-	if err == nil {
-		t.Fatal("expected error when trying to perform a query in replication follower mode")
-	}
-	const want = "database is in follower replication mode: main"
-	got := err.Error()
-	if got != want {
-		t.Errorf("expected\n%q\ngot\n%q", want, got)
-	}
-}
-
-func TestReplicationNone_CannotUseIfReplicationModeIsFollower(t *testing.T) {
-	conn, cleanup := newFollowerSQLiteConn()
-	defer cleanup()
-
-	defer sqlite3.ReplicationRegisterMethodsInstance(conn)()
-	_, err := sqlite3.ReplicationNone(conn)
-
-	if err == nil {
-		t.Fatal("expected error when trying to use ReplicationNone with replication mode follower")
-	}
-	want := sqlite3.ErrorString(sqlite3.ErrMisuse)
-	got := err.Error()
-	if got != want {
-		t.Errorf("expected\n%q\ngot\n%q", want, got)
-	}
-}
-
-func TestReplicationMode(t *testing.T) {
-	var mode sqlite3.Replication
-	hook := func(conn *sqlite3.SQLiteConn) sqlite3.ErrNo {
-		var err error
-		mode, err = sqlite3.ReplicationMode(conn)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return sqlite3.ErrInternal
-	}
-	methods := &hookReplicationMethods{hook: hook}
-	conn, cleanup := newLeaderSQLiteConn(methods)
-	defer cleanup()
-
-	if _, err := conn.Exec("CREATE TABLE foo (int N)", nil); err == nil {
-		t.Fatal("expected create table to trigger failing hook")
-	}
-
-	if mode != sqlite3.ReplicationModeLeader {
-		t.Errorf("got replication mode %d instead of leader", mode)
-	}
-}
-
-func TestReplicationBegin_MethodsInstanceNotRegistered(t *testing.T) {
-	const want = "replication hooks not found"
-	defer func() {
-		got := recover()
-		if got != want {
-			t.Errorf("expected\n%q\ngot\n%q", want, got)
-		}
-	}()
-	sqlite3.ReplicationBeginHook(unsafe.Pointer(nil))
-}
-
-/*
-func TestReplication_CannotUseIfReplicationModeIsNone(t *testing.T) {
-	// Wrapper around ReplicationWalFrames providing test parameters
-	replicationWalFrames := func(conn *sqlite3.SQLiteConn) error {
-		params := &sqlite3.ReplicationWalFramesParams{
-			Pages: sqlite3.NewReplicationPages(2, 4096),
-		}
-		return sqlite3.ReplicationWalFrames(conn, params)
-	}
-
-	cases := []struct {
-		name   string
-		method func(*sqlite3.SQLiteConn) error
-	}{
-		{"ReplicationBegin", sqlite3.ReplicationBegin},
-		{"ReplicationWalFrames", replicationWalFrames},
-		{"ReplicationUndo", sqlite3.ReplicationEnd},
-		{"ReplicationEnd", sqlite3.ReplicationEnd},
-	}
-
-	for _, c := range cases {
-		subtest.Run(t, c.name, func(t *testing.T) {
-			conn, cleanup := newFileSQLiteConn()
-			defer cleanup()
-
-			if err := sqlite3.JournalModePragma(conn, sqlite3.JournalWal); err != nil {
-				t.Fatalf("failed to set WAL journal mode: %v", err)
-			}
-
-			err := c.method(conn)
-			if err == nil {
-				t.Fatalf("expected error when trying to use %s with replication mode none", c.name)
-			}
-			want := sqlite3.ErrorString(sqlite3.ErrMisuse)
-			got := err.Error()
-			if got != want {
-				t.Errorf("expected\n%q\ngot\n%q", want, got)
-			}
-		})
-	}
-}
-*/
-
 func TestReplicationPages(t *testing.T) {
-	pages := sqlite3.NewReplicationPages(2, 4096)
+	pages := NewReplicationPages(2, 4096)
 	if len(pages) != 2 {
 		t.Fatalf("Got %d pages instead of 2", len(pages))
 	}
-	for i := range pages {
-		page := pages[i]
+	for i, page := range pages {
 		if page.Data() == nil {
 			t.Errorf("The data buffer for page %d is not allocated", i)
 		}
+		if n := len(page.Data()); n != 4096 {
+			t.Errorf("The data buffer for page %d has unexpected lenght %d", i, n)
+		}
 		page.Fill([]byte("hello"), 1, uint32(i))
-		if page.Data() == nil {
-			t.Errorf("The data buffer for page %d is NULL", i)
+		if string(page.Data()) != "hello" {
+			t.Errorf("The data buffer for page %d does not match the given bytes", i)
 		}
 		if page.Flags() != 1 {
 			t.Errorf("Failed to fill flags for page %d", i)
@@ -206,298 +31,450 @@ func TestReplicationPages(t *testing.T) {
 	}
 }
 
-func TestReplicationMethods_Commit(t *testing.T) {
-	cluster, cleanup := newReplicationCluster()
-	defer cleanup()
-
-	mustExec(cluster.Leader, "BEGIN; CREATE TABLE test (n INT); INSERT INTO test VALUES(1); COMMIT", nil)
-
-	rows := mustQuery(cluster.Observer, "SELECT * FROM test", nil)
-	defer rows.Close()
-
-	if err := rows.Next(nil); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestReplicationMethods_Rollback(t *testing.T) {
-	cluster, cleanup := newReplicationCluster()
-	defer cleanup()
-
-	mustExec(cluster.Leader, "CREATE TABLE test (n INT)", nil)
-	mustExec(cluster.Leader, "BEGIN; INSERT INTO test VALUES(1); ROLLBACK", nil)
-
-	rows := mustQuery(cluster.Observer, "SELECT * FROM test", nil)
-	defer rows.Close()
-
-	if err := rows.Next(nil); err == nil {
-		t.Fatal("follower database was not rolled back")
-	}
-}
-
-func TestReplicationCheckpoint(t *testing.T) {
-	cluster, cleanup := newReplicationCluster()
-	defer cleanup()
-
-	sqlite3.ReplicationAutoCheckpoint(cluster.Leader, 1)
-
-	mustExec(cluster.Leader, "CREATE TABLE test (n INT)", nil)
-	if sqlite3.WalSize(cluster.Leader) != 0 {
-		t.Fatal("leader WAL file was not truncated")
-	}
-	if sqlite3.WalSize(cluster.Follower) != 0 {
-		t.Fatal("follower WAL file was not truncated")
-	}
-}
-
-func TestReplicationCheckpoint_Error(t *testing.T) {
-	conn1, cleanup1 := newLeaderSQLiteConn(sqlite3.PassthroughReplicationMethods())
-	defer cleanup1()
-
-	conn2 := newSQLiteConn(sqlite3.DatabaseFilename(conn1))
-
-	if _, err := conn1.Exec("CREATE TABLE test (n INT)", nil); err != nil {
-		t.Fatal(err)
-	}
-
-	sqlite3.ReplicationAutoCheckpoint(conn1, 1)
-	if err := sqlite3.BusyTimeoutPragma(conn1, 1); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := conn1.Exec("BEGIN", nil); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := conn2.Exec("BEGIN", nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn2.Exec("SELECT * FROM test", nil); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := conn1.Exec("INSERT INTO test VALUES(1)", nil); err != nil {
-		t.Fatal(err)
-	}
-
-	// The PassthroughReplicationMethods.Checkpoint callback should panic
-	// on error.
-	defer func() {
-		err, ok := recover().(sqlite3.Error)
-		if !ok {
-			t.Fatal("expected checkpoint to panic with a sqlite3.Error")
-		}
-		if err.Code != sqlite3.ErrBusy {
-			t.Fatalf("expected SQLite ErrBusy, got %d", err.Code)
-		}
-	}()
-	mustExec(conn1, "COMMIT", nil)
-}
-
-func TestPassthroughReplicationMethods(t *testing.T) {
-	methods := sqlite3.PassthroughReplicationMethods()
-	conn, cleanup := newLeaderSQLiteConn(methods)
-	defer cleanup()
-
-	// Set auto-checkpoint to 1 so we trigger the checkpoint hook too.
-	sqlite3.ReplicationAutoCheckpoint(conn, 1)
-
-	mustExec(conn, "BEGIN; CREATE TABLE test (n INT); COMMIT", nil)
-	mustQuery(conn, "BEGIN; SELECT * FROM test; COMMIT;", nil)
-	mustExec(conn, "BEGIN; INSERT INTO test VALUES(1); ROLLBACK", nil)
-}
-
-/*
-func TestPassthroughReplicationMethods_Panic(t *testing.T) {
-	methods := sqlite3.PassthroughReplicationMethods()
-	cases := map[string]func(*sqlite3.SQLiteConn){
-		"begin": func(c *sqlite3.SQLiteConn) {
-			methods.Begin(c)
+func TestReplicationModesErrors(t *testing.T) {
+	cases := []struct {
+		name string                                     // Name of the test
+		f    func(t *testing.T, conn *SQLiteConn) error // Scenario leading to an error
+	}{
+		{
+			"connection not in WAL mode: follower",
+			func(t *testing.T, conn *SQLiteConn) error {
+				return conn.ReplicationLeader(NoopReplicationMethods())
+			},
 		},
-		"wal frames": func(c *sqlite3.SQLiteConn) {
-			params := &sqlite3.ReplicationWalFramesParams{
-				Pages: sqlite3.NewReplicationPages(2, 4096),
+		{
+			"connection not in WAL mode: leader",
+			func(t *testing.T, conn *SQLiteConn) error {
+				return conn.ReplicationFollower()
+			},
+		},
+		{
+			"cannot set twice: leader",
+			func(t *testing.T, conn *SQLiteConn) error {
+				pragmaWAL(t, conn)
+				err := conn.ReplicationLeader(NoopReplicationMethods())
+				if err != nil {
+					t.Fatal("failed to set leader replication:", err)
+				}
+				return conn.ReplicationLeader(NoopReplicationMethods())
+			},
+		},
+		{
+			"cannot set twice: follower",
+			func(t *testing.T, conn *SQLiteConn) error {
+				pragmaWAL(t, conn)
+				err := conn.ReplicationFollower()
+				if err != nil {
+					t.Fatal("failed to set follower replication:", err)
+				}
+				return conn.ReplicationFollower()
+			},
+		},
+		{
+			"cannot switch from leader to follower",
+			func(t *testing.T, conn *SQLiteConn) error {
+				pragmaWAL(t, conn)
+				err := conn.ReplicationLeader(NoopReplicationMethods())
+				if err != nil {
+					t.Fatal("failed to set leader replication:", err)
+				}
+				return conn.ReplicationFollower()
+			},
+		},
+		{
+			"cannot switch from follower to leader",
+			func(t *testing.T, conn *SQLiteConn) error {
+				pragmaWAL(t, conn)
+				err := conn.ReplicationFollower()
+				if err != nil {
+					t.Fatal("failed to set follower replication:", err)
+				}
+				return conn.ReplicationLeader(NoopReplicationMethods())
+			},
+		},
+		{
+			"cannot run queries as follower",
+			func(t *testing.T, conn *SQLiteConn) error {
+				pragmaWAL(t, conn)
+				err := conn.ReplicationFollower()
+				if err != nil {
+					t.Fatal("failed to set follower replication:", err)
+				}
+				_, err = conn.Query("SELECT 1", nil)
+				return err
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tempFilename := TempFilename(t)
+			defer os.Remove(tempFilename)
+
+			driver := &SQLiteDriver{}
+			conn, err := driver.Open(tempFilename)
+			if err != nil {
+				t.Fatalf("can't open connection to %s: %v", tempFilename, err)
 			}
-			methods.WalFrames(c, params)
-		},
-		"undo": func(c *sqlite3.SQLiteConn) {
-			methods.Undo(c)
-		},
-		"end": func(c *sqlite3.SQLiteConn) {
-			methods.End(c)
-		},
-		"checkpoint": func(c *sqlite3.SQLiteConn) {
-			methods.Checkpoint(c, sqlite3.WalCheckpointPassive, nil, nil)
-		},
-	}
+			conni := conn.(*SQLiteConn)
+			defer conni.Close()
 
-	for name, method := range cases {
-		subtest.Run(t, name, func(t *testing.T) {
-			conn := newMemorySQLiteConn()
-			want := sqlite3.ErrorString(sqlite3.ErrMisuse)
-			defer func() {
-				err, ok := recover().(error)
-				if !ok {
-					t.Error("recover() return value is not an error")
-				}
-				got := err.Error()
-				if got != want {
-					t.Errorf("expected panic\n%q\ngot\n%q", want, got)
-				}
-			}()
-			method(conn)
+			err = c.f(t, conni)
+			if err == nil {
+				t.Fatal("no error was returned")
+			}
+			erri, ok := err.(Error)
+			if !ok {
+				t.Fatalf("returned error %#v is not of type Error", erri)
+			}
+			if erri.Code != ErrError {
+				t.Errorf("expected error code %d, got %d", ErrError, erri.Code)
+			}
+
 		})
 	}
-
-}
-*/
-
-// A cluster of replicated connections composed by one leader, one
-// follower and one observer connection connected to the same database
-// as the follower.
-type replicationCluster struct {
-	Leader   *sqlite3.SQLiteConn
-	Follower *sqlite3.SQLiteConn
-	Observer *sqlite3.SQLiteConn
 }
 
-// Return a SQLiteConn opened against a temporary database filename,
-// set to WAL journal mode and configured for follower replication.
-func newFollowerSQLiteConn() (*sqlite3.SQLiteConn, func()) {
-	conn, cleanup := newFileSQLiteConn()
+func TestReplicationMethods(t *testing.T) {
+	conns := make([]*SQLiteConn, 2) // Index 0 is the leader and index 1 is the follower
 
-	if err := sqlite3.JournalModePragma(conn, sqlite3.JournalWal); err != nil {
-		panic(fmt.Sprintf("failed to set WAL journal mode: %v", err))
-	}
-
-	if err := sqlite3.DatabaseNoCheckpointOnClose(conn); err != nil {
-		panic(fmt.Sprintf("failed to set disable checkpoint on close: %v", err))
-	}
-
-	if err := sqlite3.ReplicationFollower(conn); err != nil {
-		panic(fmt.Sprintf("failed to set follower replication mode: %v", err))
-	}
-	return conn, cleanup
-}
-
-// Return a SQLiteConn opened against a temporary database filename,
-// set to WAL journal mode and configured for leader replication.
-func newLeaderSQLiteConn(methods sqlite3.ReplicationMethods) (*sqlite3.SQLiteConn, func()) {
-	conn, connCleanup := newFileSQLiteConn()
-
-	if err := sqlite3.JournalModePragma(conn, sqlite3.JournalWal); err != nil {
-		panic(fmt.Sprintf("failed to set WAL journal mode: %v", err))
-	}
-
-	if err := sqlite3.ReplicationLeader(conn, methods); err != nil {
-		panic(fmt.Sprintf("failed to set leader replication mode: %v", err))
-	}
-	cleanup := func() {
-		if _, err := sqlite3.ReplicationNone(conn); err != nil {
-			panic(fmt.Sprintf("failed to set replication mode to none: %v", err))
+	// Open the connections.
+	driver := &SQLiteDriver{}
+	for i := range conns {
+		tempFilename := TempFilename(t)
+		defer os.Remove(tempFilename)
+		conn, err := driver.Open(tempFilename)
+		if err != nil {
+			t.Fatalf("can't open connection to %s: %v", tempFilename, err)
 		}
-		connCleanup()
+		defer conn.Close()
+
+		conni := conn.(*SQLiteConn)
+		pragmaWAL(t, conni)
+		conns[i] = conni
 	}
-	return conn, cleanup
-}
+	leader := conns[0]
+	follower := conns[1]
 
-func newReplicationCluster() (*replicationCluster, func()) {
-	follower, followerCleanup := newFollowerSQLiteConn()
-	methods := &directReplicationMethods{followers: []*sqlite3.SQLiteConn{follower}}
-	leader, leaderCleanup := newLeaderSQLiteConn(methods)
-	observer := newSQLiteConn(sqlite3.DatabaseFilename(follower))
-
-	cluster := &replicationCluster{
-		Follower: follower,
-		Leader:   leader,
-		Observer: observer,
+	// Set leader replication on conn 0.
+	methods := &directReplicationMethods{
+		follower: follower,
 	}
-
-	cleanup := func() {
-		leaderCleanup()
-		followerCleanup()
+	if err := leader.ReplicationLeader(methods); err != nil {
+		t.Fatal("failed to switch to leader replication:", err)
 	}
 
-	return cluster, cleanup
+	// Set follower replication on conn 1.
+	if err := follower.ReplicationFollower(); err != nil {
+		t.Fatal("failed to switch to follower replication:", err)
+	}
+
+	// Create a table on the leader.
+	if _, err := leader.Exec("CREATE TABLE a (n INT)", nil); err != nil {
+		t.Fatal("failed to execute query on leader:", err)
+	}
+
+	// Rollback a transaction on the leader.
+	if _, err := leader.Exec("BEGIN; CREATE TABLE b (n INT); ROLLBACK", nil); err != nil {
+		t.Fatal("failed to rollback query on leader:", err)
+	}
+
+	// Check that the follower has replicated the commit but not the rollback.
+	if err := follower.ReplicationNone(); err != nil {
+		t.Fatal("failed to turn off follower replication:", err)
+	}
+	if _, err := follower.Query("SELECT 1", nil); err != nil {
+		t.Fatal("failed to execute query on follower:", err)
+	}
+	if _, err := follower.Query("SELECT n FROM a", nil); err != nil {
+		t.Fatal("failed to execute query on follower:", err)
+	}
+	if _, err := follower.Query("SELECT n FROM b", nil); err == nil {
+		t.Fatal("expected error when querying rolled back table:", err)
+	}
 }
 
 // ReplicationMethods implementation that replicates WAL commands directly
-// across the given follower connections.
+// to the given follower.
 type directReplicationMethods struct {
-	followers []*sqlite3.SQLiteConn
+	follower *SQLiteConn
+	writing  bool
 }
 
-func (m *directReplicationMethods) Begin(conn *sqlite3.SQLiteConn) sqlite3.ErrNo {
-	conns := append(m.followers, conn)
-	for i, conn := range conns {
-		if err := sqlite3.ReplicationBegin(conn); err != nil {
-			panic(fmt.Sprintf("begin failed on conn %d: %v", i, err))
+func (m *directReplicationMethods) Begin(conn *SQLiteConn) ErrNo {
+	return 0
+}
+
+func (m *directReplicationMethods) Abort(conn *SQLiteConn) ErrNo {
+	return 0
+}
+
+func (m *directReplicationMethods) Frames(conn *SQLiteConn, params *ReplicationFramesParams) ErrNo {
+	begin := false
+	if !m.writing {
+		begin = true
+		m.writing = true
+	}
+	if err := ReplicationFrames(m.follower, begin, params); err != nil {
+		panic(fmt.Sprintf("frames failed: %v", err))
+	}
+	if params.IsCommit == 1 {
+		m.writing = false
+	}
+	return 0
+}
+
+func (m *directReplicationMethods) Undo(conn *SQLiteConn) ErrNo {
+	if m.writing {
+		if err := ReplicationUndo(m.follower); err != nil {
+			panic(fmt.Sprintf("undo failed: %v", err))
 		}
 	}
 	return 0
 }
 
-func (m *directReplicationMethods) WalFrames(conn *sqlite3.SQLiteConn, params *sqlite3.ReplicationWalFramesParams) sqlite3.ErrNo {
-	conns := append(m.followers, conn)
-	for i, conn := range conns {
-		if err := sqlite3.ReplicationWalFrames(conn, params); err != nil {
-			panic(fmt.Sprintf("wal frames failed on conn %d: %v", i, err))
-		}
-	}
+func (m *directReplicationMethods) End(conn *SQLiteConn) ErrNo {
 	return 0
 }
 
-func (m *directReplicationMethods) Undo(conn *sqlite3.SQLiteConn) sqlite3.ErrNo {
-	conns := append(m.followers, conn)
-	for i, conn := range conns {
-		if err := sqlite3.ReplicationUndo(conn); err != nil {
-			panic(fmt.Sprintf("undo failed on conn %d: %v", i, err))
+// An xBegin error never triggers an xUndo callback and SQLite takes care of
+// releasing the WAL write lock, if acquired.
+func TestReplicationMethods_BeginError(t *testing.T) {
+	// Open the leader connection.
+	cases := []struct {
+		errno ErrNoExtended
+		lock  bool
+	}{
+		{ErrConstraintCheck, false},
+		{ErrConstraintCheck, true},
+		{ErrCorruptVTab, true},
+		{ErrCorruptVTab, false},
+		{ErrIoErrNotLeader, true},
+		{ErrIoErrNotLeader, false},
+		{ErrIoErrLeadershipLost, true},
+		{ErrIoErrLeadershipLost, false},
+		{ErrIoErrRead, true},
+		{ErrIoErrRead, false},
+		{ErrIoErrWrite, true},
+		{ErrIoErrWrite, false},
+	}
+
+	for _, c := range cases {
+		name := fmt.Sprintf("%s-%v", c.errno, c.lock)
+		t.Run(name, func(t *testing.T) {
+			// Create a leader connection with the appropriate
+			// replication methods.
+			driver := &SQLiteDriver{}
+			tempFilename := TempFilename(t)
+			defer os.Remove(tempFilename)
+
+			conni, err := driver.Open(tempFilename)
+			if err != nil {
+				t.Fatalf("can't open connection to %s: %v", tempFilename, err)
+			}
+			defer conni.Close()
+
+			conn := conni.(*SQLiteConn)
+			pragmaWAL(t, conn)
+
+			// Set leader replication on conn 0.
+			methods := &failingReplicationMethods{
+				conn:  conn,
+				hook:  "begin",
+				lock:  c.lock,
+				errno: c.errno,
+			}
+			if err := conn.ReplicationLeader(methods); err != nil {
+				t.Fatal("failed to switch to leader replication:", err)
+			}
+
+			// Execute a query that should error and be rolled back.
+			tx, err := conn.Begin()
+			if err != nil {
+				t.Fatal("failed to begin transaction", err)
+			}
+			_, err = conn.Exec("CREATE TABLE test (n INT)", nil)
+			erri, ok := err.(Error)
+			if !ok {
+				t.Fatalf("returned error %#v is not of type Error", erri)
+			}
+			if erri.ExtendedCode != c.errno {
+				t.Errorf("expected error code %d, got %d", c.errno, erri.ExtendedCode)
+			}
+			err = tx.Rollback()
+
+			// ErrIo errors will also fail to rollback, while other
+			// errors are fine.
+			if erri.Code == ErrIoErr {
+				if err == nil {
+					t.Fatal("expected rollback error")
+				}
+				if err.Error() != "cannot rollback - no transaction is active" {
+					t.Fatal("expected different rollback error")
+				}
+			} else {
+				if err != nil {
+					t.Fatal("failed to rollback", err)
+				}
+			}
+
+			// Execute a second query with no error.
+			methods.hook = ""
+			tx, err = conn.Begin()
+			if err != nil {
+				t.Fatal("failed to begin transaction", err)
+			}
+			_, err = conn.Exec("CREATE TABLE test (n INT)", nil)
+			if err != nil {
+				t.Fatal("failed to execute query", err)
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal("failed to commit transaction", err)
+			}
+		})
+	}
+}
+
+// An xFrames error triggers the xUndo callback.
+func TestReplicationMethods_FramesError(t *testing.T) {
+	// Create a leader connection with the appropriate
+	// replication methods.
+	driver := &SQLiteDriver{}
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+
+	conni, err := driver.Open(tempFilename)
+	if err != nil {
+		t.Fatalf("can't open connection to %s: %v", tempFilename, err)
+	}
+	defer conni.Close()
+
+	conn := conni.(*SQLiteConn)
+	pragmaWAL(t, conn)
+
+	// Set leader replication on conn 0.
+	methods := &failingReplicationMethods{
+		conn:  conn,
+		hook:  "frames",
+		errno: ErrIoErrNotLeader,
+	}
+	if err := conn.ReplicationLeader(methods); err != nil {
+		t.Fatal("failed to switch to leader replication:", err)
+	}
+	_, err = conn.Exec("CREATE TABLE test (n INT)", nil)
+	erri, ok := err.(Error)
+	if !ok {
+		t.Fatalf("returned error %#v is not of type Error", erri)
+	}
+	if erri.ExtendedCode != ErrIoErrNotLeader {
+		t.Errorf("expected error code %d, got %d", ErrIoErrNotLeader, erri.ExtendedCode)
+	}
+	if n := len(methods.fired); n != 4 {
+		t.Fatalf("expected 4 hooks to be fired, instead of %d", n)
+	}
+	hooks := []string{"begin", "frames", "undo", "end"}
+	for i := range methods.fired {
+		if hook := methods.fired[i]; hook != hooks[i] {
+			t.Errorf("expected hook %s to be fired, instead of %s", hooks[i], hook)
 		}
 	}
+}
+
+// If an xUndo hook fails, the ROLLBACK query still succeeds.
+func TestReplicationMethods_UndoError(t *testing.T) {
+	// Create a leader connection with the appropriate
+	// replication methods.
+	driver := &SQLiteDriver{}
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+
+	conni, err := driver.Open(tempFilename)
+	if err != nil {
+		t.Fatalf("can't open connection to %s: %v", tempFilename, err)
+	}
+	defer conni.Close()
+
+	conn := conni.(*SQLiteConn)
+	pragmaWAL(t, conn)
+
+	// Set leader replication on conn 0.
+	methods := &failingReplicationMethods{
+		conn:  conn,
+		hook:  "undo",
+		errno: ErrIoErrNotLeader,
+	}
+	if err := conn.ReplicationLeader(methods); err != nil {
+		t.Fatal("failed to switch to leader replication:", err)
+	}
+	_, err = conn.Exec("BEGIN; CREATE TABLE test (n INT); ROLLBACK", nil)
+	if err != nil {
+		t.Fatal("rollback failed", err)
+	}
+	if n := len(methods.fired); n != 3 {
+		t.Fatalf("expected 3 hooks to be fired, instead of %d", n)
+	}
+	hooks := []string{"begin", "undo", "end"}
+	for i := range methods.fired {
+		if hook := methods.fired[i]; hook != hooks[i] {
+			t.Errorf("expected hook %s to be fired, instead of %s", hooks[i], hook)
+		}
+	}
+}
+
+// ReplicationMethods implementation that fails in a programmable way.
+type failingReplicationMethods struct {
+	conn  *SQLiteConn   // Leader connection
+	lock  bool          // Whether to acquire the WAL write lock before failing
+	hook  string        // Name of the hook that should fail
+	errno ErrNoExtended // Error to be returned by the hook
+	fired []string      // Hooks that were fired
+}
+
+func (m *failingReplicationMethods) Begin(conn *SQLiteConn) ErrNo {
+	m.fired = append(m.fired, "begin")
+
+	if m.hook == "begin" {
+		return ErrNo(m.errno)
+	}
+
 	return 0
 }
 
-func (m *directReplicationMethods) End(conn *sqlite3.SQLiteConn) sqlite3.ErrNo {
-	conns := append(m.followers, conn)
-	for i, conn := range conns {
-		if err := sqlite3.ReplicationEnd(conn); err != nil {
-			panic(fmt.Sprintf("end failed on conn %d: %v", i, err))
-		}
-	}
+func (m *failingReplicationMethods) Abort(conn *SQLiteConn) ErrNo {
 	return 0
 }
 
-func (m *directReplicationMethods) Checkpoint(conn *sqlite3.SQLiteConn, mode sqlite3.WalCheckpointMode, log *int, ckpt *int) sqlite3.ErrNo {
-	conns := append(m.followers, conn)
-	for i, conn := range conns {
-		if err := sqlite3.ReplicationCheckpoint(conn, mode, log, ckpt); err != nil {
-			panic(fmt.Sprintf("checkpoint failed on conn %d: %v", i, err))
-		}
+func (m *failingReplicationMethods) Frames(conn *SQLiteConn, params *ReplicationFramesParams) ErrNo {
+	m.fired = append(m.fired, "frames")
+
+	if m.hook == "begin" {
+		panic("frames hook should not be reached")
 	}
+	if m.hook == "frames" {
+		return ErrNo(m.errno)
+	}
+
 	return 0
 }
 
-// ReplicationMethods implementation that defers execution to the given hook.
-type hookReplicationMethods struct {
-	hook func(*sqlite3.SQLiteConn) sqlite3.ErrNo
+func (m *failingReplicationMethods) Undo(conn *SQLiteConn) ErrNo {
+	m.fired = append(m.fired, "undo")
+
+	if m.hook == "begin" {
+		panic("undo hook should not be reached")
+	}
+	if m.hook == "undo" {
+		return ErrNo(m.errno)
+	}
+
+	return 0
 }
 
-func (m *hookReplicationMethods) Begin(conn *sqlite3.SQLiteConn) sqlite3.ErrNo {
-	return m.hook(conn)
-}
+func (m *failingReplicationMethods) End(conn *SQLiteConn) ErrNo {
+	m.fired = append(m.fired, "end")
 
-func (m *hookReplicationMethods) WalFrames(conn *sqlite3.SQLiteConn, params *sqlite3.ReplicationWalFramesParams) sqlite3.ErrNo {
-	return m.hook(conn)
-}
+	if m.hook == "end" {
+		return ErrNo(m.errno)
+	}
 
-func (m *hookReplicationMethods) Undo(conn *sqlite3.SQLiteConn) sqlite3.ErrNo {
-	return m.hook(conn)
-}
-
-func (m *hookReplicationMethods) End(conn *sqlite3.SQLiteConn) sqlite3.ErrNo {
-	return m.hook(conn)
-}
-
-func (m *hookReplicationMethods) Checkpoint(conn *sqlite3.SQLiteConn, mode sqlite3.WalCheckpointMode, log *int, ckpt *int) sqlite3.ErrNo {
-	return m.hook(conn)
+	return 0
 }

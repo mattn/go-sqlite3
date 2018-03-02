@@ -1,6 +1,7 @@
 package sqlite3
 
 /*
+#cgo CFLAGS: -DSQLITE_ENABLE_REPLICATION
 #include <string.h>
 #ifndef USE_LIBSQLITE3
 #include <sqlite3-binding.h>
@@ -10,29 +11,34 @@ package sqlite3
 #include <stdlib.h>
 
 // SQLite replication hooks
-extern int replicationBegin(void *pArg);
-extern int replicationWalFrames(void *pArg, int szPage, int nList, sqlite3_replication_page *pList, unsigned nTruncate, int isCommit, unsigned sync_flags);
-extern int replicationUndo(void *pArg);
-extern int replicationEnd(void *pArg);
-extern int replicationCheckpoint(void *pArg, int eMode, int *pnLog, int *pnCkpt);
+int replicationBegin(void*);
+int replicationAbort(void*);
+int replicationFrames(void*, int, int, sqlite3_replication_page*, unsigned, int, unsigned);
+int replicationUndo(void*);
+int replicationEnd(void*);
 
 // SQLite replication implementation
 static sqlite3_replication_methods replicationMethods = {
   replicationBegin,
-  replicationWalFrames,
+  replicationAbort,
+  replicationFrames,
   replicationUndo,
   replicationEnd,
-  replicationCheckpoint
 };
 
-static int replicationLeader(sqlite3 *db) {
-  return sqlite3_replication_leader(db, "main", &replicationMethods, db);
-};
+// Wrapper around sqlite3_config() for invoking the SQLITE_CONFIG_REPLICATION
+// opcode, since there's no way to use C varargs from Go.
+static int replicationConfig() {
+  return sqlite3_config(SQLITE_CONFIG_REPLICATION, &replicationMethods);
+}
 
+// Allocate the given number of replication pages.
 static sqlite3_replication_page* replicationPagesAlloc(int nList) {
   return (sqlite3_replication_page*)sqlite3_malloc(sizeof(sqlite3_replication_page) * (nList));
 };
 
+// Helper for copying a replication page from Go memory to C memory (pData should
+// be an unsafe.Pointer to the first element of a Go slice).
 static void replicationPagesFill(sqlite3_replication_page* pList,
   int i, int szPage, void* pData, unsigned flags, unsigned pgno) {
   sqlite3_replication_page* pReplPg = pList + i;
@@ -42,6 +48,7 @@ static void replicationPagesFill(sqlite3_replication_page* pList,
   memcpy(pReplPg->pBuf, pData, szPage);
 };
 
+// Release the given number of replication pages.
 static void replicationPagesFree(sqlite3_replication_page* pList, int nList) {
   sqlite3_replication_page* pReplPg = pList;
   int i;
@@ -54,20 +61,26 @@ static void replicationPagesFree(sqlite3_replication_page* pList, int nList) {
 */
 import "C"
 import (
-	"fmt"
 	"reflect"
-	"sync"
 	"unsafe"
 )
 
-// Replication defines all valid values for replication mode.
-type Replication int
+func init() {
+	// Register the replication implementation
+	rc := C.replicationConfig()
+	if rc != C.SQLITE_OK {
+		panic("failed to configure SQLite replication")
+	}
+}
+
+// ReplicationMode defines all valid values for replication mode.
+type ReplicationMode int
 
 // Available replication modes.
 const (
-	ReplicationModeNone     = Replication(int(C.SQLITE_REPLICATION_NONE))
-	ReplicationModeLeader   = Replication(int(C.SQLITE_REPLICATION_LEADER))
-	ReplicationModeFollower = Replication(int(C.SQLITE_REPLICATION_FOLLOWER))
+	ReplicationModeNone     = ReplicationMode(int(C.SQLITE_REPLICATION_NONE))
+	ReplicationModeLeader   = ReplicationMode(int(C.SQLITE_REPLICATION_LEADER))
+	ReplicationModeFollower = ReplicationMode(int(C.SQLITE_REPLICATION_FOLLOWER))
 )
 
 // ReplicationPage is just a Go land equivalent of the low-level
@@ -112,11 +125,11 @@ func NewReplicationPages(n int, pageSize int) []ReplicationPage {
 	return pages
 }
 
-// ReplicationWalFramesParams holds information about a single batch
+// ReplicationFramesParams holds information about a single batch
 // of WAL frames that are being dispatched for replication. They map
-// to the parameters of the sqlite3_replication_methods.xWalFrames and
-// sqlite3_replication_wal_frames C APIs.
-type ReplicationWalFramesParams struct {
+// to the parameters of the sqlite3_replication_methods.xFrames and
+// sqlite3_replication_frames C APIs.
+type ReplicationFramesParams struct {
 	PageSize  int
 	Pages     []ReplicationPage
 	Truncate  uint32
@@ -130,54 +143,40 @@ type ReplicationWalFramesParams struct {
 // triggered by sqlite.
 type ReplicationMethods interface {
 
-	// Begin a new write transaction. The implementation should
-	// eventually trigger the execution of the Begin function
-	// contained in this package, invoking it once for every follower
-	// connections that the application wants to use to replicate
-	// the leader.
+	// Begin a new write transaction. The implementation should check
+	// that the connection is eligible for starting a replicated write
+	// transaction (e.g. this node is the leader), and perform internal
+	// state changes as appropriate.
 	Begin(*SQLiteConn) ErrNo
 
-	// Write new frames to the write-ahead log. The implementation should
-	// eventually trigger the execution of the WalFrames function
-	// contained in this package, invoking it once for every follower
-	// connections that the application wants to use to replicate
-	// the leader.
-	WalFrames(*SQLiteConn, *ReplicationWalFramesParams) ErrNo
+	// Abort a write transaction. The implementation should clear any
+	// state previously set by the Begin hook.
+	Abort(*SQLiteConn) ErrNo
 
-	// Undo a write transaction. The implementation should
-	// eventually trigger the execution of the Rollback function
-	// contained in this package, invoking it once for every follower
-	// connections that the application wants to use to replicate
-	// the leader.
+	// Write new frames to the write-ahead log. The implementation should
+	// broadcast this write to other nodes and wait for a quorum.
+	Frames(*SQLiteConn, *ReplicationFramesParams) ErrNo
+
+	// Undo a write transaction. The implementation should broadcast
+	// this event to other nodes and wait for a quorum. The return code
+	// is currently ignored by SQLite.
 	Undo(*SQLiteConn) ErrNo
 
-	// Commit a write transaction. The implementation should
-	// eventually trigger the execution of the Commit function
-	// contained in this package, invoking it once for every follower
-	// connections that the application wants to use to replicate
-	// the leader.
+	// End a write transaction. The implementation should update its
+	// internal state and be ready for a new transaction.
 	End(*SQLiteConn) ErrNo
-
-	// Checkpoint the current WAL frames.
-	Checkpoint(*SQLiteConn, WalCheckpointMode, *int, *int) ErrNo
 }
 
-// ReplicationLeader switches the given sqlite connection to leader
-// replication mode. The given ReplicationMethods instance are hooks for
-// driving the execution of the replication in "follower" connections.
-func ReplicationLeader(conn *SQLiteConn, methods ReplicationMethods) error {
-	db := conn.db
-	instance := findMethodsInstance(db)
+// ReplicationLeader switches this sqlite connection to leader replication
+// mode. The given ReplicationMethods instance are hooks for driving the
+// execution of the replication in "follower" connections.
+func (c *SQLiteConn) ReplicationLeader(methods ReplicationMethods) error {
+	handle := newHandle(c, methods)
 
-	if instance != nil {
-		return fmt.Errorf("leader replication already enabled for this connection")
+	rv := C.sqlite3_replication_leader(c.db, replicationSchema, unsafe.Pointer(handle))
+	if rv != C.SQLITE_OK {
+		return newError(rv)
 	}
-
-	if rc := C.replicationLeader(db); rc != C.SQLITE_OK {
-		return newError(rc)
-	}
-
-	registerMethodsInstance(conn, methods)
 
 	return nil
 }
@@ -187,77 +186,44 @@ func ReplicationLeader(conn *SQLiteConn, methods ReplicationMethods) error {
 // possible, and the connection should be driven with the
 // ReplicationBegin, ReplicationWalFrames, ReplicationCommit and
 // ReplicationRollback APIs.
-func ReplicationFollower(conn *SQLiteConn) error {
-	db := conn.db
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
+func (c *SQLiteConn) ReplicationFollower() error {
+	rv := C.sqlite3_replication_follower(c.db, replicationSchema)
+	if rv != C.SQLITE_OK {
+		return newError(rv)
+	}
 
-	if rc := C.sqlite3_replication_follower(db, zSchema); rc != C.SQLITE_OK {
-		return newError(rc)
+	return nil
+}
+
+// ReplicationNone switches off replication on the given sqlite connection.
+func (c *SQLiteConn) ReplicationNone() error {
+	rv := C.sqlite3_replication_none(c.db, replicationSchema)
+	if rv != C.SQLITE_OK {
+		return newError(rv)
 	}
 	return nil
 }
 
-// ReplicationNone switches off replication on the given sqlite
-// connection. Note that only leader replication mode can be switched
-// off. For follower replication you need to close the connection.
-func ReplicationNone(conn *SQLiteConn) (ReplicationMethods, error) {
-	db := conn.db
-	instance := findMethodsInstance(db)
-
-	// Switch leader replication off
-	if instance == nil {
-		return nil, fmt.Errorf("leader replication is not enabled for this connection")
-	}
-
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
-
-	if rc := C.sqlite3_replication_none(db, zSchema); rc != C.SQLITE_OK {
-		return nil, newError(rc)
-	}
-
-	unregisterMethodsInstance(conn)
-	return instance.methods, nil
-}
-
-// ReplicationMode returns the current replication mode of the given
-// transaction.
-func ReplicationMode(conn *SQLiteConn) (Replication, error) {
-	db := conn.db
+// ReplicationMode returns the current replication mode of the connection.
+func (c *SQLiteConn) ReplicationMode() (ReplicationMode, error) {
 	var mode C.int
-
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
-
-	if rc := C.sqlite3_replication_mode(db, zSchema, &mode); rc != C.SQLITE_OK {
-		return 0, newError(rc)
+	rv := C.sqlite3_replication_mode(c.db, replicationSchema, &mode)
+	if rv != C.SQLITE_OK {
+		return -1, newError(rv)
 	}
-	return Replication(int(mode)), nil
+	return ReplicationMode(mode), nil
 }
 
-// ReplicationBegin starts a new write transaction in the given sqlite
-// connection. This should be called against a "follower" connection,
-// meant to replicate the "leader" one.
-func ReplicationBegin(conn *SQLiteConn) error {
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
-
-	if rc := C.sqlite3_replication_begin(conn.db, zSchema); rc != C.SQLITE_OK {
-		return newError(rc)
-	}
-	return nil
-}
-
-// ReplicationWalFrames writes the given batch of frames to the
-// write-ahead log linked to the given connection. This should be
-// called with a "follower" connection, meant to replicate the
-// "leader" one.
-func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) error {
+// ReplicationFrames writes the given batch of frames to the write-ahead log
+// linked to the given connection. This should be called with a "follower"
+// connection, meant to replicate the "leader" one.
+func ReplicationFrames(conn *SQLiteConn, begin bool, params *ReplicationFramesParams) error {
 	// Convert to C types
 	db := conn.db
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
+	isBegin := C.int(0)
+	if begin {
+		isBegin = C.int(1)
+	}
 	szPage := C.int(params.PageSize)
 	nList := C.int(len(params.Pages))
 	nTruncate := C.uint(params.Truncate)
@@ -274,8 +240,9 @@ func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) 
 			params.Pages[i].flags, params.Pages[i].pgno)
 	}
 
-	if rc := C.sqlite3_replication_wal_frames(
-		db, zSchema, szPage, nList, pList, nTruncate, isCommit, syncFlags); rc != C.SQLITE_OK {
+	rc := C.sqlite3_replication_frames(
+		db, replicationSchema, isBegin, szPage, nList, pList, nTruncate, isCommit, syncFlags)
+	if rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 	return nil
@@ -285,100 +252,38 @@ func ReplicationWalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) 
 // connection. This should be called with a "follower" connection,
 // meant to replicate the "leader" one.
 func ReplicationUndo(conn *SQLiteConn) error {
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
-
-	if rc := C.sqlite3_replication_undo(conn.db, zSchema); rc != C.SQLITE_OK {
+	rc := C.sqlite3_replication_undo(conn.db, replicationSchema)
+	if rc != C.SQLITE_OK {
 		return newError(rc)
 	}
 	return nil
 }
 
-// ReplicationEnd finishes a write transaction in the given sqlite
-// connection. This should be called with a "follower" connection,
-// meant to replicate the "leader" one.
-func ReplicationEnd(conn *SQLiteConn) error {
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
-
-	if rc := C.sqlite3_replication_end(conn.db, zSchema); rc != C.SQLITE_OK {
-		return newError(rc)
-	}
-	return nil
+// NoopReplicationMethods returns a new instance of a ReplicationMethods
+// implementation whose hooks do nothing.
+func NoopReplicationMethods() ReplicationMethods {
+	return &noopReplicationMethods{}
 }
 
-// ReplicationCheckpoint checkpoints the current WAL.
-func ReplicationCheckpoint(conn *SQLiteConn, mode WalCheckpointMode, log *int, ckpt *int) error {
-	// Convert to C types
-	db := conn.db
-	zSchema := C.CString("main")
-	defer C.free(unsafe.Pointer(zSchema))
+type noopReplicationMethods struct{}
 
-	eMode := C.int(mode)
-	pnLog := (*C.int)(unsafe.Pointer(log))
-	pnCkpt := (*C.int)(unsafe.Pointer(ckpt))
-
-	if rc := C.sqlite3_replication_checkpoint(db, zSchema, eMode, pnLog, pnCkpt); rc != C.SQLITE_OK {
-		return newError(rc)
-	}
-	return nil
+func (m *noopReplicationMethods) Begin(conn *SQLiteConn) ErrNo {
+	return 0
 }
 
-// ReplicationAutoCheckpoint can be used to enable autocheckpoint of
-// the replicated WAL.
-func ReplicationAutoCheckpoint(conn *SQLiteConn, n int) {
-
-	callback := func(arg unsafe.Pointer, conn *SQLiteConn, database string, frame int) error {
-		if frame >= n {
-			_, _, err := WalCheckpointV2(conn, WalCheckpointTruncate)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	WalHook(conn, callback, nil)
+func (m *noopReplicationMethods) Abort(conn *SQLiteConn) ErrNo {
+	return 0
 }
 
-// PassthroughReplicationMethods returns a new instance of a ReplicationMethods
-// implementation whose hooks just invoke the relevant replication APIs against
-// whatever conn.SQLiteConn connection was used to at registration time. If any
-// error is hit in the hooks, a panic is raised. This should be only used as
-// helper in unit tests.
-func PassthroughReplicationMethods() ReplicationMethods {
-	return &passthroughReplicationMethods{}
+func (m *noopReplicationMethods) Frames(conn *SQLiteConn, params *ReplicationFramesParams) ErrNo {
+	return 0
 }
 
-type passthroughReplicationMethods struct {
-	followers []*SQLiteConn
+func (m *noopReplicationMethods) Undo(conn *SQLiteConn) ErrNo {
+	return 0
 }
 
-func (m *passthroughReplicationMethods) Begin(conn *SQLiteConn) ErrNo {
-	return m.check(ReplicationBegin(conn))
-}
-
-func (m *passthroughReplicationMethods) WalFrames(conn *SQLiteConn, params *ReplicationWalFramesParams) ErrNo {
-	return m.check(ReplicationWalFrames(conn, params))
-}
-
-func (m *passthroughReplicationMethods) Undo(conn *SQLiteConn) ErrNo {
-	return m.check(ReplicationUndo(conn))
-}
-
-func (m *passthroughReplicationMethods) End(conn *SQLiteConn) ErrNo {
-	return m.check(ReplicationEnd(conn))
-}
-
-func (m *passthroughReplicationMethods) Checkpoint(conn *SQLiteConn, mode WalCheckpointMode, log *int, ckpt *int) ErrNo {
-	return m.check(ReplicationCheckpoint(conn, mode, log, ckpt))
-}
-
-// Check that the given error is nil, and return 0 if so. Otherwise, panic out.
-func (m *passthroughReplicationMethods) check(err error) ErrNo {
-	if err != nil {
-		panic(err)
-	}
+func (m *noopReplicationMethods) End(conn *SQLiteConn) ErrNo {
 	return 0
 }
 
@@ -386,16 +291,26 @@ func (m *passthroughReplicationMethods) check(err error) ErrNo {
 //
 // Hook implementing sqlite3_replication_methods->xBegin
 func replicationBegin(pArg unsafe.Pointer) C.int {
-	instance := mustFindMethodsInstance((*C.sqlite3)(pArg))
-	return C.int(instance.methods.Begin(instance.conn))
+	handle := lookupHandleVal(uintptr(pArg))
+	conn := handle.db
+	methods := handle.val.(ReplicationMethods)
+	return C.int(methods.Begin(conn))
 }
 
-//export replicationWalFrames
+//export replicationAbort
 //
-// Hook implementing sqlite3_replication_methods->xWalFrames
-func replicationWalFrames(pArg unsafe.Pointer, szPage C.int, nList C.int, pList *C.sqlite3_replication_page, nTruncate C.uint, isCommit C.int, syncFlags C.uint) C.int {
-	instance := mustFindMethodsInstance((*C.sqlite3)(pArg))
+// Hook implementing sqlite3_replication_methods->xAbort
+func replicationAbort(pArg unsafe.Pointer) C.int {
+	handle := lookupHandleVal(uintptr(pArg))
+	conn := handle.db
+	methods := handle.val.(ReplicationMethods)
+	return C.int(methods.Abort(conn))
+}
 
+//export replicationFrames
+//
+// Hook implementing sqlite3_replication_methods->xFrames
+func replicationFrames(pArg unsafe.Pointer, szPage C.int, nList C.int, pList *C.sqlite3_replication_page, nTruncate C.uint, isCommit C.int, syncFlags C.uint) C.int {
 	pages := NewReplicationPages(int(nList), int(szPage))
 	size := unsafe.Sizeof(C.sqlite3_replication_page{})
 	for i := range pages {
@@ -406,7 +321,7 @@ func replicationWalFrames(pArg unsafe.Pointer, szPage C.int, nList C.int, pList 
 		pages[i].flags = pPage.flags
 	}
 
-	params := &ReplicationWalFramesParams{
+	params := &ReplicationFramesParams{
 		PageSize:  int(szPage),
 		Pages:     pages,
 		Truncate:  uint32(nTruncate),
@@ -414,94 +329,34 @@ func replicationWalFrames(pArg unsafe.Pointer, szPage C.int, nList C.int, pList 
 		SyncFlags: uint8(syncFlags),
 	}
 
-	return C.int(instance.methods.WalFrames(instance.conn, params))
+	handle := lookupHandleVal(uintptr(pArg))
+	conn := handle.db
+	methods := handle.val.(ReplicationMethods)
+
+	return C.int(methods.Frames(conn, params))
 }
 
 //export replicationUndo
 //
 // Hook implementing sqlite3_replication_methods->xUndo
 func replicationUndo(pArg unsafe.Pointer) C.int {
-	instance := mustFindMethodsInstance((*C.sqlite3)(pArg))
-	return C.int(instance.methods.Undo(instance.conn))
+	handle := lookupHandleVal(uintptr(pArg))
+	conn := handle.db
+	methods := handle.val.(ReplicationMethods)
+	return C.int(methods.Undo(conn))
 }
 
 //export replicationEnd
 //
 // Hook implementing sqlite3_replication_methods->xEnd
 func replicationEnd(pArg unsafe.Pointer) C.int {
-	instance := mustFindMethodsInstance((*C.sqlite3)(pArg))
-	return C.int(instance.methods.End(instance.conn))
+	handle := lookupHandleVal(uintptr(pArg))
+	conn := handle.db
+	methods := handle.val.(ReplicationMethods)
+	return C.int(methods.End(conn))
 }
 
-//export replicationCheckpoint
+// Hard-coded main schema name.
 //
-// Hook implementing sqlite3_replication_methods->xCheckpoint
-func replicationCheckpoint(pArg unsafe.Pointer, eMode C.int, pnLog *C.int, pnCkpt *C.int) C.int {
-	instance := mustFindMethodsInstance((*C.sqlite3)(pArg))
-	return C.int(instance.methods.Checkpoint(
-		instance.conn, WalCheckpointMode(eMode), (*int)(unsafe.Pointer(pnLog)),
-		(*int)(unsafe.Pointer(pnCkpt)),
-	))
-}
-
-// Information about a C.sqlite3_replication_methods instance that was
-// allocated by this module using C.sqlite3_malloc in ReplicationLeader,
-// and its associated ReplicationMethods hooks in Go land.
-type replicationMethodsInstance struct {
-	conn    *SQLiteConn
-	methods ReplicationMethods
-}
-
-// A registry for tracking instances of C.sqlite3_replication_methods
-// allocated by this module.
-//
-// Each key is a pointer to a C.sqlite3 db object, and each associated
-// value a replicationMethodsInstance holding a pointer to the C callbacks
-// were registered against that db, and the Methods object that those
-// callbacks will be dispatched to.
-var replicationMethodsRegistry = make(map[uintptr]*replicationMethodsInstance)
-
-// Serialize access to the methods registry
-var replicationMethodsMutex sync.RWMutex
-
-// Register a new replication for the given connection and methods.
-func registerMethodsInstance(conn *SQLiteConn, methods ReplicationMethods) {
-	replicationMethodsMutex.Lock()
-	defer replicationMethodsMutex.Unlock()
-
-	pointer := uintptr(unsafe.Pointer(conn.db))
-	replicationMethodsRegistry[pointer] = &replicationMethodsInstance{
-		conn:    conn,
-		methods: methods,
-	}
-}
-
-// Unregister a previously registered replication
-func unregisterMethodsInstance(conn *SQLiteConn) {
-	replicationMethodsMutex.Lock()
-	defer replicationMethodsMutex.Unlock()
-
-	pointer := uintptr(unsafe.Pointer(conn.db))
-	delete(replicationMethodsRegistry, pointer)
-}
-
-// Find the replication methods instance for the given database.
-func findMethodsInstance(db *C.sqlite3) *replicationMethodsInstance {
-	replicationMethodsMutex.RLock()
-	defer replicationMethodsMutex.RUnlock()
-
-	pointer := uintptr(unsafe.Pointer(db))
-	return replicationMethodsRegistry[pointer]
-}
-
-// Find the replication methods instance for the given database and
-// ensure they are valid.
-func mustFindMethodsInstance(db *C.sqlite3) *replicationMethodsInstance {
-	instance := findMethodsInstance(db)
-	if instance == nil {
-		// Something really bad happened if we have lost track of this
-		// connection.
-		panic("replication hooks not found")
-	}
-	return instance
-}
+// TODO: support replicating also attached databases.
+var replicationSchema = C.CString("main")
