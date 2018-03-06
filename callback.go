@@ -77,6 +77,21 @@ func updateHookTrampoline(handle uintptr, op int, db *C.char, table *C.char, row
 	callback(op, C.GoString(db), C.GoString(table), rowid)
 }
 
+//export preUpdateHookTrampoline
+func preUpdateHookTrampoline(handle uintptr, dbHandle uintptr, op int, db *C.char, table *C.char, oldrowid int64, newrowid int64) {
+	hval := lookupHandleVal(handle)
+	data := SQLitePreUpdateData{
+		Conn:         hval.db,
+		Op:           op,
+		DatabaseName: C.GoString(db),
+		TableName:    C.GoString(table),
+		OldRowID:     oldrowid,
+		NewRowID:     newrowid,
+	}
+	callback := hval.val.(func(SQLitePreUpdateData))
+	callback(data)
+}
+
 // Use handles to avoid passing Go pointers to C.
 
 type handleVal struct {
@@ -97,7 +112,7 @@ func newHandle(db *SQLiteConn, v interface{}) uintptr {
 	return i
 }
 
-func lookupHandle(handle uintptr) interface{} {
+func lookupHandleVal(handle uintptr) handleVal {
 	handleLock.Lock()
 	defer handleLock.Unlock()
 	r, ok := handleVals[handle]
@@ -108,7 +123,11 @@ func lookupHandle(handle uintptr) interface{} {
 			panic("invalid handle")
 		}
 	}
-	return r.val
+	return r
+}
+
+func lookupHandle(handle uintptr) interface{} {
+	return lookupHandleVal(handle).val
 }
 
 func deleteHandles(db *SQLiteConn) {
