@@ -1,25 +1,46 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"os"
+	"strings"
 )
 
 func main() {
+	log.Printf("args: %d\n", len(os.Args))
 	if len(os.Args) < 2 {
 		log.Fatal("not enough arguments")
 	}
 	path := os.Args[1]
-	query := os.Args[2]
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	runQuery(db, query)
+	if len(os.Args) < 3 {
+		dumbShell(db)
+	} else {
+		query := os.Args[2]
+		runQuery(db, query)
+	}
+}
+
+func dumbShell(db *sql.DB) {
+	for {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("sql> ")
+		var query string
+		query, _ = reader.ReadString('\n')
+		//fmt.Println(query)
+		query = strings.TrimSpace(query)
+		if len(query) > 0 {
+			runQuery(db, query)
+		}
+	}
 }
 
 func runQuery(db *sql.DB, query string) (err error) {
