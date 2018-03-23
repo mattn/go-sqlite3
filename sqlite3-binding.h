@@ -126,7 +126,7 @@ extern "C" {
 */
 #define SQLITE_VERSION        "3.22.0"
 #define SQLITE_VERSION_NUMBER 3022000
-#define SQLITE_SOURCE_ID      "2018-02-22 22:06:10 e423678975735665819f6ece52befe489398d191ac930907195e63fa694000bd"
+#define SQLITE_SOURCE_ID      "2018-03-23 13:01:24 3b5960a2bd94cb5f63c48c24c13c67ce0cc2847158d10ac49b5c869dd3260768"
 
 /*
 ** CAPI3REF: Run-Time Library Version Numbers
@@ -450,8 +450,6 @@ SQLITE_API int sqlite3_exec(
 #define SQLITE_NOTADB      26   /* File opened that is not a database file */
 #define SQLITE_NOTICE      27   /* Notifications from sqlite3_log() */
 #define SQLITE_WARNING     28   /* Warnings from sqlite3_log() */
-#define SQLITE_NOTLEADER   29   /* Attempt to start a write transaction on a non-leader node */
-#define SQLITE_REPLICATION 30   /* Failure while replicating a write transaction  */
 #define SQLITE_ROW         100  /* sqlite3_step() has another row ready */
 #define SQLITE_DONE        101  /* sqlite3_step() has finished executing */
 /* end-of-error-codes */
@@ -506,6 +504,8 @@ SQLITE_API int sqlite3_exec(
 #define SQLITE_IOERR_BEGIN_ATOMIC      (SQLITE_IOERR | (29<<8))
 #define SQLITE_IOERR_COMMIT_ATOMIC     (SQLITE_IOERR | (30<<8))
 #define SQLITE_IOERR_ROLLBACK_ATOMIC   (SQLITE_IOERR | (31<<8))
+#define SQLITE_IOERR_NOT_LEADER        (SQLITE_IOERR | (32<<8))
+#define SQLITE_IOERR_LEADERSHIP_LOST   (SQLITE_IOERR | (33<<8))
 #define SQLITE_LOCKED_SHAREDCACHE      (SQLITE_LOCKED |  (1<<8))
 #define SQLITE_BUSY_RECOVERY           (SQLITE_BUSY   |  (1<<8))
 #define SQLITE_BUSY_SNAPSHOT           (SQLITE_BUSY   |  (2<<8))
@@ -1926,6 +1926,20 @@ struct sqlite3_mem_methods {
 ** I/O required to support statement rollback.
 ** The default value for this setting is controlled by the
 ** [SQLITE_STMTJRNL_SPILL] compile-time option.
+**
+** [[SQLITE_CONFIG_REPLICATION]]
+** <dt>SQLITE_CONFIG_REPLICATION
+** <dd>The SQLITE_CONFIG_REPLICATION option is only available if SQLite is
+** compiled with the [SQLITE_ENABLE_REPLICATION] pre-processor macro defined.
+** SQLITE_CONFIG_REPLICATION takes a single argument which is a pointer to an
+** [sqlite3_replication_methods] object. This object specifies the interface to
+** a write-ahead log replication implementation.
+** SQLite makes a copy of the [sqlite3_replication_methods] object.
+**
+** [[SQLITE_CONFIG_GETREPLICATION]] <dt>SQLITE_CONFIG_GETREPLICATION</dt>
+** <dd> The SQLITE_CONFIG_GETREPLICATION option takes a single argument which
+** is a pointer to an [sqlite3_replication_methods] object.  SQLite copies of
+** the current write-ahead log replication implementation into that object.
 ** </dl>
 */
 #define SQLITE_CONFIG_SINGLETHREAD  1  /* nil */
@@ -1955,6 +1969,8 @@ struct sqlite3_mem_methods {
 #define SQLITE_CONFIG_PMASZ               25  /* unsigned int szPma */
 #define SQLITE_CONFIG_STMTJRNL_SPILL      26  /* int nByte */
 #define SQLITE_CONFIG_SMALL_MALLOC        27  /* boolean */
+#define SQLITE_CONFIG_REPLICATION         28  /* sqlite3_replication_methods* */
+#define SQLITE_CONFIG_GETREPLICATION      29  /* sqlite3_replication_methods* */
 
 /*
 ** CAPI3REF: Database Connection Configuration Options
@@ -8797,85 +8813,270 @@ SQLITE_API SQLITE_EXPERIMENTAL int sqlite3_snapshot_cmp(
 SQLITE_API SQLITE_EXPERIMENTAL int sqlite3_snapshot_recover(sqlite3 *db, const char *zDb);
 
 /*
-** CAPI3REF: Database replication
+** CAPI3REF: Write-Ahead Log Replication Page Object
 ** EXPERIMENTAL
+**
+** The sqlite3_replication_page object represents a new page about to be
+** appended to the write-ahead log of a [WAL mode] database.
+**
+** When an implementation for the replication interface is provided (using
+** [SQLITE_CONFIG_REPLICATION]) and a connection is set to leader replication
+** mode (using [sqlite3_replication_leader], this object is used to inform
+** third-party replication libraries about the content of the new write-ahead
+** log frame.
+**
+** See [sqlite3_replication_methods] for additional information.
 */
-#define SQLITE_REPLICATION_NONE        0   /* No replication */
+typedef struct sqlite3_replication_page {
+  void *pBuf;        /* The content of the WAL frame to be written */
+  unsigned flags;    /* Flags used internaly by the WAL */
+  unsigned pgno;     /* Page number */
+} sqlite3_replication_page;
+
+/*
+** CAPI3REF: Write-Ahead Log Replication Methods
+** EXPERIMENTAL
+**
+** An instance of this structure defines a set of write-ahead log lifecycle
+** hooks that can be used by third party libraries to replicate the write-ahead
+** log across all SQLite instances that are part of a cluster.
+**
+** A replication library should set a connection to leader replication mode
+** using [sqlite3_replication_leader]. At that point SQLite will invoke the
+** replication hooks whenever queries in that connection trigger WAL
+** changes. The replication library is then in charge of broadcasting the events
+** to other nodes and wait for a quorum.
+**
+** In case the node running the hook is not the current leader, then
+** [SQLITE_IOERR_NOT_LEADER] should be returned. This means that no broadcast
+** attempt was made at all.
+**
+** In case the node running the hook was the leader when the hook fired but was
+** the deposed half way while broadcasting, then [SQLITE_IOERR_LEADERSHIP_LOST]
+** should be returned. No assumption can be made whether the broadcast was
+** successful or not, and the replication library should take appropriate
+** recovery measures when a new leader gets elected.
+*/
+typedef struct sqlite3_replication_methods {
+  int (*xBegin)(void*);
+  int (*xAbort)(void*);
+  int (*xFrames)(void*, int szPage, int nList,
+      sqlite3_replication_page *pList, unsigned nTruncate, int isCommit,
+      unsigned sync_flags);
+  int (*xUndo)(void*);
+  int (*xEnd)(void*);
+} sqlite3_replication_methods;
+
+/*
+** CAPI3REF: Replication Mode Values
+** EXPERIMENTAL
+**
+** These constants define all valid values for the "replication mode" a certain
+** database connection might be set to. The current mode for a connection can
+** be inspected using [sqlite3_replication_mode].
+*/
+#define SQLITE_REPLICATION_NONE        0   /* No replication (the default) */
 #define SQLITE_REPLICATION_LEADER      1   /* Fire replication commands */
 #define SQLITE_REPLICATION_FOLLOWER    2   /* Execute replication commands */
 
-typedef struct sqlite3_replication_page sqlite3_replication_page;
-struct sqlite3_replication_page {
-  void *pBuf;        /* The content of the page */
-  unsigned flags;    /* Page flags used internaly by the WAL */
-  unsigned pgno;     /* Page number for this page */
-};
-
-typedef struct sqlite3_replication_methods sqlite3_replication_methods;
-struct sqlite3_replication_methods {
-  int (*xBegin)(void *pArg);
-  int (*xWalFrames)(void *pArg, int szPage, int nList, sqlite3_replication_page *pList, unsigned nTruncate, int isCommit, unsigned sync_flags);
-  int (*xUndo)(void *pArg);
-  int (*xEnd)(void *pArg);
-  int (*xCheckpoint)(void *pArg, int eMode, int *pnLog, int *pnCkpt);
-};
+/*
+** CAPI3REF: Obtain the replication mode of a connection.
+** EXPERIMENTAL
+**
+** The [sqlite3_replication_mode(D,S,M) interface copies into M the current
+** replication mode value for schema S of [database connection] D.
+**
+** The [sqlite3_replication_mode()] interface returns SQLITE_OK on success
+** or an appropriate [error code] if it fails.
+**
+** In order to succeed, a call to [sqlite3_replication_mode(D,S,P)]
+** requires the [database connection] D to be in [WAL mode].
+**
+** The [sqlite3_replication_mode()] interface is only available when the
+** SQLITE_ENABLE_REPLICATION compile-time option is used.
+**/
+SQLITE_API int sqlite3_replication_mode(
+  sqlite3 *db,                          /* Database handle */
+  const char *zSchema,                  /* Name of attached database (or NULL) */
+  int *eMode                            /* OUT: Replication mode value */
+);
 
 /*
-** Put this connection in leader replication mode, registering callbacks for
-** write transactions and write-ahead-log frames events.
+** CAPI3REF: Enable leader replication mode on a connection.
+** EXPERIMENTAL
+**
+** The [sqlite3_replication_leader(D,S,P)] interface enables leader write-ahead
+** log replication for schema S of [database connection] D, saving P as context
+** argument to be passed to the [sqlite3_replication_methods] hooks.
+**
+** The [sqlite3_replication_leader()] interface returns SQLITE_OK on success
+** or an appropriate [error code] if it fails.
+**
+** In order to succeed, a call to [sqlite3_replication_leader(D,S,P)] requires
+** that SQLite has been configured with a valid [sqlite3_replication_methods]
+** implementation (using the [SQLITE_CONFIG_REPLICATION] configuration
+** option), that the database file for schema S is in [WAL mode], and that the
+** current replication mode value is [SQLITE_REPLICATION_NONE].
+**
+** After the call returns, the replication mode for this database will be set to
+** SQLITE_REPLICATION_LEADER and from this point on SQLite will notify the
+** configured [sqlite3_replication_methods] implementation whenever a WAL event
+** involving a write transaction occurs (begin, write frames, undo, end). SQLite
+** will block on the particular [sqlite3_replication_methods] hook that was
+** fired. The hook implementation should typically broadcast WAL-changing events
+** such as writing frames or undoing changes to a number of other nodes and wait
+** for a quorum of them to acknowledge it.
+**
+** The [sqlite3_replication_leader()] interface is only available when the
+** SQLITE_ENABLE_REPLICATION compile-time option is used.
 */
 SQLITE_API int sqlite3_replication_leader(
-  sqlite3 *db,                          /* The db handle to use */
-  const char *zDbName,                  /* Enable leader replication on this backend */
-  sqlite3_replication_methods *methods,  /* Replication interface */
-  void *pCtx
+  sqlite3 *db,                      /* Database handle */
+  const char *zSchema,              /* Name of attached database (or NULL) */
+  void *pCtx                        /* Application-defined context */
 );
 
+/*
+** CAPI3REF: Enable follower replication mode on a connection.
+** EXPERIMENTAL
+**
+** The [sqlite3_replication_follower(D,S)] interface enables follower
+** write-ahead log replication on schema S of [database connection] D.
+**
+** The [sqlite3_replication_follower()] interface returns SQLITE_OK on success
+** or an appropriate [error code] if it fails.
+**
+** In order to succeed, a call to [sqlite3_replication_follower(D,S)] requires
+** that the database file for schema S is in [WAL mode], and that the
+** current replication mode value is SQLITE_REPLICATION_NONE.
+**
+** After the call returns, the replication mode for this database will be set to
+** SQLITE_REPLICATION_FOLLOWER. A [sqlite3_replication_methods] implementation
+** configured on another SQLite node should be in charge of "driving" the
+** lifecycle of this connection's WAL. The typical implementation will broadcast
+** to follower SQLite nodes all WAL events received by a leader connection, and
+** wait for a quorum before returning from the relevant WAL hooks (begin, write
+** frames, undo).
+**
+** The [sqlite3_replication_leader()] interface is only available when the
+** SQLITE_ENABLE_REPLICATION compile-time option is used.
+*/
 SQLITE_API int sqlite3_replication_follower(
-  sqlite3 *db,                          /* The db handle to use */
-  const char *zDbName                   /* Enable follower replication on this backend */
+  sqlite3 *db,                      /* Database handle */
+  const char *zSchema               /* Name of attached database (or NULL) */
 );
 
+/*
+** CAPI3REF: Disable leader or follower replication mode on a connection.
+** EXPERIMENTAL
+**
+** The [sqlite3_replication_none(D,S)] interface disables leader or follower
+** write-ahead log replication on schema S of [database connection] D.
+**
+** The [sqlite3_replication_none()] interface returns SQLITE_OK on success
+** or an appropriate [error code] if it fails.
+**
+** In order to succeed, a call to [sqlite3_replication_none(D,S)] requires that
+** the database file for schema S is in [WAL mode], and that the current
+** replication mode value is either [SQLITE_REPLICATION_LEADER] or
+** [SQLITE_REPLICATION_FOLLOWER].
+**
+** After the call returns, the replication mode for this database will be set to
+** SQLITE_REPLICATION_NONE. If the database was set to leader replication, from
+** this point on SQLite won't invoke any more hooks on the configured
+** [sqlite3_replication_methods] implementation, for WAL events associated with
+** schema S of [database connection] D.
+**
+** When a database is in follower replication mode, no backup can be performed
+** on it.
+**
+** The [sqlite3_replication_none()] interface is only available when the
+** SQLITE_ENABLE_REPLICATION compile-time option is used.
+*/
 SQLITE_API int sqlite3_replication_none(
-  sqlite3 *db,                          /* The db handle to use */
-  const char *zDbName                   /* Enable follower replication on this backend */
+  sqlite3 *db,                      /* Database handle */
+  const char *zSchema               /* Name of attached database (or NULL) */
 );
 
-SQLITE_API int sqlite3_replication_mode(
-  sqlite3 *db,                          /* The db handle to use */
-  const char *zDbName,                  /* Enable follower replication on this backend */
-  int *eMode
+/*
+** CAPI3REF: Write WAL frames in the context of a replicated transaction.
+** EXPERIMENTAL
+**
+** The [sqlite3_replication_frames(D,S,B,P,N,L,T,C,F)] interface writes new
+** frames into the write-ahead log for schema S of [database connection] D.
+**
+** The [sqlite3_replication_frames()] interface returns SQLITE_OK on success
+** or an appropriate [error code] if it fails.
+**
+** In order to succeed, a call to [sqlite3_replication_frames()] requires that
+** schema S of [database connection] D has been set to follower replication mode
+** using [sqlite3_replication_follower].
+**
+** The B, P, N, L, T, C, and F parameters contain information about the new
+** pages to append to the write-ahead log. If B is non-zero, then this is the
+** first batch of frames of a new WAL write transaction, and a new transaction
+** will be started. If C is non-zero, then this is the final batch of frames of
+** a WAL write transaction, and a commit will be performed.
+**
+** The [sqlite3_replication_frames()] interface is only available when the
+** SQLITE_ENABLE_REPLICATION compile-time option is used.
+*/
+SQLITE_API int sqlite3_replication_frames(
+  sqlite3 *db,                      /* Database handle */
+  const char *zSchema,              /* Name of attached database (or NULL) */
+  int isBegin,                      /* Begin flag, used for new transactions */
+  int szPage,                       /* Database page-size in bytes */
+  int nList,                        /* Number of pages to write */
+  sqlite3_replication_page *pList,  /* List of pages to write */
+  unsigned nTruncate,               /* Truncate flag, used by the WAL */
+  int isCommit,                     /* Commit flag, used for committing */
+  int sync_flags                    /* Sync flags, used by the WAL */
 );
 
-SQLITE_API int sqlite3_replication_begin(
-  sqlite3 *db,
-  const char *zDbName            /* Write WAL replication frames for this backend */
-);
-
-SQLITE_API int sqlite3_replication_wal_frames(
-  sqlite3 *db,
-  const char *zDbName,            /* Write WAL replication frames for this backend */
-  int szPage,                     /* Database page-size in bytes */
-  int nList,
-  sqlite3_replication_page *pList,
-  unsigned nTruncate,
-  int isCommit,
-  int sync_flags
-);
-
+/*
+** CAPI3REF: Undo WAL changes in the context of a replicated transaction.
+** EXPERIMENTAL
+**
+** The [sqlite3_replication_undo(D,S)] interface reverts the changes
+** of a WAL write transaction for schema S of [database connection] D.
+**
+** The [sqlite3_replication_undo()] interface returns SQLITE_OK on success
+** or an appropriate [error code] if it fails.
+**
+** In order to succeed, a call to [sqlite3_replication_undo()] requires that
+** schema S of [database connection] D has been set to follower replication mode
+** using [sqlite3_replication_follower].
+**
+** The [sqlite3_replication_undo()] interface is only available when the
+** SQLITE_ENABLE_REPLICATION compile-time option is used.
+*/
 SQLITE_API int sqlite3_replication_undo(
-  sqlite3 *db,
-  const char *zDbName            /* Write WAL replication frames for this backend */
+  sqlite3 *db,                      /* Database handle */
+  const char *zSchema               /* Name of attached database (or NULL) */
 );
 
-SQLITE_API int sqlite3_replication_end(
-  sqlite3 *db,
-  const char *zDbName            /* Write WAL replication frames for this backend */
-);
-
+/*
+** CAPI3REF: Checkpoint a replicated WAL
+** EXPERIMENTAL
+**
+** The [sqlite3_replication_checkpoint(D,S,M,L,C)] interface checkpoints the
+** replicated WAL for schema S of [database connection] D.
+**
+** The [sqlite3_replication_checkpoint()] interface returns SQLITE_OK on success
+** or an appropriate [error code] if it fails.
+**
+** This interface is meant to be used by replication implementations to perform
+** a checkpoint on a database in follower replication mode.
+**
+** The parameters have the same meaning as for the [sqlite3_wal_checkpoint_v2]
+** interface.
+**
+** The [sqlite3_replication_checkpoint()] interface is only available when the
+** SQLITE_ENABLE_REPLICATION compile-time option is used.
+*/
 SQLITE_API int sqlite3_replication_checkpoint(
-  sqlite3 *db,                          /* The db handle to use */
-  const char *zDbName,                  /* Enable replication on this database */
+  sqlite3 *db,                    /* Database handle */
+  const char *zSchema,            /* Name of attached database (or NULL) */
   int eMode,                      /* Type of checkpoint */
   int *pnLog,                     /* OUT: Final number of frames in log */
   int *pnCkpt                     /* OUT: Final number of checkpointed frames */
