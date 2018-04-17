@@ -563,7 +563,7 @@ func TestBoolean(t *testing.T) {
 		t.Fatalf("Expected 1 row but %v", counter)
 	}
 
-	if id != 1 && fbool != true {
+	if id != 1 && !fbool {
 		t.Fatalf("Value for id 1 should be %v, not %v", bool1, fbool)
 	}
 
@@ -585,7 +585,7 @@ func TestBoolean(t *testing.T) {
 		t.Fatalf("Expected 1 row but %v", counter)
 	}
 
-	if id != 2 && fbool != false {
+	if id != 2 && fbool {
 		t.Fatalf("Value for id 2 should be %v, not %v", bool2, fbool)
 	}
 
@@ -1591,10 +1591,7 @@ func BenchmarkCustomFunctions(b *testing.B) {
 		sql.Register("sqlite3_BenchmarkCustomFunctions", &SQLiteDriver{
 			ConnectHook: func(conn *SQLiteConn) error {
 				// Impure function to force sqlite to reexecute it each time.
-				if err := conn.RegisterFunc("custom_add", customAdd, false); err != nil {
-					return err
-				}
-				return nil
+				return conn.RegisterFunc("custom_add", customAdd, false)
 			},
 		})
 	})
@@ -1701,7 +1698,7 @@ func (db *TestDB) tearDown() {
 // q replaces ? parameters if needed
 func (db *TestDB) q(sql string) string {
 	switch db.dialect {
-	case POSTGRESQL: // repace with $1, $2, ..
+	case POSTGRESQL: // replace with $1, $2, ..
 		qrx := regexp.MustCompile(`\?`)
 		n := 0
 		return qrx.ReplaceAllStringFunc(sql, func(string) string {
