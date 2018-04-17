@@ -336,7 +336,7 @@ func (c *SQLiteConn) RegisterCommitHook(callback func() int) {
 	if callback == nil {
 		C.sqlite3_commit_hook(c.db, nil, nil)
 	} else {
-		C.sqlite3_commit_hook(c.db, (*[0]byte)(unsafe.Pointer(C.commitHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+		C.sqlite3_commit_hook(c.db, (*[0]byte)(C.commitHookTrampoline), unsafe.Pointer(newHandle(c, callback)))
 	}
 }
 
@@ -349,7 +349,7 @@ func (c *SQLiteConn) RegisterRollbackHook(callback func()) {
 	if callback == nil {
 		C.sqlite3_rollback_hook(c.db, nil, nil)
 	} else {
-		C.sqlite3_rollback_hook(c.db, (*[0]byte)(unsafe.Pointer(C.rollbackHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+		C.sqlite3_rollback_hook(c.db, (*[0]byte)(C.rollbackHookTrampoline), unsafe.Pointer(newHandle(c, callback)))
 	}
 }
 
@@ -366,7 +366,7 @@ func (c *SQLiteConn) RegisterUpdateHook(callback func(int, string, string, int64
 	if callback == nil {
 		C.sqlite3_update_hook(c.db, nil, nil)
 	} else {
-		C.sqlite3_update_hook(c.db, (*[0]byte)(unsafe.Pointer(C.updateHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+		C.sqlite3_update_hook(c.db, (*[0]byte)(C.updateHookTrampoline), unsafe.Pointer(newHandle(c, callback)))
 	}
 }
 
@@ -448,7 +448,7 @@ func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) erro
 }
 
 func sqlite3CreateFunction(db *C.sqlite3, zFunctionName *C.char, nArg C.int, eTextRep C.int, pApp uintptr, xFunc unsafe.Pointer, xStep unsafe.Pointer, xFinal unsafe.Pointer) C.int {
-	return C._sqlite3_create_function(db, zFunctionName, nArg, eTextRep, C.uintptr_t(pApp), (*[0]byte)(unsafe.Pointer(xFunc)), (*[0]byte)(unsafe.Pointer(xStep)), (*[0]byte)(unsafe.Pointer(xFinal)))
+	return C._sqlite3_create_function(db, zFunctionName, nArg, eTextRep, C.uintptr_t(pApp), (*[0]byte)(xFunc), (*[0]byte)(xStep), (*[0]byte)(xFinal))
 }
 
 // AutoCommit return which currently auto commit or not.
@@ -859,7 +859,7 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 		case int64:
 			rv = C.sqlite3_bind_int64(s.s, n, C.sqlite3_int64(v))
 		case bool:
-			if bool(v) {
+			if v {
 				rv = C.sqlite3_bind_int(s.s, n, 1)
 			} else {
 				rv = C.sqlite3_bind_int(s.s, n, 0)
@@ -1070,10 +1070,10 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
 			switch dest[i].(type) {
 			case sql.RawBytes:
-				dest[i] = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
+				dest[i] = (*[1 << 30]byte)(p)[0:n]
 			default:
 				slice := make([]byte, n)
-				copy(slice[:], (*[1 << 30]byte)(unsafe.Pointer(p))[0:n])
+				copy(slice[:], (*[1 << 30]byte)(p)[0:n])
 				dest[i] = slice
 			}
 		case C.SQLITE_NULL:
