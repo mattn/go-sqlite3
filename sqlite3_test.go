@@ -1517,7 +1517,7 @@ func (db *TestDB) tearDown() {
 // q replaces ? parameters if needed
 func (db *TestDB) q(sql string) string {
 	switch db.dialect {
-	case POSTGRESQL: // repace with $1, $2, ..
+	case POSTGRESQL: // replace with $1, $2, ..
 		qrx := regexp.MustCompile(`\?`)
 		n := 0
 		return qrx.ReplaceAllStringFunc(sql, func(string) string {
