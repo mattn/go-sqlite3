@@ -141,6 +141,12 @@ var SQLiteTimestampFormats = []string{
 	"2006-01-02",
 }
 
+const (
+	columnDate      string = "date"
+	columnDatetime  string = "datetime"
+	columnTimestamp string = "timestamp"
+)
+
 func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
 }
@@ -1039,7 +1045,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_INTEGER:
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
-			case "timestamp", "datetime", "date":
+			case columnTimestamp, columnDatetime, columnDate:
 				var t time.Time
 				// Assume a millisecond unix timestamp if it's 13 digits -- too
 				// large to be a reasonable timestamp in seconds.
@@ -1086,7 +1092,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			s := C.GoStringN((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))), C.int(n))
 
 			switch rc.decltype[i] {
-			case "timestamp", "datetime", "date":
+			case columnTimestamp, columnDatetime, columnDate:
 				var t time.Time
 				s = strings.TrimSuffix(s, "Z")
 				for _, format := range SQLiteTimestampFormats {
