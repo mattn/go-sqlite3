@@ -1,3 +1,5 @@
+// +build cgo
+
 // Copyright (C) 2014 Yasuhiro Matsumoto <mattn.jp@gmail.com>.
 //
 // Use of this source code is governed by an MIT-style
@@ -7,7 +9,8 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -std=gnu99
-#cgo CFLAGS: -DSQLITE_ENABLE_RTREE -DSQLITE_THREADSAFE=1
+#cgo CFLAGS: -DSQLITE_ENABLE_RTREE -DSQLITE_THREADSAFE=1 -DHAVE_USLEEP=1
+#cgo linux,!android CFLAGS: -DHAVE_PREAD64=1 -DHAVE_PWRITE64=1
 #cgo CFLAGS: -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS -DSQLITE_ENABLE_FTS4_UNICODE61
 #cgo CFLAGS: -DSQLITE_TRACE_SIZE_LIMIT=15
 #cgo CFLAGS: -DSQLITE_DISABLE_INTRINSIC
@@ -136,6 +139,7 @@ static int _sqlite3_limit(sqlite3* db, int limitId, int newLimit) {
 */
 import "C"
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -149,8 +153,6 @@ import (
 	"sync"
 	"time"
 	"unsafe"
-
-	"golang.org/x/net/context"
 )
 
 // SQLiteTimestampFormats is timestamp formats understood by both this module
@@ -170,6 +172,12 @@ var SQLiteTimestampFormats = []string{
 	"2006-01-02T15:04",
 	"2006-01-02",
 }
+
+const (
+	columnDate      string = "date"
+	columnDatetime  string = "datetime"
+	columnTimestamp string = "timestamp"
+)
 
 func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
@@ -390,7 +398,7 @@ func (c *SQLiteConn) RegisterCommitHook(callback func() int) {
 	if callback == nil {
 		C.sqlite3_commit_hook(c.db, nil, nil)
 	} else {
-		C.sqlite3_commit_hook(c.db, (*[0]byte)(unsafe.Pointer(C.commitHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+		C.sqlite3_commit_hook(c.db, (*[0]byte)(C.commitHookTrampoline), unsafe.Pointer(newHandle(c, callback)))
 	}
 }
 
@@ -403,7 +411,7 @@ func (c *SQLiteConn) RegisterRollbackHook(callback func()) {
 	if callback == nil {
 		C.sqlite3_rollback_hook(c.db, nil, nil)
 	} else {
-		C.sqlite3_rollback_hook(c.db, (*[0]byte)(unsafe.Pointer(C.rollbackHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+		C.sqlite3_rollback_hook(c.db, (*[0]byte)(C.rollbackHookTrampoline), unsafe.Pointer(newHandle(c, callback)))
 	}
 }
 
@@ -420,7 +428,7 @@ func (c *SQLiteConn) RegisterUpdateHook(callback func(int, string, string, int64
 	if callback == nil {
 		C.sqlite3_update_hook(c.db, nil, nil)
 	} else {
-		C.sqlite3_update_hook(c.db, (*[0]byte)(unsafe.Pointer(C.updateHookTrampoline)), unsafe.Pointer(newHandle(c, callback)))
+		C.sqlite3_update_hook(c.db, (*[0]byte)(C.updateHookTrampoline), unsafe.Pointer(newHandle(c, callback)))
 	}
 }
 
@@ -502,7 +510,7 @@ func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) erro
 }
 
 func sqlite3CreateFunction(db *C.sqlite3, zFunctionName *C.char, nArg C.int, eTextRep C.int, pApp uintptr, xFunc unsafe.Pointer, xStep unsafe.Pointer, xFinal unsafe.Pointer) C.int {
-	return C._sqlite3_create_function(db, zFunctionName, nArg, eTextRep, C.uintptr_t(pApp), (*[0]byte)(unsafe.Pointer(xFunc)), (*[0]byte)(unsafe.Pointer(xStep)), (*[0]byte)(unsafe.Pointer(xFinal)))
+	return C._sqlite3_create_function(db, zFunctionName, nArg, eTextRep, C.uintptr_t(pApp), (*[0]byte)(xFunc), (*[0]byte)(xStep), (*[0]byte)(xFinal))
 }
 
 // RegisterAggregator makes a Go type available as a SQLite aggregation function.
@@ -783,6 +791,8 @@ func errorString(err Error) string {
 //     Enable or disable recursive triggers.  X can be 1 or 0.
 //   _crypto_key=XXX
 //     Specify symmetric crypto key for use by SEE.  X must be text key without quotes.
+//   _mutex=XXX
+//     Specify mutex mode. XXX can be "no", "full".
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
@@ -794,6 +804,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	foreignKeys := -1
 	recursiveTriggers := -1
 	cryptoKey := ""
+	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -862,6 +873,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 		// _crypto_key
 		cryptoKey = params.Get("_crypto_key")
+    
+		// _mutex
+		if val := params.Get("_mutex"); val != "" {
+			switch val {
+			case "no":
+				mutex = C.SQLITE_OPEN_NOMUTEX
+			case "full":
+				mutex = C.SQLITE_OPEN_FULLMUTEX
+			default:
+				return nil, fmt.Errorf("Invalid _mutex: %v", val)
+			}
+		}
 
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
@@ -872,9 +895,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
 	rv := C._sqlite3_open_v2(name, &db,
-		C.SQLITE_OPEN_FULLMUTEX|
-			C.SQLITE_OPEN_READWRITE|
-			C.SQLITE_OPEN_CREATE,
+		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
 		nil)
 	if rv != 0 {
 		return nil, Error{Code: ErrNo(rv)}
@@ -1087,7 +1108,7 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 		case int64:
 			rv = C.sqlite3_bind_int64(s.s, n, C.sqlite3_int64(v))
 		case bool:
-			if bool(v) {
+			if v {
 				rv = C.sqlite3_bind_int(s.s, n, 1)
 			} else {
 				rv = C.sqlite3_bind_int(s.s, n, 0)
@@ -1138,18 +1159,20 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 		done:     make(chan struct{}),
 	}
 
-	go func(db *C.sqlite3) {
-		select {
-		case <-ctx.Done():
+	if ctxdone := ctx.Done(); ctxdone != nil {
+		go func(db *C.sqlite3) {
 			select {
+			case <-ctxdone:
+				select {
+				case <-rows.done:
+				default:
+					C.sqlite3_interrupt(db)
+					rows.Close()
+				}
 			case <-rows.done:
-			default:
-				C.sqlite3_interrupt(db)
-				rows.Close()
 			}
-		case <-rows.done:
-		}
-	}(s.c.db)
+		}(s.c.db)
+	}
 
 	return rows, nil
 }
@@ -1183,15 +1206,21 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 		return nil, err
 	}
 
-	done := make(chan struct{})
-	defer close(done)
-	go func(db *C.sqlite3) {
-		select {
-		case <-ctx.Done():
-			C.sqlite3_interrupt(db)
-		case <-done:
-		}
-	}(s.c.db)
+	if ctxdone := ctx.Done(); ctxdone != nil {
+		done := make(chan struct{})
+		defer close(done)
+		go func(db *C.sqlite3) {
+			select {
+			case <-done:
+			case <-ctxdone:
+				select {
+				case <-done:
+				default:
+					C.sqlite3_interrupt(db)
+				}
+			}
+		}(s.c.db)
+	}
 
 	var rowid, changes C.longlong
 	rv := C._sqlite3_step(s.s, &rowid, &changes)
@@ -1285,7 +1314,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_INTEGER:
 			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
 			switch rc.decltype[i] {
-			case "timestamp", "datetime", "date":
+			case columnTimestamp, columnDatetime, columnDate:
 				var t time.Time
 				// Assume a millisecond unix timestamp if it's 13 digits -- too
 				// large to be a reasonable timestamp in seconds.
@@ -1316,10 +1345,10 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
 			switch dest[i].(type) {
 			case sql.RawBytes:
-				dest[i] = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
+				dest[i] = (*[1 << 30]byte)(p)[0:n]
 			default:
 				slice := make([]byte, n)
-				copy(slice[:], (*[1 << 30]byte)(unsafe.Pointer(p))[0:n])
+				copy(slice[:], (*[1 << 30]byte)(p)[0:n])
 				dest[i] = slice
 			}
 		case C.SQLITE_NULL:
@@ -1332,7 +1361,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			s := C.GoStringN((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))), C.int(n))
 
 			switch rc.decltype[i] {
-			case "timestamp", "datetime", "date":
+			case columnTimestamp, columnDatetime, columnDate:
 				var t time.Time
 				s = strings.TrimSuffix(s, "Z")
 				for _, format := range SQLiteTimestampFormats {
