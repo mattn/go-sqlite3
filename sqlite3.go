@@ -789,6 +789,8 @@ func errorString(err Error) string {
 //     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
 //   _recursive_triggers=X
 //     Enable or disable recursive triggers.  X can be 1 or 0.
+//   _mutex=XXX
+//     Specify mutex mode. XXX can be "no", "full".
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
@@ -799,6 +801,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	busyTimeout := 5000
 	foreignKeys := -1
 	recursiveTriggers := -1
+	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -865,6 +868,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// _mutex
+		if val := params.Get("_mutex"); val != "" {
+			switch val {
+			case "no":
+				mutex = C.SQLITE_OPEN_NOMUTEX
+			case "full":
+				mutex = C.SQLITE_OPEN_FULLMUTEX
+			default:
+				return nil, fmt.Errorf("Invalid _mutex: %v", val)
+			}
+		}
+
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
@@ -874,9 +889,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
 	rv := C._sqlite3_open_v2(name, &db,
-		C.SQLITE_OPEN_FULLMUTEX|
-			C.SQLITE_OPEN_READWRITE|
-			C.SQLITE_OPEN_CREATE,
+		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
 		nil)
 	if rv != 0 {
 		return nil, Error{Code: ErrNo(rv)}
