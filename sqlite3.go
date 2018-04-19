@@ -789,6 +789,8 @@ func errorString(err Error) string {
 //     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
 //   _recursive_triggers=X
 //     Enable or disable recursive triggers.  X can be 1 or 0.
+//   _crypto_key=XXX
+//     Specify symmetric crypto key for use by SEE.  X must be text key without quotes.
 //   _mutex=XXX
 //     Specify mutex mode. XXX can be "no", "full".
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
@@ -801,6 +803,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	busyTimeout := 5000
 	foreignKeys := -1
 	recursiveTriggers := -1
+	cryptoKey := ""
 	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -868,6 +871,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// _crypto_key
+		cryptoKey = params.Get("_crypto_key")
+    
 		// _mutex
 		if val := params.Get("_mutex"); val != "" {
 			switch val {
@@ -931,6 +937,16 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 	} else if recursiveTriggers == 1 {
 		if err := exec("PRAGMA recursive_triggers = ON;"); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// crypto key must be specified BEFORE any other action
+	// and works only with SEE version of Sqlite3
+	if cryptoKey != "" {
+		tmp := fmt.Sprintf("PRAGMA key = '%s'", strings.Replace(cryptoKey, "'", "''", -1))
+		if err := exec(tmp); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
