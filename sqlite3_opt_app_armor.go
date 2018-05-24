@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 // +build !windows
-// +build app_armor
+// +build sqlite_app_armor
 
 package sqlite3
 

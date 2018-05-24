@@ -2,7 +2,7 @@
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
-// +build allow_uri_authority
+// +build sqlite_allow_uri_authority
 
 package sqlite3
 
