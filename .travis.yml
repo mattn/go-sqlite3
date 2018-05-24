@@ -13,7 +13,18 @@ env:
     - GOTAGS=
     - GOTAGS=libsqlite3
     - GOTAGS=trace
-    - GOTAGS=vtable
+    - GOTAGS=sqlite_allow_uri_authority
+    - GOTAGS=sqlite_app_armor
+    - GOTAGS=sqlite_foreign_keys
+    - GOTAGS=sqlite_fts5
+    - GOTAGS=sqlite_icu
+    - GOTAGS=sqlite_introspect
+    - GOTAGS=sqlite_json
+    - GOTAGS=sqlite_secure_delete
+    - GOTAGS=sqlite_stat4
+    - GOTAGS=sqlite_vacuum_full
+    - GOTAGS=sqlite_vacuum_incr
+    - GOTAGS=sqlite_vtable
 
 go:
   - 1.7.x
