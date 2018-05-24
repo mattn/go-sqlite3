@@ -12,7 +12,6 @@ env:
   matrix:
     - GOTAGS=
     - GOTAGS=libsqlite3
-    - GOTAGS=trace
     - GOTAGS=sqlite_allow_uri_authority
     - GOTAGS=sqlite_app_armor
     - GOTAGS=sqlite_foreign_keys
@@ -21,7 +20,10 @@ env:
     - GOTAGS=sqlite_introspect
     - GOTAGS=sqlite_json
     - GOTAGS=sqlite_secure_delete
+    - GOTAGS=sqlite_see
     - GOTAGS=sqlite_stat4
+    - GOTAGS=sqlite_trace
+    - GOTAGS=sqlite_userauth
     - GOTAGS=sqlite_vacuum_full
     - GOTAGS=sqlite_vacuum_incr
     - GOTAGS=sqlite_vtable
