@@ -56,16 +56,94 @@ matrix:
       env: GOTAGS=libsqlite3 GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.7.x
-      env: GOTAGS=trace GOOS=windows GOARCH=386
+      env: GOTAGS=sqlite_allow_uri_authority GOOS=windows GOARCH=386
     - os: linux
       go: 1.7.x
-      env: GOTAGS=trace GOOS=windows GOARCH=amd64
+      env: GOTAGS=sqlite_allow_uri_authority GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.7.x
-      env: GOTAGS=vtable GOOS=windows GOARCH=386
+      env: GOTAGS=sqlite_app_armor GOOS=windows GOARCH=386
     - os: linux
       go: 1.7.x
-      env: GOTAGS=vtable GOOS=windows GOARCH=amd64
+      env: GOTAGS=sqlite_app_armor GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_foreign_keys GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_foreign_keys GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_fts5 GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_fts5 GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_icu GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_icu GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_introspect GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_introspect GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_json GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_json GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_secure_delete GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_secure_delete GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_see GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_see GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_stat4 GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_stat4 GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_trace GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_trace GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_userauth GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_userauth GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_vacuum_full GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_vacuum_full GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_vacuum_incr GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_vacuum_incr GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_vtable GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.7.x
+      env: GOTAGS=sqlite_vtable GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.8.x
       env: GOTAGS= GOOS=windows GOARCH=386
@@ -80,16 +158,94 @@ matrix:
       env: GOTAGS=libsqlite3 GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.8.x
-      env: GOTAGS=trace GOOS=windows GOARCH=386
+      env: GOTAGS=sqlite_allow_uri_authority GOOS=windows GOARCH=386
     - os: linux
       go: 1.8.x
-      env: GOTAGS=trace GOOS=windows GOARCH=amd64
+      env: GOTAGS=sqlite_allow_uri_authority GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.8.x
-      env: GOTAGS=vtable GOOS=windows GOARCH=386
+      env: GOTAGS=sqlite_app_armor GOOS=windows GOARCH=386
     - os: linux
       go: 1.8.x
-      env: GOTAGS=vtable GOOS=windows GOARCH=amd64
+      env: GOTAGS=sqlite_app_armor GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_foreign_keys GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_foreign_keys GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_fts5 GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_fts5 GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_icu GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_icu GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_introspect GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_introspect GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_json GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_json GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_secure_delete GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_secure_delete GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_see GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_see GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_stat4 GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_stat4 GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_trace GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_trace GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_userauth GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_userauth GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_vacuum_full GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_vacuum_full GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_vacuum_incr GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_vacuum_incr GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_vtable GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.8.x
+      env: GOTAGS=sqlite_vtable GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.9.x
       env: GOTAGS= GOOS=windows GOARCH=386
@@ -104,16 +260,94 @@ matrix:
       env: GOTAGS=libsqlite3 GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.9.x
-      env: GOTAGS=trace GOOS=windows GOARCH=386
+      env: GOTAGS=sqlite_allow_uri_authority GOOS=windows GOARCH=386
     - os: linux
       go: 1.9.x
-      env: GOTAGS=trace GOOS=windows GOARCH=amd64
+      env: GOTAGS=sqlite_allow_uri_authority GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.9.x
-      env: GOTAGS=vtable GOOS=windows GOARCH=386
+      env: GOTAGS=sqlite_app_armor GOOS=windows GOARCH=386
     - os: linux
       go: 1.9.x
-      env: GOTAGS=vtable GOOS=windows GOARCH=amd64
+      env: GOTAGS=sqlite_app_armor GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_foreign_keys GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_foreign_keys GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_fts5 GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_fts5 GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_icu GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_icu GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_introspect GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_introspect GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_json GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_json GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_secure_delete GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_secure_delete GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_see GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_see GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_stat4 GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_stat4 GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_trace GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_trace GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_userauth GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_userauth GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_vacuum_full GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_vacuum_full GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_vacuum_incr GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_vacuum_incr GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_vtable GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.9.x
+      env: GOTAGS=sqlite_vtable GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.10.x
       env: GOTAGS= GOOS=windows GOARCH=386
@@ -128,16 +362,94 @@ matrix:
       env: GOTAGS=libsqlite3 GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.10.x
-      env: GOTAGS=trace GOOS=windows GOARCH=386
+      env: GOTAGS=sqlite_allow_uri_authority GOOS=windows GOARCH=386
     - os: linux
       go: 1.10.x
-      env: GOTAGS=trace GOOS=windows GOARCH=amd64
+      env: GOTAGS=sqlite_allow_uri_authority GOOS=windows GOARCH=amd64
     - os: linux
       go: 1.10.x
-      env: GOTAGS=vtable GOOS=windows GOARCH=386
+      env: GOTAGS=sqlite_app_armor GOOS=windows GOARCH=386
     - os: linux
       go: 1.10.x
-      env: GOTAGS=vtable GOOS=windows GOARCH=amd64
+      env: GOTAGS=sqlite_app_armor GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_foreign_keys GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_foreign_keys GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_fts5 GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_fts5 GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_icu GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_icu GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_introspect GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_introspect GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_json GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_json GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_secure_delete GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_secure_delete GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_see GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_see GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_stat4 GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_stat4 GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_trace GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_trace GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_userauth GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_userauth GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_vacuum_full GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_vacuum_full GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_vacuum_incr GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_vacuum_incr GOOS=windows GOARCH=amd64
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_vtable GOOS=windows GOARCH=386
+    - os: linux
+      go: 1.10.x
+      env: GOTAGS=sqlite_vtable GOOS=windows GOARCH=amd64
 
 
 before_install:
