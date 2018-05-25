@@ -2,12 +2,12 @@
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
-// +build icu
+// +build sqlite_allow_uri_authority
 
 package sqlite3
 
 /*
-#cgo LDFLAGS: -licuuc -licui18n
-#cgo CFLAGS: -DSQLITE_ENABLE_ICU
+#cgo CFLAGS: -DSQLITE_ALLOW_URI_AUTHORITY
+#cgo LDFLAGS: -lm
 */
 import "C"

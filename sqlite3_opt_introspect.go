@@ -2,11 +2,12 @@
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
-// +build json1
+// +build sqlite_introspect
 
 package sqlite3
 
 /*
-#cgo CFLAGS: -DSQLITE_ENABLE_JSON1
+#cgo CFLAGS: -DSQLITE_INTROSPECTION_PRAGMAS
+#cgo LDFLAGS: -lm
 */
 import "C"
