@@ -157,7 +157,7 @@ before_install:
   - |
     if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then 
       brew update
-      brew install icu4c
+      brew upgrade icu4c
     fi
   - |
     if [[ "${GOOS}" != "windows" ]]; then
