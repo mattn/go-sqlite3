@@ -137,16 +137,6 @@ Additional information:
 - [#491](https://github.com/mattn/go-sqlite3/issues/491)
 - [#560](https://github.com/mattn/go-sqlite3/issues/560)
 
-## Docker
-
-### Alpine
-
-When building in an `alpine` container run the following command before building.
-
-```
-apk add --update gcc musl-dev
-```
-
 # Google Cloud Platform
 
 Building on GCP is not possible because `Google Cloud Platform does not allow `gcc` to be executed.
@@ -167,6 +157,14 @@ If you wish to link directly to libsqlite3 then you can use the `libsqlite3` bui
 
 ```
 go build --tags "libsqlite3 linux"
+```
+
+### Alpine
+
+When building in an `alpine` container run the following command before building.
+
+```
+apk add --update gcc musl-dev
 ```
 
 ### Fedora
