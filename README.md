@@ -40,6 +40,26 @@ This package allows additional configuration of features available within SQLite
 
 [Click here for more information about build tags / constraints.](https://golang.org/pkg/go/build/#hdr-Build_Constraints)
 
+### Usage
+
+If you wish to build this library with additional extensions / features.
+Use the following command.
+
+```bash
+go build --tags "<FEATURE>"
+```
+
+For available features see the extension list.
+When using multiple build tags, all the different tags should be space delimted.
+
+Example:
+
+```bash
+go build --tags "icu json1 fts5 secure_delete"
+```
+
+### Feature / Extension List
+
 | Extension | Build Tag | Description |
 |-----------|-----------|-------------|
 | Additional Statistics | sqlite_stat4 | This option adds additional logic to the ANALYZE command and to the query planner that can help SQLite to chose a better query plan under certain situations. The ANALYZE command is enhanced to collect histogram data from all columns of every index and store that data in the sqlite_stat4 table.<br><br>The query planner will then use the histogram data to help it make better index choices. The downside of this compile-time option is that it violates the query planner stability guarantee making it more difficult to ensure consistent performance in mass-produced applications.<br><br>SQLITE_ENABLE_STAT4 is an enhancement of SQLITE_ENABLE_STAT3. STAT3 only recorded histogram data for the left-most column of each index whereas the STAT4 enhancement records histogram data from all columns of each index.<br><br>The SQLITE_ENABLE_STAT3 compile-time option is a no-op and is ignored if the SQLITE_ENABLE_STAT4 compile-time option is used |
@@ -67,16 +87,6 @@ This package allows additional configuration of features available within SQLite
     Install sqlite3 from homebrew: `brew install sqlite3`
 
     Use `go build --tags "libsqlite3 darwin"`
-
-- Want to build go-sqlite3 with additional extensions / features.
-
-    Use `go build --tags "<FEATURE>"`
-
-    When using multiple build tags, all the different tags should be space delimted.
-
-    For available features / extensions see [Features](#features).
-
-    Example building multiple features: `go build --tags "icu json1 fts5 secure_delete"`
 
 - Can't build go-sqlite3 on windows 64bit.
 
