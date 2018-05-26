@@ -120,6 +120,20 @@ go build --tags "icu json1 fts5 secure_delete"
     connection to this string will point to the same in-memory database. See
     [#204](https://github.com/mattn/go-sqlite3/issues/204) for more info.
 
+- Compile error: `can not be used when making a shared object; recompile with -fPIC`
+
+    When receiving a compile time error referencing recompile with `-FPIC` then you
+    are probably using a hardend system.
+
+    You can copile the library on a hardend system with the following command.
+
+    ```bash
+    go build -ldflags '-extldflags=-fno-PIC'
+    ```
+
+    More details see [#120](https://github.com/mattn/go-sqlite3/issues/120)
+    
+
 # License
 
 MIT: http://mattn.mit-license.org/2012
