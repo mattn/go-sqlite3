@@ -10,11 +10,29 @@ go-sqlite3
 
 sqlite3 driver conforming to the built-in database/sql interface
 
+Supported Golang version:
+- 1.8.x
+- 1.9.x
+- 1.10.x
+
 ### Overview
 
 - [Installation](#installation)
 - [API Reference](#api-reference)
 - [Features](#features)
+- [Compilation](#compilation)
+  - [Android](#android)
+  - [ARM](#arm)
+  - [Cross Compile](#cross-compile)
+  - [Docker](#docker)
+    - [Alpine](#alpine)
+  - [Google Cloud Platform](#google-cloud-platform)
+  - [Linux](#linux)
+    - [Fedora](#fedora)
+    - [Ubuntu](#ubuntu)
+  - [Mac OSX](#mac-osx)
+  - [Windows](#windows)
+  - [Errors](#errors)
 - [FAQ](#faq)
 - [License](#license)
 
@@ -28,6 +46,8 @@ _go-sqlite3_ is *cgo* package.
 If you want to build your app using go-sqlite3, you need gcc.
 However, after you have built and installed _go-sqlite3_ with `go install github.com/mattn/go-sqlite3` (which requires gcc), you can build your app without relying on gcc in future.
 
+***Important: because this is a `CGO` enabled package you are required to set the environment variable `CGO_ENABLED=1` and have a `gcc` compile present within your path.***
+
 # API Reference
 
 API documentation can be found here: http://godoc.org/github.com/mattn/go-sqlite3
@@ -39,6 +59,26 @@ Examples can be found under the [examples](./_example) directory
 This package allows additional configuration of features available within SQLite3 to be enabled or disabled by golang build constraints also known as build `tags`.
 
 [Click here for more information about build tags / constraints.](https://golang.org/pkg/go/build/#hdr-Build_Constraints)
+
+### Usage
+
+If you wish to build this library with additional extensions / features.
+Use the following command.
+
+```bash
+go build --tags "<FEATURE>"
+```
+
+For available features see the extension list.
+When using multiple build tags, all the different tags should be space delimted.
+
+Example:
+
+```bash
+go build --tags "icu json1 fts5 secure_delete"
+```
+
+### Feature / Extension List
 
 | Extension | Build Tag | Description |
 |-----------|-----------|-------------|
@@ -56,32 +96,165 @@ This package allows additional configuration of features available within SQLite
 | Secure Delete | sqlite_secure_delete | This compile-time option changes the default setting of the secure_delete pragma.<br><br>When this option is not used, secure_delete defaults to off. When this option is present, secure_delete defaults to on.<br><br>The secure_delete setting causes deleted content to be overwritten with zeros. There is a small performance penalty since additional I/O must occur.<br><br>On the other hand, secure_delete can prevent fragments of sensitive information from lingering in unused parts of the database file after it has been deleted. See the documentation on the secure_delete pragma for additional information |
 | Tracing / Debug | sqlite_trace | Activate trace functions |
 
-# FAQ
+# Compilation
 
-- Want to build go-sqlite3 with libsqlite3 on my linux.
+This package requires `CGO_ENABLED=1` ennvironment variable if not set by default, and the presence of the `gcc` compiler.
 
-    Use `go build --tags "libsqlite3 linux"`
+If you need to add additional CFLAGS or LDFLAGS to the build command, and do not want to modify this package. Then this can be achieved by  using the `CGO_CFLAGS` and `CGO_LDFLAGS` environment variables.
 
-- Want to build go-sqlite3 with libsqlite3 on OS X.
+## Android
 
-    Install sqlite3 from homebrew: `brew install sqlite3`
+This package can be compiled for android.
+Compile with:
 
-    Use `go build --tags "libsqlite3 darwin"`
+```bash
+go build --tags "android"
+```
 
-- Want to build go-sqlite3 with additional extensions / features.
+For more information see [#201](https://github.com/mattn/go-sqlite3/issues/201)
 
-    Use `go build --tags "<FEATURE>"`
+# ARM
 
-    When using multiple build tags, all the different tags should be space delimted.
+To compile for `ARM` use the following environment.
 
-    For available features / extensions see [Features](#features).
+```bash
+env CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++ \
+    CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 \
+    go build -v 
+```
 
-    Example building multiple features: `go build --tags "icu json1 fts5 secure_delete"`
+Additional information:
+- [#242](https://github.com/mattn/go-sqlite3/issues/242)
+- [#504](https://github.com/mattn/go-sqlite3/issues/504)
+
+# Cross Compile
+
+This library can be cross-compiled.
+
+In some cases you are required to the `CC` environment variable with the cross compiler.
+
+Additional information:
+- [#491](https://github.com/mattn/go-sqlite3/issues/491)
+- [#560](https://github.com/mattn/go-sqlite3/issues/560)
+
+# Google Cloud Platform
+
+Building on GCP is not possible because `Google Cloud Platform does not allow `gcc` to be executed.
+
+Please work only with compiled final binaries.
+
+## Linux
+
+To compile this package on Linux you must install the development tools for your linux distribution.
+
+To compile under linux use the build tag `linux`.
+
+```bash
+go build --tags "linux"
+```
+
+If you wish to link directly to libsqlite3 then you can use the `libsqlite3` build tag.
+
+```
+go build --tags "libsqlite3 linux"
+```
+
+### Alpine
+
+When building in an `alpine` container run the following command before building.
+
+```
+apk add --update gcc musl-dev
+```
+
+### Fedora
+
+```bash
+sudo yum groupinstall "Development Tools" "Development Libraries"
+```
+
+### Ubuntu
+
+```bash
+sudo apt-get install build-essential
+```
+
+## Mac OSX
+
+OSX should have all the tools present to compile this package, if not install XCode this will add all the developers tools.
+
+Required dependency
+
+```bash
+brew install sqlite3
+```
+
+For OSX there is an additional package install which is required if you whish to build the `icu` extension.
+
+This additional package can be installed with `homebrew`.
+
+```bash
+brew upgrade icu4c
+```
+
+To compile for Mac OSX.
+
+```bash
+go build --tags "darwin"
+```
+
+If you wish to link directly to libsqlite3 then you can use the `libsqlite3` build tag.
+
+```
+go build --tags "libsqlite3 darwin"
+```
+
+Additional information:
+- [#206](https://github.com/mattn/go-sqlite3/issues/206)
+- [#404](https://github.com/mattn/go-sqlite3/issues/404)
+
+## Windows
+
+To compile this package on Windows OS you must have the `gcc` compiler installed.
+
+1) Install a Windows `gcc` toolchain.
+2) Add the `bin` folders to the Windows path if the installer did not do this by default.
+3) Open a terminal for the TDM-GCC toolchain, can be found in the Windows Start menu.
+4) Navigate to your project folder and run the `go build ...` command for this package.
+
+For example the TDM-GCC Toolchain can be found [here](ttps://sourceforge.net/projects/tdm-gcc/).
+
+## Errors
+
+- Compile error: `can not be used when making a shared object; recompile with -fPIC`
+
+    When receiving a compile time error referencing recompile with `-FPIC` then you
+    are probably using a hardend system.
+
+    You can copile the library on a hardend system with the following command.
+
+    ```bash
+    go build -ldflags '-extldflags=-fno-PIC'
+    ```
+
+    More details see [#120](https://github.com/mattn/go-sqlite3/issues/120)
 
 - Can't build go-sqlite3 on windows 64bit.
 
     > Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit.
     > See: [#27](https://github.com/mattn/go-sqlite3/issues/27)
+
+- `go get github.com/mattn/go-sqlite3` throws compilation error.
+
+    `gcc` throws: `internal compiler error`
+
+    Remove the download repository from your disk and try re-install with:
+
+    ```bash
+    go install github.com/mattn/go-sqlite3
+    ```
+
+# FAQ
 
 - Getting insert error while query is opened.
 
@@ -109,6 +282,21 @@ This package allows additional configuration of features available within SQLite
     workaround is to use "file::memory:?mode=memory&cache=shared". Every
     connection to this string will point to the same in-memory database. See
     [#204](https://github.com/mattn/go-sqlite3/issues/204) for more info.
+
+- Reading from database with large amount of goroutines fails on OSX.
+
+    OS X limits OS-wide to not have more than 1000 files open simultaneously by default.
+
+    For more information see [#289](https://github.com/mattn/go-sqlite3/issues/289)
+
+- Trying to execure a `.` (dot) command throws an error.
+
+    Error: `Error: near ".": syntax error`
+    Dot command are part of SQLite3 CLI not of this library.
+
+    You need to implement the feature or call the sqlite3 cli.
+
+    More infomation see [#305](https://github.com/mattn/go-sqlite3/issues/305)
 
 # License
 
