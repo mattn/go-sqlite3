@@ -19,15 +19,15 @@ Supported Golang version:
 
 - [Installation](#installation)
 - [API Reference](#api-reference)
+- [Connection String](#connection-string)
 - [Features](#features)
 - [Compilation](#compilation)
   - [Android](#android)
   - [ARM](#arm)
   - [Cross Compile](#cross-compile)
-  - [Docker](#docker)
-    - [Alpine](#alpine)
   - [Google Cloud Platform](#google-cloud-platform)
   - [Linux](#linux)
+    - [Alpine](#alpine)
     - [Fedora](#fedora)
     - [Ubuntu](#ubuntu)
   - [Mac OSX](#mac-osx)
@@ -53,6 +53,36 @@ However, after you have built and installed _go-sqlite3_ with `go install github
 API documentation can be found here: http://godoc.org/github.com/mattn/go-sqlite3
 
 Examples can be found under the [examples](./_example) directory
+
+# Connection String
+
+When creating a new SQLite database or connection to an existing one, with the file name additional options can be given.
+This is also known as a DSN string. (Data Source Name).
+
+Options are append after the filename of the SQLite database.
+The database filename and options are seperated by an `?` (Question Mark).
+
+This also applies when using an in-memory database instead of a file.
+
+Options can be given using the following format: `KEYWORD=VALUE` and multiple options can be combined with the `&` ampersand.
+
+This library supports dsn options of SQLite itself and provides additional options.
+
+| Name | Key | Value(s) | Description |
+|------|-----|----------|-------------|
+| Shared-Cache Mode | cache | <ul><li>shared</li><li>private</li></ul> | Set cache mode for more information see [sqlite.org](https://www.sqlite.org/sharedcache.html) |
+| Time Zone Location | _loc | auto | Specify location of time format. |
+| Busy Timeout | _busy_timeout | `int` | Specify value for sqlite3_busy_timeout. |
+| Transaction Lock | _txlock | <ul><li>immediate</li><li>deferred</li><li>exclusive</li></ul> | Specify locking behavior for transactions. |
+| Foreign Keys | _foreign_keys | <ul><li>0</li><li>1</li></ul> | Enable or disable enforcement of foreign keys. |
+| Recursive Triggers | _recursive_triggers | <ul><li>0</li><li>1</li></ul> | Enable or disable recursive triggers. |
+| Mutex Locking | _mutex | <ul><li>no</li><li>full</li></ul> | Specify mutex mode. |
+
+## DSN Examples
+
+```
+file:test.db?cache=shared&mode=memory
+```
 
 # Features
 
