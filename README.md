@@ -68,15 +68,20 @@ Options can be given using the following format: `KEYWORD=VALUE` and multiple op
 
 This library supports dsn options of SQLite itself and provides additional options.
 
+Boolean values can be one of:
+* `0` `no` `false` `off`
+* `1` `yes` `true` `on`
+
 | Name | Key | Value(s) | Description |
 |------|-----|----------|-------------|
+| Auto Vacuum | _vacuum | <ul><li>`0` \| `none`</li><li>`1` \| `full`</li><li>`2` \| `incremental`</li></ul> | For more information see [PRAGMA auto_vacuum](https://www.sqlite.org/pragma.html#pragma_auto_vacuum) |
+| Busy Timeout | _busy_timeout | `int` | Specify value for sqlite3_busy_timeout. |
+| Foreign Keys | _foreign_keys | `boolean` | Enable or disable enforcement of foreign keys. |
+| Mutex Locking | _mutex | <ul><li>no</li><li>full</li></ul> | Specify mutex mode. |
+| Recursive Triggers | _recursive_triggers | `boolean` | Enable or disable recursive triggers. |
 | Shared-Cache Mode | cache | <ul><li>shared</li><li>private</li></ul> | Set cache mode for more information see [sqlite.org](https://www.sqlite.org/sharedcache.html) |
 | Time Zone Location | _loc | auto | Specify location of time format. |
-| Busy Timeout | _busy_timeout | `int` | Specify value for sqlite3_busy_timeout. |
 | Transaction Lock | _txlock | <ul><li>immediate</li><li>deferred</li><li>exclusive</li></ul> | Specify locking behavior for transactions. |
-| Foreign Keys | _foreign_keys | <ul><li>0</li><li>1</li></ul> | Enable or disable enforcement of foreign keys. |
-| Recursive Triggers | _recursive_triggers | <ul><li>0</li><li>1</li></ul> | Enable or disable recursive triggers. |
-| Mutex Locking | _mutex | <ul><li>no</li><li>full</li></ul> | Specify mutex mode. |
 
 ## DSN Examples
 

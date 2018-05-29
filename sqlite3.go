@@ -779,6 +779,14 @@ func errorString(err Error) string {
 }
 
 // Open database and return a new connection.
+//
+// A pragma can take either zero or one argument.
+// The argument is may be either in parentheses or it may be separated from
+// the pragma name by an equal sign. The two syntaxes yield identical results.
+// In many pragmas, the argument is a boolean. The boolean can be one of:
+//    1 yes true on
+//    0 no false off
+//
 // You can specify a DSN string using a URI as the filename.
 //   test.db
 //   file:test.db?cache=shared&mode=memory
@@ -787,28 +795,43 @@ func errorString(err Error) string {
 // go-sqlite3 adds the following query parameters to those used by SQLite:
 //   _loc=XXX
 //     Specify location of time format. It's possible to specify "auto".
-//   _busy_timeout=XXX
-//     Specify value for sqlite3_busy_timeout.
+//
+//   _mutex=XXX
+//     Specify mutex mode. XXX can be "no", "full".
+//
 //   _txlock=XXX
 //     Specify locking behavior for transactions.  XXX can be "immediate",
 //     "deferred", "exclusive".
+//
+//   _busy_timeout=XXX
+//     Specify value for sqlite3_busy_timeout.
+//
 //   _foreign_keys=X
 //     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
+//
 //   _recursive_triggers=X
 //     Enable or disable recursive triggers.  X can be 1 or 0.
-//   _mutex=XXX
-//     Specify mutex mode. XXX can be "no", "full".
+//
+//   _vacuum=X
+//     0 | none - Auto Vacuum disabled
+//     1 | full - Auto Vacuum FULL
+//     2 | incremental - Auto Vacuum Incremental
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
 	}
 
+	// Options
 	var loc *time.Location
+	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	txlock := "BEGIN"
+
+	// PRAGMA's
+	autoVacuum := -1
 	busyTimeout := 5000
 	foreignKeys := -1
 	recursiveTriggers := -1
-	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
+
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
@@ -828,13 +851,16 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
-		// _busy_timeout
-		if val := params.Get("_busy_timeout"); val != "" {
-			iv, err := strconv.ParseInt(val, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("Invalid _busy_timeout: %v: %v", val, err)
+		// _mutex
+		if val := params.Get("_mutex"); val != "" {
+			switch val {
+			case "no":
+				mutex = C.SQLITE_OPEN_NOMUTEX
+			case "full":
+				mutex = C.SQLITE_OPEN_FULLMUTEX
+			default:
+				return nil, fmt.Errorf("Invalid _mutex: %v", val)
 			}
-			busyTimeout = int(iv)
 		}
 
 		// _txlock
@@ -851,13 +877,36 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// auto_vacuum
+		if val := params.Get("_vacuum"); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "none":
+				autoVacuum = 0
+			case "1", "full":
+				autoVacuum = 1
+			case "2", "incremental":
+				autoVacuum = 2
+			default:
+				return nil, fmt.Errorf("Invalid _vacuum: %v", val)
+			}
+		}
+
+		// _busy_timeout
+		if val := params.Get("_busy_timeout"); val != "" {
+			iv, err := strconv.ParseInt(val, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid _busy_timeout: %v: %v", val, err)
+			}
+			busyTimeout = int(iv)
+		}
+
 		// _foreign_keys
 		if val := params.Get("_foreign_keys"); val != "" {
-			switch val {
-			case "1":
-				foreignKeys = 1
-			case "0":
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
 				foreignKeys = 0
+			case "1", "yes", "true", "on":
+				foreignKeys = 1
 			default:
 				return nil, fmt.Errorf("Invalid _foreign_keys: %v", val)
 			}
@@ -865,25 +914,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 		// _recursive_triggers
 		if val := params.Get("_recursive_triggers"); val != "" {
-			switch val {
-			case "1":
-				recursiveTriggers = 1
-			case "0":
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
 				recursiveTriggers = 0
+			case "1", "yes", "true", "on":
+				recursiveTriggers = 1
 			default:
 				return nil, fmt.Errorf("Invalid _recursive_triggers: %v", val)
-			}
-		}
-
-		// _mutex
-		if val := params.Get("_mutex"); val != "" {
-			switch val {
-			case "no":
-				mutex = C.SQLITE_OPEN_NOMUTEX
-			case "full":
-				mutex = C.SQLITE_OPEN_FULLMUTEX
-			default:
-				return nil, fmt.Errorf("Invalid _mutex: %v", val)
 			}
 		}
 
@@ -920,24 +957,26 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 		return nil
 	}
-	if foreignKeys == 0 {
-		if err := exec("PRAGMA foreign_keys = OFF;"); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
-		}
-	} else if foreignKeys == 1 {
-		if err := exec("PRAGMA foreign_keys = ON;"); err != nil {
+
+	// Auto Vacuum
+	if autoVacuum > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA auto_vacuum = %d;", autoVacuum)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
 	}
-	if recursiveTriggers == 0 {
-		if err := exec("PRAGMA recursive_triggers = OFF;"); err != nil {
+
+	// Forgein Keys
+	if foreignKeys > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA foreign_keys = %d;", foreignKeys)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
-	} else if recursiveTriggers == 1 {
-		if err := exec("PRAGMA recursive_triggers = ON;"); err != nil {
+	}
+
+	// Recursive Triggers
+	if recursiveTriggers > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA recursive_triggers = %d;", recursiveTriggers)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
