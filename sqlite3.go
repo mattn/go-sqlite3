@@ -810,6 +810,9 @@ func errorString(err Error) string {
 //     Default or disabled the LIKE operation is case-insensitive.
 //     When enabling this options behaviour of LIKE will become case-sensitive.
 //
+//   _defer_foreign_keys=Boolean | _defer_fk=Boolean
+//     Defer Foreign Keys until outermost transaction is committed.
+//
 //   _foreign_keys=Boolean | _fk=Boolean
 //     Enable or disable enforcement of foreign keys.
 //
@@ -836,6 +839,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	autoVacuum := -1
 	busyTimeout := 5000
 	caseSensitiveLike := -1
+	deferForeignKeys := -1
 	foreignKeys := -1
 	recursiveTriggers := -1
 
@@ -935,6 +939,28 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Defer Foreign Keys
+		//
+		// https://www.sqlite.org/pragma.html#pragma_defer_foreign_keys
+		//
+		pkey = "" // Reset pkey
+		if _, ok := params["_defer_foreign_keys"]; ok {
+			pkey = "_defer_foreign_keys"
+		}
+		if _, ok := params["_defer_fk"]; ok {
+			pkey = "_defer_fk"
+		}
+		if val := params.Get(pkey); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
+				deferForeignKeys = 0
+			case "1", "yes", "true", "on":
+				deferForeignKeys = 1
+			default:
+				return nil, fmt.Errorf("Invalid _foreign_keys: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+			}
+		}
+
 		// Foreign Keys (_foreign_keys)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
@@ -1023,6 +1049,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	if caseSensitiveLike > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA case_sensitive_like = %d;", caseSensitiveLike)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Defer Foreign Keys
+	if deferForeignKeys > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA defer_foreign_keys = %d;", deferForeignKeys)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
