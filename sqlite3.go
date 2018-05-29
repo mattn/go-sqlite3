@@ -1304,7 +1304,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	// Query Only
-	if queryOnly > 0 {
+	if queryOnly > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA query_only = %d;", queryOnly)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
