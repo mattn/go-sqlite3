@@ -793,6 +793,23 @@ func errorString(err Error) string {
 //   file:test.db?cache=shared&mode=memory
 //   :memory:
 //   file::memory:
+//
+//   mode
+//     Access mode of the database.
+//     https://www.sqlite.org/c3ref/open.html
+//     Values:
+//      - ro
+//      - rw
+//      - rwc
+//      - memory
+//
+//   shared
+//     SQLite Shared-Cache Mode
+//     https://www.sqlite.org/sharedcache.html
+//     Values:
+//       - shared
+//       - private
+//
 // go-sqlite3 adds the following query parameters to those used by SQLite:
 //   _loc=XXX
 //     Specify location of time format. It's possible to specify "auto".
