@@ -862,6 +862,10 @@ func errorString(err Error) string {
 //   _recursive_triggers=Boolean | _rt=Boolean
 //     Enable or disable recursive triggers.
 //
+//   _secure_delete=Boolean|FAST
+//     When secure_delete is on, SQLite overwrites deleted content with zeros.
+//     https://www.sqlite.org/pragma.html#pragma_secure_delete
+//
 //   _vacuum=X
 //     0 | none - Auto Vacuum disabled
 //     1 | full - Auto Vacuum FULL
@@ -889,6 +893,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	lockingMode := "NORMAL"
 	queryOnly := -1
 	recursiveTriggers := -1
+	secureDelete := "DEFAULT"
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -1109,6 +1114,23 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Secure Delete (_secure_delete)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_secure_delete
+		//
+		if val := params.Get("_secure_delete"); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
+				secureDelete = "OFF"
+			case "1", "yes", "true", "on":
+				secureDelete = "ON"
+			case "fast":
+				secureDelete = "FAST"
+			default:
+				return nil, fmt.Errorf("Invalid _recursive_triggers: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+			}
+		}
+
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
@@ -1209,6 +1231,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Recursive Triggers
 	if recursiveTriggers > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA recursive_triggers = %d;", recursiveTriggers)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Secure Delete
+	//
+	// Because this package can set the compile time flag SQLITE_SECURE_DELETE with a build tag
+	// the default value for secureDelete var is 'DEFAULT' this way
+	// you can compile with secure_delete 'ON' and disable it for a specific database connection.
+	if secureDelete != "DEFAULT" {
+		if err := exec(fmt.Sprintf("PRAGMA secure_delete = %s;", secureDelete)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
