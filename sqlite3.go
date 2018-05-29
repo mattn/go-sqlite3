@@ -961,7 +961,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
 		//
-		if val := params.Get("_recursive_triggers"); val != "" {
+		pkey = "" // Reset pkey
+		if _, ok := params["_recursive_triggers"]; ok {
+			pkey = "_recursive_triggers"
+		}
+		if _, ok := params["_rt"]; ok {
+			pkey = "_rt"
+		}
+		if val := params.Get(pkey); val != "" {
 			switch strings.ToLower(val) {
 			case "0", "no", "false", "off":
 				recursiveTriggers = 0
