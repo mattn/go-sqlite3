@@ -816,6 +816,10 @@ func errorString(err Error) string {
 //   _foreign_keys=Boolean | _fk=Boolean
 //     Enable or disable enforcement of foreign keys.
 //
+//   _ignore_check_constraints=Boolean
+//     This pragma enables or disables the enforcement of CHECK constraints.
+//     The default setting is off, meaning that CHECK constraints are enforced by default.
+//
 //   _recursive_triggers=Boolean | _rt=Boolean
 //     Enable or disable recursive triggers.
 //
@@ -840,6 +844,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	busyTimeout := 5000
 	caseSensitiveLike := -1
 	deferForeignKeys := -1
+	ignoreCheckConstraints := -1
 	foreignKeys := -1
 	recursiveTriggers := -1
 
@@ -983,6 +988,21 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Ignore CHECK Constrains (_ignore_check_constraints)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_ignore_check_constraints
+		//
+		if val := params.Get("_ignore_check_constraints"); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
+				ignoreCheckConstraints = 0
+			case "1", "yes", "true", "on":
+				ignoreCheckConstraints = 1
+			default:
+				return nil, fmt.Errorf("Invalid _ignore_check_constraints: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+			}
+		}
+
 		// Recursive Triggers (_recursive_triggers)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
@@ -1066,6 +1086,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Forgein Keys
 	if foreignKeys > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA foreign_keys = %d;", foreignKeys)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Ignore CHECK Constraints
+	if ignoreCheckConstraints > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA ignore_check_constraints = %d;", ignoreCheckConstraints)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
