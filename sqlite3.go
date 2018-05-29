@@ -811,10 +811,10 @@ func errorString(err Error) string {
 //     When enabling this options behaviour of LIKE will become case-sensitive.
 //
 //   _foreign_keys=Boolean | _fk=Boolean
-//     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
+//     Enable or disable enforcement of foreign keys.
 //
-//   _recursive_triggers=Boolean
-//     Enable or disable recursive triggers.  X can be 1 or 0.
+//   _recursive_triggers=Boolean | _rt=Boolean
+//     Enable or disable recursive triggers.
 //
 //   _vacuum=X
 //     0 | none - Auto Vacuum disabled
@@ -905,6 +905,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_busy_timeout
 		//
+		pkey = "" // Reset pkey
 		if _, ok := params["_busy_timeout"]; ok {
 			pkey = "_busy_timeout"
 		}
@@ -938,6 +939,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
 		//
+		pkey = "" // Reset pkey
 		if _, ok := params["_foreign_keys"]; ok {
 			pkey = "_foreign_keys"
 		}
