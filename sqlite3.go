@@ -838,7 +838,8 @@ func errorString(err Error) string {
 //   _busy_timeout=XXX"| _timeout=XXX
 //     Specify value for sqlite3_busy_timeout.
 //
-//   _cslike=Boolean
+//   _case_sensitive_like=Boolean | _cslike=Boolean
+//     https://www.sqlite.org/pragma.html#pragma_case_sensitive_like
 //     Default or disabled the LIKE operation is case-insensitive.
 //     When enabling this options behaviour of LIKE will become case-sensitive.
 //
@@ -852,11 +853,11 @@ func errorString(err Error) string {
 //     This pragma enables or disables the enforcement of CHECK constraints.
 //     The default setting is off, meaning that CHECK constraints are enforced by default.
 //
-//   _journal=MODE
+//   _journal_mode=MODE | _journal=MODE
 //     Set journal mode for the databases associated with the current connection.
 //     https://www.sqlite.org/pragma.html#pragma_journal_mode
 //
-//   _locking=X
+//   _locking_mode=X | _locking=X
 //     Sets the database connection locking-mode.
 //     The locking-mode is either NORMAL or EXCLUSIVE.
 //     https://www.sqlite.org/pragma.html#pragma_locking_mode
@@ -958,7 +959,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_auto_vacuum
 		//
-		if val := params.Get("_vacuum"); val != "" {
+		pkey = "" // Reset pkey
+		if _, ok := params["_auto_vacuum"]; ok {
+			pkey = "_auto_vacuum"
+		}
+		if _, ok := params["_vacuum"]; ok {
+			pkey = "_vacuum"
+		}
+		if val := params.Get(pkey); val != "" {
 			switch strings.ToLower(val) {
 			case "0", "none":
 				autoVacuum = 0
@@ -967,7 +975,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			case "2", "incremental":
 				autoVacuum = 2
 			default:
-				return nil, fmt.Errorf("Invalid _vacuum: %v", val)
+				return nil, fmt.Errorf("Invalid _auto_vacuum: %v, expecting value of '0 NONE 1 FULL 2 INCREMENTAL'", val)
 			}
 		}
 
@@ -994,14 +1002,21 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_case_sensitive_like
 		//
-		if val := params.Get("_cslike"); val != "" {
+		pkey = "" // Reset pkey
+		if _, ok := params["_case_sensitive_like"]; ok {
+			pkey = "_case_sensitive_like"
+		}
+		if _, ok := params["_cslike"]; ok {
+			pkey = "_cslike"
+		}
+		if val := params.Get(pkey); val != "" {
 			switch strings.ToLower(val) {
 			case "0", "no", "false", "off":
 				caseSensitiveLike = 0
 			case "1", "yes", "true", "on":
 				caseSensitiveLike = 1
 			default:
-				return nil, fmt.Errorf("Invalid _cslike: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+				return nil, fmt.Errorf("Invalid _case_sensitive_like: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 			}
 		}
 
@@ -1064,11 +1079,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
-		// Journal Mode (_journal)
+		// Journal Mode (_journal_mode | _journal)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_journal_mode
 		//
-		if val := params.Get("_journal"); val != "" {
+		pkey = "" // Reset pkey
+		if _, ok := params["_journal_mode"]; ok {
+			pkey = "_journal_mode"
+		}
+		if _, ok := params["_journal"]; ok {
+			pkey = "_journal"
+		}
+		if val := params.Get(pkey); val != "" {
 			switch strings.ToUpper(val) {
 			case "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "OFF":
 				journalMode = strings.ToUpper(val)
@@ -1087,12 +1109,19 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_locking_mode
 		//
+		pkey = "" // Reset pkey
+		if _, ok := params["_locking_mode"]; ok {
+			pkey = "_locking_mode"
+		}
+		if _, ok := params["_locking"]; ok {
+			pkey = "_locking"
+		}
 		if val := params.Get("_locking"); val != "" {
 			switch strings.ToUpper(val) {
 			case "NORMAL", "EXCLUSIVE":
 				lockingMode = strings.ToUpper(val)
 			default:
-				return nil, fmt.Errorf("Invalid _locking: %v, expecting value of 'NORMAL EXCLUSIVE", val)
+				return nil, fmt.Errorf("Invalid _locking_mode: %v, expecting value of 'NORMAL EXCLUSIVE", val)
 			}
 		}
 
@@ -1146,7 +1175,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			case "fast":
 				secureDelete = "FAST"
 			default:
-				return nil, fmt.Errorf("Invalid _recursive_triggers: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+				return nil, fmt.Errorf("Invalid _secure_delete: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 			}
 		}
 
