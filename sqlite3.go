@@ -825,6 +825,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
 	}
 
+	var pkey string
+
 	// Options
 	var loc *time.Location
 	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
@@ -903,7 +905,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_busy_timeout
 		//
-		if val := params.Get("_busy_timeout"); val != "" {
+		if _, ok := params["_busy_timeout"]; ok {
+			pkey = "_busy_timeout"
+		}
+		if _, ok := params["_timeout"]; ok {
+			pkey = "_timeout"
+		}
+		if val := params.Get(pkey); val != "" {
 			iv, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Invalid _busy_timeout: %v: %v", val, err)
@@ -930,6 +938,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
 		//
+
 		if val := params.Get("_foreign_keys"); val != "" {
 			switch strings.ToLower(val) {
 			case "0", "no", "false", "off":
