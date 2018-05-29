@@ -806,10 +806,14 @@ func errorString(err Error) string {
 //   _busy_timeout=XXX
 //     Specify value for sqlite3_busy_timeout.
 //
-//   _foreign_keys=X
+//   _cslike=Boolean
+//     Default or disabled the LIKE operation is case-insensitive.
+//     When enabling this options behaviour of LIKE will become case-sensitive.
+//
+//   _foreign_keys=Boolean
 //     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
 //
-//   _recursive_triggers=X
+//   _recursive_triggers=Boolean
 //     Enable or disable recursive triggers.  X can be 1 or 0.
 //
 //   _vacuum=X
@@ -829,6 +833,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// PRAGMA's
 	autoVacuum := -1
 	busyTimeout := 5000
+	caseSensitiveLike := -1
 	foreignKeys := -1
 	recursiveTriggers := -1
 
@@ -877,7 +882,10 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
-		// auto_vacuum
+		// Auto Vacuum (_vacuum)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_auto_vacuum
+		//
 		if val := params.Get("_vacuum"); val != "" {
 			switch strings.ToLower(val) {
 			case "0", "none":
@@ -891,7 +899,10 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
-		// _busy_timeout
+		// Busy Timeout (_busy_timeout)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_busy_timeout
+		//
 		if val := params.Get("_busy_timeout"); val != "" {
 			iv, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
@@ -900,7 +911,25 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			busyTimeout = int(iv)
 		}
 
-		// _foreign_keys
+		// Case Sensitive Like (_cslike)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_case_sensitive_like
+		//
+		if val := params.Get("_cslike"); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
+				caseSensitiveLike = 0
+			case "1", "yes", "true", "on":
+				caseSensitiveLike = 1
+			default:
+				return nil, fmt.Errorf("Invalid _cslike: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+			}
+		}
+
+		// Foreign Keys (_foreign_keys)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
+		//
 		if val := params.Get("_foreign_keys"); val != "" {
 			switch strings.ToLower(val) {
 			case "0", "no", "false", "off":
@@ -908,11 +937,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			case "1", "yes", "true", "on":
 				foreignKeys = 1
 			default:
-				return nil, fmt.Errorf("Invalid _foreign_keys: %v", val)
+				return nil, fmt.Errorf("Invalid _foreign_keys: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 			}
 		}
 
-		// _recursive_triggers
+		// Recursive Triggers (_recursive_triggers)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
+		//
 		if val := params.Get("_recursive_triggers"); val != "" {
 			switch strings.ToLower(val) {
 			case "0", "no", "false", "off":
@@ -920,7 +952,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			case "1", "yes", "true", "on":
 				recursiveTriggers = 1
 			default:
-				return nil, fmt.Errorf("Invalid _recursive_triggers: %v", val)
+				return nil, fmt.Errorf("Invalid _recursive_triggers: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 			}
 		}
 
@@ -961,6 +993,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Auto Vacuum
 	if autoVacuum > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA auto_vacuum = %d;", autoVacuum)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	if caseSensitiveLike > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA case_sensitive_like = %d;", caseSensitiveLike)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
