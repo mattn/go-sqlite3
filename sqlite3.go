@@ -838,6 +838,10 @@ func errorString(err Error) string {
 //     This pragma enables or disables the enforcement of CHECK constraints.
 //     The default setting is off, meaning that CHECK constraints are enforced by default.
 //
+//   _journal=MODE
+//     Set journal mode for the databases associated with the current connection.
+//     https://www.sqlite.org/pragma.html#pragma_journal_mode
+//
 //   _recursive_triggers=Boolean | _rt=Boolean
 //     Enable or disable recursive triggers.
 //
@@ -863,6 +867,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	caseSensitiveLike := -1
 	deferForeignKeys := -1
 	ignoreCheckConstraints := -1
+	journalMode := "DELETE"
 	foreignKeys := -1
 	recursiveTriggers := -1
 
@@ -1022,6 +1027,19 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Journal Mode (_journal)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_journal_mode
+		//
+		if val := params.Get("_journal"); val != "" {
+			switch strings.ToUpper(val) {
+			case "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF":
+				journalMode = strings.ToUpper(val)
+			default:
+				return nil, fmt.Errorf("Invalid _journal: %v, expecting value of 'DELETE TRUNCATE PERSIST MEMORY WAL OFF'", val)
+			}
+		}
+
 		// Recursive Triggers (_recursive_triggers)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
@@ -1116,6 +1134,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
+	}
+
+	// Journal Mode
+	// Because default Journal Mode is DELETE this PRAGMA can always be executed.
+	if err := exec(fmt.Sprintf("PRAGMA journal_mode = %s;", journalMode)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
 	}
 
 	// Recursive Triggers
