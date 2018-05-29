@@ -803,14 +803,14 @@ func errorString(err Error) string {
 //     Specify locking behavior for transactions.  XXX can be "immediate",
 //     "deferred", "exclusive".
 //
-//   _busy_timeout=XXX
+//   _busy_timeout=XXX"| _timeout=XXX
 //     Specify value for sqlite3_busy_timeout.
 //
 //   _cslike=Boolean
 //     Default or disabled the LIKE operation is case-insensitive.
 //     When enabling this options behaviour of LIKE will become case-sensitive.
 //
-//   _foreign_keys=Boolean
+//   _foreign_keys=Boolean | _fk=Boolean
 //     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
 //
 //   _recursive_triggers=Boolean
@@ -938,8 +938,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
 		//
-
-		if val := params.Get("_foreign_keys"); val != "" {
+		if _, ok := params["_foreign_keys"]; ok {
+			pkey = "_foreign_keys"
+		}
+		if _, ok := params["_fk"]; ok {
+			pkey = "_fk"
+		}
+		if val := params.Get(pkey); val != "" {
 			switch strings.ToLower(val) {
 			case "0", "no", "false", "off":
 				foreignKeys = 0
