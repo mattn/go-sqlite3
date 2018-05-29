@@ -810,6 +810,15 @@ func errorString(err Error) string {
 //       - shared
 //       - private
 //
+//   immutable=Boolean
+//     The immutable parameter is a boolean query parameter that indicates
+//     that the database file is stored on read-only media. When immutable is set,
+//     SQLite assumes that the database file cannot be changed,
+//     even by a process with higher privilege,
+//     and so the database is opened read-only and all locking and change detection is disabled.
+//     Caution: Setting the immutable property on a database file that
+//     does in fact change can result in incorrect query results and/or SQLITE_CORRUPT errors.
+//
 // go-sqlite3 adds the following query parameters to those used by SQLite:
 //   _loc=XXX
 //     Specify location of time format. It's possible to specify "auto".
