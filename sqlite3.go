@@ -1047,6 +1047,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 	}
 
+	// Case Sensitive LIKE
 	if caseSensitiveLike > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA case_sensitive_like = %d;", caseSensitiveLike)); err != nil {
 			C.sqlite3_close_v2(db)
