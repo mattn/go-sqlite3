@@ -842,6 +842,11 @@ func errorString(err Error) string {
 //     Set journal mode for the databases associated with the current connection.
 //     https://www.sqlite.org/pragma.html#pragma_journal_mode
 //
+//   _locking=X
+//     Sets the database connection locking-mode.
+//     The locking-mode is either NORMAL or EXCLUSIVE.
+//     https://www.sqlite.org/pragma.html#pragma_locking_mode
+//
 //   _recursive_triggers=Boolean | _rt=Boolean
 //     Enable or disable recursive triggers.
 //
@@ -866,9 +871,10 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	busyTimeout := 5000
 	caseSensitiveLike := -1
 	deferForeignKeys := -1
+	foreignKeys := -1
 	ignoreCheckConstraints := -1
 	journalMode := "DELETE"
-	foreignKeys := -1
+	lockingMode := "NORMAL"
 	recursiveTriggers := -1
 
 	pos := strings.IndexRune(dsn, '?')
@@ -1040,6 +1046,19 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Locking Mode (_locking)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_locking_mode
+		//
+		if val := params.Get("_locking"); val != "" {
+			switch strings.ToUpper(val) {
+			case "NORMAL", "EXCLUSIVE":
+				lockingMode = strings.ToUpper(val)
+			default:
+				return nil, fmt.Errorf("Invalid _locking: %v, expecting value of 'NORMAL EXCLUSIVE", val)
+			}
+		}
+
 		// Recursive Triggers (_recursive_triggers)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
@@ -1139,6 +1158,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Journal Mode
 	// Because default Journal Mode is DELETE this PRAGMA can always be executed.
 	if err := exec(fmt.Sprintf("PRAGMA journal_mode = %s;", journalMode)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Locking Mode
+	// Because the default is NORMAL and this is not changed in this package
+	// by using the compile time SQLITE_DEFAULT_LOCKING_MODE this PRAGMA can always be executed
+	if err := exec(fmt.Sprintf("PRAGMA locking_mode = %s;", lockingMode)); err != nil {
 		C.sqlite3_close_v2(db)
 		return nil, err
 	}
