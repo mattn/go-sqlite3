@@ -830,6 +830,11 @@ func errorString(err Error) string {
 //     Specify locking behavior for transactions.  XXX can be "immediate",
 //     "deferred", "exclusive".
 //
+//   _auto_vacuum=X | _vacuum=X
+//     0 | none - Auto Vacuum disabled
+//     1 | full - Auto Vacuum FULL
+//     2 | incremental - Auto Vacuum Incremental
+//
 //   _busy_timeout=XXX"| _timeout=XXX
 //     Specify value for sqlite3_busy_timeout.
 //
@@ -870,10 +875,12 @@ func errorString(err Error) string {
 //     Change the setting of the "synchronous" flag.
 //     https://www.sqlite.org/pragma.html#pragma_synchronous
 //
-//   _vacuum=X
-//     0 | none - Auto Vacuum disabled
-//     1 | full - Auto Vacuum FULL
-//     2 | incremental - Auto Vacuum Incremental
+//   _writable_schema=Boolean
+//     When this pragma is on, the SQLITE_MASTER tables in which database
+//     can be changed using ordinary UPDATE, INSERT, and DELETE statements.
+//     Warning: misuse of this pragma can easily result in a corrupt database file.
+//
+//
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
@@ -899,6 +906,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	recursiveTriggers := -1
 	secureDelete := "DEFAULT"
 	synchronousMode := "NORMAL"
+	writableSchema := -1
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -1162,6 +1170,21 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Writable Schema (_writeable_schema)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_writeable_schema
+		//
+		if val := params.Get("_writable_schema"); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
+				writableSchema = 0
+			case "1", "yes", "true", "on":
+				writableSchema = 1
+			default:
+				return nil, fmt.Errorf("Invalid _writable_schema: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+			}
+		}
+
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
@@ -1285,6 +1308,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if err := exec(fmt.Sprintf("PRAGMA synchronous = %s;", synchronousMode)); err != nil {
 		C.sqlite3_close_v2(db)
 		return nil, err
+	}
+
+	// Writable Schema
+	if writableSchema > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA writable_schema = %d;", writableSchema)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
