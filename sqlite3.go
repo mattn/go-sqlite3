@@ -944,7 +944,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
-		// Defer Foreign Keys
+		// Defer Foreign Keys (_defer_foreign_keys | _defer_fk)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_defer_foreign_keys
 		//
@@ -962,11 +962,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			case "1", "yes", "true", "on":
 				deferForeignKeys = 1
 			default:
-				return nil, fmt.Errorf("Invalid _foreign_keys: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+				return nil, fmt.Errorf("Invalid _defer_foreign_keys: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 			}
 		}
 
-		// Foreign Keys (_foreign_keys)
+		// Foreign Keys (_foreign_keys | _fk)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
 		//
