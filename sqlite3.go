@@ -875,9 +875,10 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 		// _loc
 		if val := params.Get("_loc"); val != "" {
-			if val == "auto" {
+			switch strings.ToLower(val) {
+			case "auto":
 				loc = time.Local
-			} else {
+			default:
 				loc, err = time.LoadLocation(val)
 				if err != nil {
 					return nil, fmt.Errorf("Invalid _loc: %v: %v", val, err)
@@ -887,7 +888,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 		// _mutex
 		if val := params.Get("_mutex"); val != "" {
-			switch val {
+			switch strings.ToLower(val) {
 			case "no":
 				mutex = C.SQLITE_OPEN_NOMUTEX
 			case "full":
@@ -899,7 +900,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 		// _txlock
 		if val := params.Get("_txlock"); val != "" {
-			switch val {
+			switch strings.ToLower(val) {
 			case "immediate":
 				txlock = "BEGIN IMMEDIATE"
 			case "exclusive":
