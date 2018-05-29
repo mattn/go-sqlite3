@@ -347,7 +347,7 @@ For example the TDM-GCC Toolchain can be found [here](ttps://sourceforge.net/pro
 
 # License
 
-MIT: http://mattn.mit-license.org/2012
+MIT: http://mattn.mit-license.org/2018
 
 sqlite3-binding.c, sqlite3-binding.h, sqlite3ext.h
 
@@ -358,3 +358,5 @@ In this repository, those files are an amalgamation of code that was copied from
 # Author
 
 Yasuhiro Matsumoto (a.k.a mattn)
+
+G.J.R. Timmer
