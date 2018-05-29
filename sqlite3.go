@@ -1175,7 +1175,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			case "fast":
 				secureDelete = "FAST"
 			default:
-				return nil, fmt.Errorf("Invalid _secure_delete: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+				return nil, fmt.Errorf("Invalid _secure_delete: %v, expecting boolean value of '0 1 false true no yes off on fast'", val)
 			}
 		}
 
