@@ -866,6 +866,10 @@ func errorString(err Error) string {
 //     When secure_delete is on, SQLite overwrites deleted content with zeros.
 //     https://www.sqlite.org/pragma.html#pragma_secure_delete
 //
+//   _synchronous=X | _sync=X
+//     Change the setting of the "synchronous" flag.
+//     https://www.sqlite.org/pragma.html#pragma_synchronous
+//
 //   _vacuum=X
 //     0 | none - Auto Vacuum disabled
 //     1 | full - Auto Vacuum FULL
@@ -894,6 +898,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	queryOnly := -1
 	recursiveTriggers := -1
 	secureDelete := "DEFAULT"
+	synchronousMode := "NORMAL"
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -1057,8 +1062,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		if val := params.Get("_journal"); val != "" {
 			switch strings.ToUpper(val) {
-			case "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF":
+			case "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "OFF":
 				journalMode = strings.ToUpper(val)
+			case "WAL":
+				journalMode = strings.ToUpper(val)
+
+				// For WAL Mode set Synchronous Mode to 'NORMAL'
+				// See https://www.sqlite.org/pragma.html#pragma_synchronous
+				synchronousMode = "NORMAL"
 			default:
 				return nil, fmt.Errorf("Invalid _journal: %v, expecting value of 'DELETE TRUNCATE PERSIST MEMORY WAL OFF'", val)
 			}
@@ -1128,6 +1139,26 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 				secureDelete = "FAST"
 			default:
 				return nil, fmt.Errorf("Invalid _recursive_triggers: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+			}
+		}
+
+		// Synchronous Mode (_synchronous | _sync)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_synchronous
+		//
+		pkey = "" // Reset pkey
+		if _, ok := params["_synchronous"]; ok {
+			pkey = "_synchronous"
+		}
+		if _, ok := params["_sync"]; ok {
+			pkey = "_sync"
+		}
+		if val := params.Get(pkey); val != "" {
+			switch strings.ToUpper(val) {
+			case "0", "OFF", "1", "NORMAL", "2", "FULL", "3", "EXTRA":
+				synchronousMode = strings.ToUpper(val)
+			default:
+				return nil, fmt.Errorf("Invalid _synchronous: %v, expecting value of '0 OFF 1 NORMAL 2 FULL 3 EXTRA'", val)
 			}
 		}
 
@@ -1246,6 +1277,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
+	}
+
+	// Synchronous Mode
+	//
+	// Because default is NORMAL this statement is always executed
+	if err := exec(fmt.Sprintf("PRAGMA synchronous = %s;", synchronousMode)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
 	}
 
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
