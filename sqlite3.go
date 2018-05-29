@@ -856,6 +856,9 @@ func errorString(err Error) string {
 //     The locking-mode is either NORMAL or EXCLUSIVE.
 //     https://www.sqlite.org/pragma.html#pragma_locking_mode
 //
+//   _query_only=Boolean
+//     The query_only pragma prevents all changes to database files when enabled.
+//
 //   _recursive_triggers=Boolean | _rt=Boolean
 //     Enable or disable recursive triggers.
 //
@@ -884,6 +887,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	ignoreCheckConstraints := -1
 	journalMode := "DELETE"
 	lockingMode := "NORMAL"
+	queryOnly := -1
 	recursiveTriggers := -1
 
 	pos := strings.IndexRune(dsn, '?')
@@ -1068,6 +1072,21 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Query Only (_query_only)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_query_only
+		//
+		if val := params.Get("_query_only"); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
+				queryOnly = 0
+			case "1", "yes", "true", "on":
+				queryOnly = 1
+			default:
+				return nil, fmt.Errorf("Invalid _query_only: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+			}
+		}
+
 		// Recursive Triggers (_recursive_triggers)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
@@ -1177,6 +1196,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if err := exec(fmt.Sprintf("PRAGMA locking_mode = %s;", lockingMode)); err != nil {
 		C.sqlite3_close_v2(db)
 		return nil, err
+	}
+
+	// Query Only
+	if queryOnly > 0 {
+		if err := exec(fmt.Sprintf("PRAGMA query_only = %d;", queryOnly)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// Recursive Triggers
