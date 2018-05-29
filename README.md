@@ -68,15 +68,31 @@ Options can be given using the following format: `KEYWORD=VALUE` and multiple op
 
 This library supports dsn options of SQLite itself and provides additional options.
 
+Boolean values can be one of:
+* `0` `no` `false` `off`
+* `1` `yes` `true` `on`
+
 | Name | Key | Value(s) | Description |
 |------|-----|----------|-------------|
-| Shared-Cache Mode | cache | <ul><li>shared</li><li>private</li></ul> | Set cache mode for more information see [sqlite.org](https://www.sqlite.org/sharedcache.html) |
-| Time Zone Location | _loc | auto | Specify location of time format. |
-| Busy Timeout | _busy_timeout | `int` | Specify value for sqlite3_busy_timeout. |
-| Transaction Lock | _txlock | <ul><li>immediate</li><li>deferred</li><li>exclusive</li></ul> | Specify locking behavior for transactions. |
-| Foreign Keys | _foreign_keys | <ul><li>0</li><li>1</li></ul> | Enable or disable enforcement of foreign keys. |
-| Recursive Triggers | _recursive_triggers | <ul><li>0</li><li>1</li></ul> | Enable or disable recursive triggers. |
-| Mutex Locking | _mutex | <ul><li>no</li><li>full</li></ul> | Specify mutex mode. |
+| Auto Vacuum | `_auto_vacuum` \| `_vacuum` | <ul><li>`0` \| `none`</li><li>`1` \| `full`</li><li>`2` \| `incremental`</li></ul> | For more information see [PRAGMA auto_vacuum](https://www.sqlite.org/pragma.html#pragma_auto_vacuum) |
+| Busy Timeout | `_busy_timeout` \| `_timeout` | `int` | Specify value for sqlite3_busy_timeout. For more information see [PRAGMA busy_timeout](https://www.sqlite.org/pragma.html#pragma_busy_timeout) |
+| Case Sensitive LIKE | `_case_sensitive_like` \| `_cslike` | `boolean` | For more information see [PRAGMA case_sensitive_like](https://www.sqlite.org/pragma.html#pragma_case_sensitive_like) |
+| Defer Foreign Keys | `_defer_foreign_keys` \| `_defer_fk` | `boolean` | For more information see [PRAGMA defer_foreign_keys](https://www.sqlite.org/pragma.html#pragma_defer_foreign_keys) |
+| Foreign Keys | `_foreign_keys` \| `_fk` | `boolean` | For more information see [PRAGMA foreign_keys](https://www.sqlite.org/pragma.html#pragma_foreign_keys) |
+| Ignore CHECK Constraints | `_ignore_check_constraints` | `boolean` | For more information see [PRAGMA ignore_check_constraints](https://www.sqlite.org/pragma.html#pragma_ignore_check_constraints) |
+| Immutable | `immutable` | `boolean` | For more information see [Immutable](https://www.sqlite.org/c3ref/open.html) |
+| Journal Mode | `_journal_mode` \| `_journal` | <ul><li>DELETE</li><li>TRUNCATE</li><li>PERSIST</li><li>MEMORY</li><li>WAL</li><li>OFF</li></ul> | For more information see [PRAGMA journal_mode](https://www.sqlite.org/pragma.html#pragma_journal_mode) |
+| Locking Mode | `_locking_mode` \| `_locking` | <ul><li>NORMAL</li><li>EXCLUSIVE</li></ul> | For more information see [PRAGMA locking_mode](https://www.sqlite.org/pragma.html#pragma_locking_mode) |
+| Mode | `mode` | <ul><li>ro</li><li>rw</li><li>rwc</li><li>memory</li></ul> | Access Mode of the database. For more information see [SQLite Open](https://www.sqlite.org/c3ref/open.html) |
+| Mutex Locking | `_mutex` | <ul><li>no</li><li>full</li></ul> | Specify mutex mode. |
+| Query Only | `_query_only` | `boolean` | For more information see [PRAGMA query_only](https://www.sqlite.org/pragma.html#pragma_query_only) |
+| Recursive Triggers | `_recursive_triggers` \| `_rt` | `boolean` | For more information see [PRAGMA recursive_triggers](https://www.sqlite.org/pragma.html#pragma_recursive_triggers) |
+| Secure Delete | `_secure_delete` | `boolean` \| `FAST` | For more information see [PRAGMA secure_delete](https://www.sqlite.org/pragma.html#pragma_secure_delete) |
+| Shared-Cache Mode | `cache` | <ul><li>shared</li><li>private</li></ul> | Set cache mode for more information see [sqlite.org](https://www.sqlite.org/sharedcache.html) |
+| Synchronous | `_synchronous` \| `_sync` | <ul><li>0 \| OFF</li><li>1 \| NORMAL</li><li>2 \| FULL</li><li>3 \| EXTRA</li></ul> | For more information see [PRAGMA synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous) |
+| Time Zone Location | `_loc` | auto | Specify location of time format. |
+| Transaction Lock | `_txlock` | <ul><li>immediate</li><li>deferred</li><li>exclusive</li></ul> | Specify locking behavior for transactions. |
+| Writable Schema | `_writable_schema` | `Boolean` | When this pragma is on, the SQLITE_MASTER tables in which database can be changed using ordinary UPDATE, INSERT, and DELETE statements. Warning: misuse of this pragma can easily result in a corrupt database file. |
 
 ## DSN Examples
 
@@ -124,6 +140,7 @@ go build --tags "icu json1 fts5 secure_delete"
 | Introspect PRAGMAS | sqlite_introspect | This option adds some extra PRAGMA statements. <ul><li>PRAGMA function_list</li><li>PRAGMA module_list</li><li>PRAGMA pragma_list</li></ul> |
 | JSON SQL Functions | sqlite_json | When this option is defined in the amalgamation, the JSON SQL functions are added to the build automatically |
 | Secure Delete | sqlite_secure_delete | This compile-time option changes the default setting of the secure_delete pragma.<br><br>When this option is not used, secure_delete defaults to off. When this option is present, secure_delete defaults to on.<br><br>The secure_delete setting causes deleted content to be overwritten with zeros. There is a small performance penalty since additional I/O must occur.<br><br>On the other hand, secure_delete can prevent fragments of sensitive information from lingering in unused parts of the database file after it has been deleted. See the documentation on the secure_delete pragma for additional information |
+| Secure Delete (FAST) | sqlite_secure_delete_fast | For more information see [PRAGMA secure_delete](https://www.sqlite.org/pragma.html#pragma_secure_delete) |
 | Tracing / Debug | sqlite_trace | Activate trace functions |
 
 # Compilation
