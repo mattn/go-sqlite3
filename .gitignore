@@ -2,3 +2,6 @@
 *.exe
 *.dll
 *.o
+
+# VSCode
+.vscode

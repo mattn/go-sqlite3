@@ -2,7 +2,8 @@
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
-// +build vtable
+
+// +build sqlite_vtable vtable
 
 package sqlite3
 
