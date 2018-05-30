@@ -33,6 +33,8 @@ Supported Golang version:
   - [Mac OSX](#mac-osx)
   - [Windows](#windows)
   - [Errors](#errors)
+- [Extensions](#extensions)
+  - [Spatialite](#spatialite)
 - [FAQ](#faq)
 - [License](#license)
 
@@ -300,6 +302,15 @@ For example the TDM-GCC Toolchain can be found [here](ttps://sourceforge.net/pro
     ```bash
     go install github.com/mattn/go-sqlite3
     ```
+
+# Extensions
+
+If you want your own extension to be listed here or you want to add a reference to an extension; please submit an Issue for this.
+
+## Spatialite
+
+Spatialite is available as an extension to SQLite, and can be used in combination with this repository.
+For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatialite).
 
 # FAQ
 
