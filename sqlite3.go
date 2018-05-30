@@ -891,6 +891,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	// Options
 	var loc *time.Location
+	authCreate := false
+	authUser := ""
+	authPass := ""
 	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	txlock := "BEGIN"
 
@@ -914,6 +917,17 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		params, err := url.ParseQuery(dsn[pos+1:])
 		if err != nil {
 			return nil, err
+		}
+
+		// Authentication
+		if _, ok := params["_auth"]; ok {
+			authCreate = true
+		}
+		if val := params.Get("_auth_user"); val != "" {
+			authUser = val
+		}
+		if val := params.Get("_auth_pass"); val != "" {
+			authPass = val
 		}
 
 		// _loc
@@ -1248,11 +1262,124 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil
 	}
 
+	// USER AUTHENTICATION
+	//
+	// User Authentication is always performed even when
+	// sqlite_userauth is not compiled in, because without user authentication
+	// the authentication is a no-op.
+	//
+	// Workflow
+	//	- Authenticate
+	//		ON::SUCCESS		=> Continue
+	//		ON::SQLITE_AUTH => Return error and exit Open(...)
+	//
+	//  - Activate User Authentication
+	//		Check if the user wants to activate User Authentication.
+	//		If so then first create a temporary AuthConn to the database
+	//		This is possible because we are already succesfully authenticated.
+	//
+	//	- Check if `sqlite_user`` table exists
+	//		YES				=> Add the provided user from DSN as Admin User and
+	//						   activate user authentication.
+	//		NO				=> Continue
+	//
+
+	// Create connection to SQLite
+	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
+
+	// Preform Authentication
+	if err := conn.Authenticate(authUser, authPass); err != nil {
+		return nil, err
+	}
+
+	// Register Authentication Functions into connection
+	//
+	// Register Authentication function
+	// Authenticate will perform an authentication of the provided username
+	// and password against the database.
+	//
+	// If a database contains the SQLITE_USER table, then the
+	// call to Authenticate must be invoked with an
+	// appropriate username and password prior to enable read and write
+	//access to the database.
+	//
+	// Return SQLITE_OK on success or SQLITE_ERROR if the username/password
+	// combination is incorrect or unknown.
+	//
+	// If the SQLITE_USER table is not present in the database file, then
+	// this interface is a harmless no-op returnning SQLITE_OK.
+	if err := conn.RegisterFunc("authenticate", conn.Authenticate, true); err != nil {
+		return nil, err
+	}
+	//
+	// Register AuthUserAdd
+	// AuthUserAdd can be used (by an admin user only)
+	// to create a new user. When called on a no-authentication-required
+	// database, this routine converts the database into an authentication-
+	// required database, automatically makes the added user an
+	// administrator, and logs in the current connection as that user.
+	// The AuthUserAdd only works for the "main" database, not
+	// for any ATTACH-ed databases. Any call to AuthUserAdd by a
+	// non-admin user results in an error.
+	if err := conn.RegisterFunc("auth_user_add", conn.AuthUserAdd, true); err != nil {
+		return nil, err
+	}
+	//
+	// AuthUserChange can be used to change a users
+	// login credentials or admin privilege.  Any user can change their own
+	// login credentials. Only an admin user can change another users login
+	// credentials or admin privilege setting. No user may change their own
+	// admin privilege setting.
+	if err := conn.RegisterFunc("auth_user_change", conn.AuthUserChange, true); err != nil {
+		return nil, err
+	}
+	//
+	// AuthUserDelete can be used (by an admin user only)
+	// to delete a user. The currently logged-in user cannot be deleted,
+	// which guarantees that there is always an admin user and hence that
+	// the database cannot be converted into a no-authentication-required
+	// database.
+	if err := conn.RegisterFunc("auth_user_delete", conn.AuthUserDelete, true); err != nil {
+		return nil, err
+	}
+
 	// Auto Vacuum
+	// Moved auto_vacuum command, the user preference for auto_vacuum needs to be implemented directly after
+	// the authentication and before the sqlite_user table gets created if the user
+	// decides to activate User Authentication because
+	// auto_vacuum needs to be set before any tables are created
+	// and activating user authentication creates the internal table `sqlite_user`.
 	if autoVacuum > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA auto_vacuum = %d;", autoVacuum)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
+		}
+	}
+
+	// Check if user wants to activate User Authentication
+	if authCreate {
+		// Before going any further, we need to check that the user
+		// has provided an username and password within the DSN.
+		// We are not allowed to continue.
+		if len(authUser) < 0 {
+			return nil, fmt.Errorf("Missing '_auth_user' while user authentication was requested with '_auth'")
+		}
+		if len(authPass) < 0 {
+			return nil, fmt.Errorf("Missing '_auth_pass' while user authentication was requested with '_auth'")
+		}
+
+		// TODO: Table exists check for table 'sqlite_user'
+		// replace 'authExists := false' with return value of table exists check
+		//
+		// REPLACE BY RESULT FROM TABLE EXISTS
+		// SELECT count(type) as exists FROM sqlite_master WHERE type='table' AND name='sqlite_user';
+		// Scan result 'exists' and use it instead of boolean below.
+		authExists := false
+
+		if !authExists {
+			if err := conn.AuthUserAdd(authUser, authPass, true); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -1346,8 +1473,6 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return nil, err
 		}
 	}
-
-	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
 
 	if len(d.Extensions) > 0 {
 		if err := conn.loadExtensions(d.Extensions); err != nil {
