@@ -1593,6 +1593,10 @@ func TestInsertNilByteSlice(t *testing.T) {
 	if _, err := db.Exec("insert into blob_not_null (b) values (?)", nilSlice); err == nil {
 		t.Fatal("didn't expect INSERT to 'not null' column with a nil []byte slice to work")
 	}
+	zeroLenSlice := []byte{}
+	if _, err := db.Exec("insert into blob_not_null (b) values (?)", zeroLenSlice); err != nil {
+		t.Fatal("failed to insert zero-length slice")
+	}
 }
 
 var customFunctionOnce sync.Once
