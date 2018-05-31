@@ -40,6 +40,23 @@ _sqlite3_user_delete(sqlite3* db, const char* zUsername)
 {
   return sqlite3_user_delete(db, zUsername);
 }
+
+static int
+_sqlite3_auth_is_enabled(sqlite3* db)
+{
+	int exists = -1;
+
+	sqlite3_stmt *stmt;
+	sqlite3_prepare_v2(db, "select count(type) from sqlite_master WHERE type='table' and name='sqlite_user';", -1, &stmt, NULL);
+
+	while ( sqlite3_step(stmt) == SQLITE_ROW) {
+		exists = sqlite3_column_int(stmt, 0);
+	}
+
+	sqlite3_finalize(stmt);
+
+	return exists;
+}
 */
 import "C"
 import (
@@ -163,6 +180,16 @@ func (c *SQLiteConn) AuthUserDelete(username string) error {
 	}
 
 	return nil
+}
+
+// Check is database is protected by user authentication
+func (c *SQLiteConn) AuthIsEnabled() (exists bool) {
+	rv := C._sqlite3_auth_is_enabled(c.db)
+	if rv == 1 {
+		exists = true
+	}
+
+	return
 }
 
 // EOF

@@ -1368,14 +1368,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return nil, fmt.Errorf("Missing '_auth_pass' while user authentication was requested with '_auth'")
 		}
 
-		// TODO: Table exists check for table 'sqlite_user'
-		// replace 'authExists := false' with return value of table exists check
-		//
-		// REPLACE BY RESULT FROM TABLE EXISTS
-		// SELECT count(type) as exists FROM sqlite_master WHERE type='table' AND name='sqlite_user';
-		// Scan result 'exists' and use it instead of boolean below.
-		authExists := false
-
+		// Check if User Authentication is Enabled
+		authExists := conn.AuthIsEnabled()
 		if !authExists {
 			if err := conn.AuthUserAdd(authUser, authPass, true); err != nil {
 				return nil, err
