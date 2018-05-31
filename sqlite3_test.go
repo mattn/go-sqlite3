@@ -1580,6 +1580,21 @@ func TestNilAndEmptyBytes(t *testing.T) {
 	}
 }
 
+func TestInsertNilByteSlice(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("create table blob_not_null (b blob not null)"); err != nil {
+		t.Fatal(err)
+	}
+	var nilSlice []byte
+	if _, err := db.Exec("insert into blob_not_null (b) values (?)", nilSlice); err == nil {
+		t.Fatal("didn't expect INSERT to 'not null' column with a nil []byte slice to work")
+	}
+}
+
 var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
