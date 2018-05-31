@@ -42,6 +42,9 @@ _sqlite3_user_delete(sqlite3* db, const char* zUsername)
 }
 */
 import "C"
+import (
+	"unsafe"
+)
 
 const (
 	SQLITE_AUTH = C.SQLITE_AUTH
@@ -61,7 +64,17 @@ const (
 // If the SQLITE_USER table is not present in the database file, then
 // this interface is a harmless no-op returnning SQLITE_OK.
 func (c *SQLiteConn) Authenticate(username, password string) error {
-	rv := C._sqlite3_user_authenticate(c.db, C.CString(username), C.CString(password), C.int(len(password)))
+	// Allocate C Variables
+	cuser := C.CString(username)
+	cpass := C.CString(password)
+
+	// Free C Variables
+	defer func() {
+		C.free(unsafe.Pointer(cuser))
+		C.free(unsafe.Pointer(cpass))
+	}()
+
+	rv := C._sqlite3_user_authenticate(c.db, cuser, cpass, C.int(len(password)))
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
@@ -83,7 +96,17 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 		isAdmin = 1
 	}
 
-	rv := C._sqlite3_user_add(c.db, C.CString(username), C.CString(password), C.int(len(password)), C.int(isAdmin))
+	// Allocate C Variables
+	cuser := C.CString(username)
+	cpass := C.CString(password)
+
+	// Free C Variables
+	defer func() {
+		C.free(unsafe.Pointer(cuser))
+		C.free(unsafe.Pointer(cpass))
+	}()
+
+	rv := C._sqlite3_user_add(c.db, cuser, cpass, C.int(len(password)), C.int(isAdmin))
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
@@ -102,7 +125,17 @@ func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error
 		isAdmin = 1
 	}
 
-	rv := C._sqlite3_user_change(c.db, C.CString(username), C.CString(password), C.int(len(password)), C.int(isAdmin))
+	// Allocate C Variables
+	cuser := C.CString(username)
+	cpass := C.CString(password)
+
+	// Free C Variables
+	defer func() {
+		C.free(unsafe.Pointer(cuser))
+		C.free(unsafe.Pointer(cpass))
+	}()
+
+	rv := C._sqlite3_user_change(c.db, cuser, cpass, C.int(len(password)), C.int(isAdmin))
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
@@ -116,7 +149,15 @@ func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error
 // the database cannot be converted into a no-authentication-required
 // database.
 func (c *SQLiteConn) AuthUserDelete(username string) error {
-	rv := C._sqlite3_user_delete(c.db, C.CString(username))
+	// Allocate C Variables
+	cuser := C.CString(username)
+
+	// Free C Variables
+	defer func() {
+		C.free(unsafe.Pointer(cuser))
+	}()
+
+	rv := C._sqlite3_user_delete(c.db, cuser)
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
