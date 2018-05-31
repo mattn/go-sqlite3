@@ -1308,7 +1308,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	//
 	// If the SQLITE_USER table is not present in the database file, then
 	// this interface is a harmless no-op returnning SQLITE_OK.
-	if err := conn.RegisterFunc("authenticate", conn.Authenticate, true); err != nil {
+	if err := conn.RegisterFunc("authenticate", conn.Authenticate, false); err != nil {
 		return nil, err
 	}
 	//
@@ -1321,7 +1321,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// The AuthUserAdd only works for the "main" database, not
 	// for any ATTACH-ed databases. Any call to AuthUserAdd by a
 	// non-admin user results in an error.
-	if err := conn.RegisterFunc("auth_user_add", conn.AuthUserAdd, true); err != nil {
+	if err := conn.RegisterFunc("auth_user_add", conn.AuthUserAdd, false); err != nil {
 		return nil, err
 	}
 	//
@@ -1330,7 +1330,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// login credentials. Only an admin user can change another users login
 	// credentials or admin privilege setting. No user may change their own
 	// admin privilege setting.
-	if err := conn.RegisterFunc("auth_user_change", conn.AuthUserChange, true); err != nil {
+	if err := conn.RegisterFunc("auth_user_change", conn.AuthUserChange, false); err != nil {
 		return nil, err
 	}
 	//
@@ -1339,7 +1339,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// which guarantees that there is always an admin user and hence that
 	// the database cannot be converted into a no-authentication-required
 	// database.
-	if err := conn.RegisterFunc("auth_user_delete", conn.AuthUserDelete, true); err != nil {
+	if err := conn.RegisterFunc("auth_user_delete", conn.AuthUserDelete, false); err != nil {
 		return nil, err
 	}
 

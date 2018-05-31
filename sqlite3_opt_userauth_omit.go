@@ -62,4 +62,9 @@ func (c *SQLiteConn) AuthUserDelete(username string) error {
 	return nil
 }
 
+// Check is database is protected by user authentication
+func (c *SQLiteConn) AuthIsEnabled() (exists bool) {
+	return
+}
+
 // EOF

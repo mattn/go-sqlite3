@@ -60,11 +60,17 @@ _sqlite3_auth_is_enabled(sqlite3* db)
 */
 import "C"
 import (
+	"errors"
 	"unsafe"
 )
 
 const (
 	SQLITE_AUTH = C.SQLITE_AUTH
+)
+
+var (
+	ErrUnauthorized  = errors.New("SQLITE_AUTH: Unauthorized")
+	ErrAdminRequired = errors.New("SQLITE_AUTH: Unauthorized; Admin Privileges Required")
 )
 
 // Authenticate will perform an authentication of the provided username
@@ -92,6 +98,9 @@ func (c *SQLiteConn) Authenticate(username, password string) error {
 	}()
 
 	rv := C._sqlite3_user_authenticate(c.db, cuser, cpass, C.int(len(password)))
+	if rv == C.SQLITE_AUTH {
+		return ErrUnauthorized
+	}
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
@@ -113,6 +122,18 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 		isAdmin = 1
 	}
 
+	rv := c.authUserAdd(username, password, isAdmin)
+	switch rv {
+	case C.SQLITE_AUTH:
+		return ErrAdminRequired
+	case C.SQLITE_OK:
+		return nil
+	default:
+		return c.lastError()
+	}
+}
+
+func (c *SQLiteConn) authUserAdd(username, password string, admin int) int {
 	// Allocate C Variables
 	cuser := C.CString(username)
 	cpass := C.CString(password)
@@ -123,12 +144,7 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 		C.free(unsafe.Pointer(cpass))
 	}()
 
-	rv := C._sqlite3_user_add(c.db, cuser, cpass, C.int(len(password)), C.int(isAdmin))
-	if rv != C.SQLITE_OK {
-		return c.lastError()
-	}
-
-	return nil
+	return int(C._sqlite3_user_add(c.db, cuser, cpass, C.int(len(password)), C.int(admin)))
 }
 
 // AuthUserChange can be used to change a users
@@ -153,6 +169,9 @@ func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error
 	}()
 
 	rv := C._sqlite3_user_change(c.db, cuser, cpass, C.int(len(password)), C.int(isAdmin))
+	if rv == C.SQLITE_AUTH {
+		return ErrAdminRequired
+	}
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
@@ -175,6 +194,9 @@ func (c *SQLiteConn) AuthUserDelete(username string) error {
 	}()
 
 	rv := C._sqlite3_user_delete(c.db, cuser)
+	if rv == SQLITE_AUTH {
+		return ErrAdminRequired
+	}
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}
