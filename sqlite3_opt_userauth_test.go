@@ -9,14 +9,13 @@ package sqlite3
 
 import (
 	"database/sql"
-	"fmt"
+	"os"
 	"testing"
 )
 
-func TestCreateAuthDatabase(t *testing.T) {
+func TestAuthCreateDatabase(t *testing.T) {
 	tempFilename := TempFilename(t)
-	fmt.Println(tempFilename) // debug
-	//defer os.Remove(tempFilename) // Disable for debug
+	defer os.Remove(tempFilename)
 
 	db, err := sql.Open("sqlite3", "file:"+tempFilename+"?_auth&_auth_user=admin&_auth_pass=admin")
 	if err != nil {
@@ -24,16 +23,18 @@ func TestCreateAuthDatabase(t *testing.T) {
 	}
 	defer db.Close()
 
-	var i int64
-	err = db.QueryRow("SELECT count(type) FROM sqlite_master WHERE type='table' AND name='sqlite_user';").Scan(&i)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("sqlite_user exists: %d", i)
-
-	_, err = db.Exec("SELECT auth_user_add('test', 'test', false);", nil)
-	if err != nil {
+	// Ping database
+	if err := db.Ping(); err != nil {
 		t.Fatal(err)
 	}
 
+	var exists bool
+	err = db.QueryRow("select count(type) from sqlite_master WHERE type='table' and name='sqlite_user';").Scan(&exists)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !exists {
+		t.Fatal("failed to enable User Authentication")
+	}
 }
