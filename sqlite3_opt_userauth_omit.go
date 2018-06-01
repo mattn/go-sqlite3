@@ -29,6 +29,19 @@ func (c *SQLiteConn) Authenticate(username, password string) error {
 	return nil
 }
 
+// authenticate provides the actual authentication to SQLite.
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	C.SQLITE_OK (0)
+//	C.SQLITE_ERROR (1)
+//  C.SQLITE_AUTH (23)
+func (c *SQLiteConn) authenticate(username, password string) int {
+	// NOOP
+	return 0
+}
+
 // AuthUserAdd can be used (by an admin user only)
 // to create a new user.  When called on a no-authentication-required
 // database, this routine converts the database into an authentication-
@@ -42,6 +55,24 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 	return nil
 }
 
+// authUserAdd enables the User Authentication if not enabled.
+// Otherwise it will add a user.
+//
+// When user authentication is already enabled then this function
+// can only be called by an admin.
+//
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	C.SQLITE_OK (0)
+//	C.SQLITE_ERROR (1)
+//  C.SQLITE_AUTH (23)
+func (c *SQLiteConn) authUserAdd(username, password string, admin int) int {
+	// NOOP
+	return 0
+}
+
 // AuthUserChange can be used to change a users
 // login credentials or admin privilege.  Any user can change their own
 // login credentials.  Only an admin user can change another users login
@@ -50,6 +81,27 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error {
 	// NOOP
 	return nil
+}
+
+// authUserChange allows to modify a user.
+// Users can change their own password.
+//
+// Only admins can change passwords for other users
+// and modify the admin flag.
+//
+// The admin flag of the current logged in user cannot be changed.
+// THis ensures that their is always an admin.
+//
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	C.SQLITE_OK (0)
+//	C.SQLITE_ERROR (1)
+//  C.SQLITE_AUTH (23)
+func (c *SQLiteConn) authUserChange(username, password string, admin int) int {
+	// NOOP
+	return 0
 }
 
 // AuthUserDelete can be used (by an admin user only)
@@ -62,9 +114,39 @@ func (c *SQLiteConn) AuthUserDelete(username string) error {
 	return nil
 }
 
-// Check is database is protected by user authentication
-func (c *SQLiteConn) AuthIsEnabled() (exists bool) {
-	return
+// authUserDelete can be used to delete a user.
+//
+// This function can only be executed by an admin.
+//
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	C.SQLITE_OK (0)
+//	C.SQLITE_ERROR (1)
+//  C.SQLITE_AUTH (23)
+func (c *SQLiteConn) authUserDelete(username string) int {
+	// NOOP
+	return 0
+}
+
+// AuthEnabled checks if the database is protected by user authentication
+func (c *SQLiteConn) AuthEnabled() (exists bool) {
+	// NOOP
+	return false
+}
+
+// authEnabled perform the actual check for user authentication.
+//
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	0 - Disabled
+//  1 - Enabled
+func (c *SQLiteConn) authEnabled() int {
+	// NOOP
+	return 0
 }
 
 // EOF

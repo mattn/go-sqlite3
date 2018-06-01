@@ -42,7 +42,7 @@ _sqlite3_user_delete(sqlite3* db, const char* zUsername)
 }
 
 static int
-_sqlite3_auth_is_enabled(sqlite3* db)
+_sqlite3_auth_enabled(sqlite3* db)
 {
 	int exists = -1;
 
@@ -87,6 +87,26 @@ var (
 // If the SQLITE_USER table is not present in the database file, then
 // this interface is a harmless no-op returnning SQLITE_OK.
 func (c *SQLiteConn) Authenticate(username, password string) error {
+	rv := c.authenticate(username, password)
+	switch rv {
+	case C.SQLITE_ERROR, C.SQLITE_AUTH:
+		return ErrUnauthorized
+	case C.SQLITE_OK:
+		return nil
+	default:
+		return c.lastError()
+	}
+}
+
+// authenticate provides the actual authentication to SQLite.
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	C.SQLITE_OK (0)
+//	C.SQLITE_ERROR (1)
+//  C.SQLITE_AUTH (23)
+func (c *SQLiteConn) authenticate(username, password string) int {
 	// Allocate C Variables
 	cuser := C.CString(username)
 	cpass := C.CString(password)
@@ -97,15 +117,7 @@ func (c *SQLiteConn) Authenticate(username, password string) error {
 		C.free(unsafe.Pointer(cpass))
 	}()
 
-	rv := C._sqlite3_user_authenticate(c.db, cuser, cpass, C.int(len(password)))
-	if rv == C.SQLITE_AUTH {
-		return ErrUnauthorized
-	}
-	if rv != C.SQLITE_OK {
-		return c.lastError()
-	}
-
-	return nil
+	return int(C._sqlite3_user_authenticate(c.db, cuser, cpass, C.int(len(password))))
 }
 
 // AuthUserAdd can be used (by an admin user only)
@@ -124,7 +136,7 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 
 	rv := c.authUserAdd(username, password, isAdmin)
 	switch rv {
-	case C.SQLITE_AUTH:
+	case C.SQLITE_ERROR, C.SQLITE_AUTH:
 		return ErrAdminRequired
 	case C.SQLITE_OK:
 		return nil
@@ -133,6 +145,19 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 	}
 }
 
+// authUserAdd enables the User Authentication if not enabled.
+// Otherwise it will add a user.
+//
+// When user authentication is already enabled then this function
+// can only be called by an admin.
+//
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	C.SQLITE_OK (0)
+//	C.SQLITE_ERROR (1)
+//  C.SQLITE_AUTH (23)
 func (c *SQLiteConn) authUserAdd(username, password string, admin int) int {
 	// Allocate C Variables
 	cuser := C.CString(username)
@@ -158,6 +183,34 @@ func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error
 		isAdmin = 1
 	}
 
+	rv := c.authUserChange(username, password, isAdmin)
+	switch rv {
+	case C.SQLITE_ERROR, C.SQLITE_AUTH:
+		return ErrAdminRequired
+	case C.SQLITE_OK:
+		return nil
+	default:
+		return c.lastError()
+	}
+}
+
+// authUserChange allows to modify a user.
+// Users can change their own password.
+//
+// Only admins can change passwords for other users
+// and modify the admin flag.
+//
+// The admin flag of the current logged in user cannot be changed.
+// THis ensures that their is always an admin.
+//
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	C.SQLITE_OK (0)
+//	C.SQLITE_ERROR (1)
+//  C.SQLITE_AUTH (23)
+func (c *SQLiteConn) authUserChange(username, password string, admin int) int {
 	// Allocate C Variables
 	cuser := C.CString(username)
 	cpass := C.CString(password)
@@ -168,15 +221,7 @@ func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error
 		C.free(unsafe.Pointer(cpass))
 	}()
 
-	rv := C._sqlite3_user_change(c.db, cuser, cpass, C.int(len(password)), C.int(isAdmin))
-	if rv == C.SQLITE_AUTH {
-		return ErrAdminRequired
-	}
-	if rv != C.SQLITE_OK {
-		return c.lastError()
-	}
-
-	return nil
+	return int(C._sqlite3_user_change(c.db, cuser, cpass, C.int(len(password)), C.int(admin)))
 }
 
 // AuthUserDelete can be used (by an admin user only)
@@ -185,6 +230,29 @@ func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error
 // the database cannot be converted into a no-authentication-required
 // database.
 func (c *SQLiteConn) AuthUserDelete(username string) error {
+	rv := c.authUserDelete(username)
+	switch rv {
+	case C.SQLITE_ERROR, C.SQLITE_AUTH:
+		return ErrAdminRequired
+	case C.SQLITE_OK:
+		return nil
+	default:
+		return c.lastError()
+	}
+}
+
+// authUserDelete can be used to delete a user.
+//
+// This function can only be executed by an admin.
+//
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	C.SQLITE_OK (0)
+//	C.SQLITE_ERROR (1)
+//  C.SQLITE_AUTH (23)
+func (c *SQLiteConn) authUserDelete(username string) int {
 	// Allocate C Variables
 	cuser := C.CString(username)
 
@@ -193,25 +261,29 @@ func (c *SQLiteConn) AuthUserDelete(username string) error {
 		C.free(unsafe.Pointer(cuser))
 	}()
 
-	rv := C._sqlite3_user_delete(c.db, cuser)
-	if rv == SQLITE_AUTH {
-		return ErrAdminRequired
-	}
-	if rv != C.SQLITE_OK {
-		return c.lastError()
-	}
-
-	return nil
+	return int(C._sqlite3_user_delete(c.db, cuser))
 }
 
-// Check is database is protected by user authentication
-func (c *SQLiteConn) AuthIsEnabled() (exists bool) {
-	rv := C._sqlite3_auth_is_enabled(c.db)
+// AuthEnabled checks if the database is protected by user authentication
+func (c *SQLiteConn) AuthEnabled() (exists bool) {
+	rv := c.authEnabled()
 	if rv == 1 {
 		exists = true
 	}
 
 	return
+}
+
+// authEnabled perform the actual check for user authentication.
+//
+// This is not exported for usage in Go.
+// It is however exported for usage within SQL by the user.
+//
+// Returns:
+//	0 - Disabled
+//  1 - Enabled
+func (c *SQLiteConn) authEnabled() int {
+	return int(C._sqlite3_auth_enabled(c.db))
 }
 
 // EOF
