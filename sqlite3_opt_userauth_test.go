@@ -9,201 +9,1088 @@ package sqlite3
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"testing"
+
+	. "github.com/smartystreets/goconvey/convey"
 )
 
-func TestAuthCreateDatabase(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
+func init() {
 
-	db, err := sql.Open("sqlite3", "file:"+tempFilename+"?_auth&_auth_user=admin&_auth_pass=admin")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-	defer db.Close()
-
-	var exists bool
-	err = db.QueryRow("select count(type) from sqlite_master WHERE type='table' and name='sqlite_user';").Scan(&exists)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !exists {
-		t.Fatal("failed to enable User Authentication")
-	}
 }
 
-func TestAuthorization(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
+func TestUserAuthentication(t *testing.T) {
+	// Create database connection
+	var conn *SQLiteConn
+	sql.Register("sqlite3_with_conn",
+		&SQLiteDriver{
+			ConnectHook: func(c *SQLiteConn) error {
+				conn = c
+				return nil
+			},
+		})
 
-	db, err := sql.Open("sqlite3", "file:"+tempFilename+"?_auth&_auth_user=admin&_auth_pass=admin")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-
-	// Dummy Query to force connection
-	if _, err := db.Exec("SELECT 1;"); err != nil {
-		t.Fatalf("Failed to connect: %s", err)
-	}
-
-	// Add normal user to database
-	if _, err := db.Exec("select auth_user_add('user', 'user', false);"); err != nil {
-		t.Fatal(err)
-	}
-
-	var uname string
-	if err := db.QueryRow("select uname from sqlite_user where uname = 'user';").Scan(&uname); err != nil {
-		t.Fatal(err)
-	}
-	if uname != "user" {
-		t.Fatal("Failed to create normal user")
-	}
-	db.Close()
-
-	// Re-Open Database as User
-	db, err = sql.Open("sqlite3", "file:"+tempFilename+"?_auth_user=user&_auth_pass=user")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-	defer db.Close()
-
-	// Add User should now fail because we are not admin
-	var rv int
-	if err := db.QueryRow("select auth_user_add('user2', 'user2', false);").Scan(&rv); err != nil || rv == 0 {
-		if err != nil {
-			t.Fatal(err)
+	connect := func(f string, username, password string) (file string, db *sql.DB, c *SQLiteConn, err error) {
+		conn = nil // Clear connection
+		file = f   // Copy provided file (f) => file
+		if file == "" {
+			// Create dummy file
+			file = TempFilename(t)
 		}
-		t.Fatal("Succeeded creating user, while not being admin, this is not supposed to work")
-	}
 
-	// Try to create admin user
-	// Should also fail because we are not admin
-	if err := db.QueryRow("select auth_user_add('admin2', 'admin2', true);").Scan(&rv); err != nil || rv == 0 {
+		db, err = sql.Open("sqlite3_with_conn", "file:"+file+fmt.Sprintf("?_auth&_auth_user=%s&_auth_pass=%s", username, password))
 		if err != nil {
-			t.Fatal(err)
+			defer os.Remove(file)
+			return file, nil, nil, err
 		}
-		t.Fatal("Succeeded creating admin, while not being admin, this is not supposed to work")
-	}
-}
 
-func TestAuthorizationFailed(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-
-	db, err := sql.Open("sqlite3", "file:"+tempFilename+"?_auth&_auth_user=admin&_auth_pass=admin")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-
-	// Dummy Query to force connection
-	if _, err := db.Exec("SELECT 1;"); err != nil {
-		t.Fatalf("Failed to connect: %s", err)
-	}
-	db.Close()
-
-	db, err = sql.Open("sqlite3", "file:"+tempFilename+"?_auth&_auth_user=admin&_auth_pass=invalid")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-	defer db.Close()
-
-	// Dummy Query to issue connection
-	if _, err := db.Exec("SELECT 1;"); err != nil && err != ErrUnauthorized {
-		t.Fatalf("Failed to connect: %s", err)
-	}
-}
-
-func TestAuthUserModify(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-
-	var rv int
-
-	db, err := sql.Open("sqlite3", "file:"+tempFilename+"?_auth&_auth_user=admin&_auth_pass=admin")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-
-	// Dummy Query to force connection
-	if _, err := db.Exec("SELECT 1;"); err != nil {
-		t.Fatalf("Failed to connect: %s", err)
-	}
-
-	if err := db.QueryRow("select auth_user_add('user', 'user', false);").Scan(&rv); err != nil || rv != 0 {
-		if err != nil {
-			t.Fatal(err)
+		// Dummy query to force connection and database creation
+		// Will return ErrUnauthorized (SQLITE_AUTH) if user authentication fails
+		if _, err = db.Exec("SELECT 1;"); err != nil {
+			defer os.Remove(file)
+			defer db.Close()
+			return file, nil, nil, err
 		}
-		t.Fatal("Failed to create normal user")
+		c = conn
+
+		return
 	}
 
-	if err := db.QueryRow("select auth_user_change('admin', 'nimda', true);").Scan(&rv); err != nil || rv != 0 {
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Fatal("Failed to change password")
-	}
-	db.Close()
-
-	// Re-Connect with new credentials
-	db, err = sql.Open("sqlite3", "file:"+tempFilename+"?_auth_user=admin&_auth_pass=nimda")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
+	authEnabled := func(db *sql.DB) (exists bool, err error) {
+		err = db.QueryRow("select count(type) from sqlite_master WHERE type='table' and name='sqlite_user';").Scan(&exists)
+		return
 	}
 
-	if err := db.QueryRow("select count(uname) from sqlite_user where uname = 'admin';").Scan(&rv); err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	// Dummy Query to force connection to test authorization
-	if _, err := db.Exec("SELECT 1;"); err != nil && err != ErrUnauthorized {
-		t.Fatalf("Failed to connect: %s", err)
-	}
-}
-
-func TestAuthUserDelete(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-
-	var rv int
-
-	db, err := sql.Open("sqlite3", "file:"+tempFilename+"?_auth&_auth_user=admin&_auth_pass=admin")
-	if err != nil {
-		t.Fatal("Failed to open database:", err)
-	}
-	defer db.Close()
-
-	// Dummy Query to force connection to test authorization
-	if _, err := db.Exec("SELECT 1;"); err != nil {
-		t.Fatalf("Failed to connect: %s", err)
+	addUser := func(db *sql.DB, username, password string, admin int) (rv int, err error) {
+		err = db.QueryRow("select auth_user_add(?, ?, ?);", username, password, admin).Scan(&rv)
+		return
 	}
 
-	// Add User
-	if _, err := db.Exec("select auth_user_add('user', 'user', false);"); err != nil {
-		t.Fatal(err)
+	userExists := func(db *sql.DB, username string) (rv int, err error) {
+		err = db.QueryRow("select count(uname) from sqlite_user where uname=?", username).Scan(&rv)
+		return
 	}
 
-	// Verify, their should be now 2 users
-	var users int
-	if err := db.QueryRow("select count(uname) from sqlite_user;").Scan(&users); err != nil {
-		t.Fatal(err)
-	}
-	if users != 2 {
-		t.Fatal("Failed to add user")
+	isAdmin := func(db *sql.DB, username string) (rv bool, err error) {
+		err = db.QueryRow("select isAdmin from sqlite_user where uname=?", username).Scan(&rv)
+		return
 	}
 
-	// Delete User
-	if _, err := db.Exec("select auth_user_delete('user');"); err != nil {
-		t.Fatal(err)
+	modifyUser := func(db *sql.DB, username, password string, admin int) (rv int, err error) {
+		err = db.QueryRow("select auth_user_change(?, ?, ?);", username, password, admin).Scan(&rv)
+		return
 	}
 
-	// Verify their should now only be 1 user remaining, the current logged in admin user
-	if err := db.QueryRow("select count(uname) from sqlite_user;").Scan(&users); err != nil {
-		t.Fatal(err)
+	deleteUser := func(db *sql.DB, username string) (rv int, err error) {
+		err = db.QueryRow("select auth_user_delete(?);", username).Scan(&rv)
+		return
 	}
-	if users != 1 {
-		t.Fatal("Failed to delete user")
-	}
+
+	Convey("Create Database", t, func() {
+		_, db, c, err := connect("", "admin", "admin")
+		So(db, ShouldNotBeNil)
+		So(c, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db.Close()
+
+		b, err := authEnabled(db)
+		So(b, ShouldEqual, true)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+	})
+
+	Convey("Authorization Success", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connect(f1, "admin", "admin")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("Authorization Success (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db1.Close()
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Test lower level authentication
+		err = c1.Authenticate("admin", "admin")
+		So(err, ShouldBeNil)
+	})
+
+	Convey("Authorization Failed", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Perform Invalid Authentication when we connect
+		// to a database
+		f2, db2, c2, err := connect(f1, "admin", "invalid")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldBeNil)
+		So(c2, ShouldBeNil)
+		So(err, ShouldEqual, ErrUnauthorized)
+	})
+
+	Convey("Authorization Failed (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db1.Close()
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Test lower level authentication
+		// We require a successful *SQLiteConn to test this.
+		err = c1.Authenticate("admin", "invalid")
+		So(err, ShouldNotBeNil)
+		So(err, ShouldEqual, ErrUnauthorized)
+	})
+
+	Convey("Add Admin User", t, func() {
+		_, db, c, err := connect("", "admin", "admin")
+		So(db, ShouldNotBeNil)
+		So(c, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db.Close()
+
+		e, err := userExists(db, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Admin User
+		rv, err := addUser(db, "admin2", "admin2", 1)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db, "admin2")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db, "admin2")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+	})
+
+	Convey("Add Admin User (*SQLiteConn)", t, func() {
+		_, db, c, err := connect("", "admin", "admin")
+		So(db, ShouldNotBeNil)
+		So(c, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db.Close()
+
+		e, err := userExists(db, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Test lower level AuthUserAdd
+		err = c.AuthUserAdd("admin2", "admin2", true)
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db, "admin2")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db, "admin2")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+	})
+
+	Convey("Add Normal User", t, func() {
+		_, db, c, err := connect("", "admin", "admin")
+		So(db, ShouldNotBeNil)
+		So(c, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db.Close()
+
+		e, err := userExists(db, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+	})
+
+	Convey("Add Normal User (*SQLiteConn)", t, func() {
+		_, db, c, err := connect("", "admin", "admin")
+		So(db, ShouldNotBeNil)
+		So(c, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db.Close()
+
+		e, err := userExists(db, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Test lower level AuthUserAdd
+		err = c.AuthUserAdd("user", "user", false)
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+	})
+
+	Convey("Add Admin User Insufficient Privileges", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+		db1.Close()
+
+		// Reconnect as normal user
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+
+		// Add Admin User
+		// Because 'user' is not admin
+		// Adding an admin user should now fail
+		// because we have insufficient privileges
+		rv, err = addUser(db2, "admin2", "admin2", 1)
+		So(rv, ShouldEqual, SQLITE_AUTH)
+		So(err, ShouldBeNil)
+	})
+
+	Convey("Add Admin User Insufficient Privileges (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+		db1.Close()
+
+		// Reconnect as normal user
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+
+		// Add Admin User
+		// Because 'user' is not admin
+		// Adding an admin user should now fail
+		// because we have insufficient privileges
+		err = c2.AuthUserAdd("admin2", "admin2", true)
+		So(err, ShouldNotBeNil)
+		So(err, ShouldEqual, ErrAdminRequired)
+	})
+
+	Convey("Add Normal User Insufficient Privileges", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+		db1.Close()
+
+		// Reconnect as normal user
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+
+		// Add Normal User
+		// Because 'user' is not admin
+		// Adding an normal user should now fail
+		// because we have insufficient privileges
+		rv, err = addUser(db2, "user2", "user2", 0)
+		So(rv, ShouldEqual, SQLITE_AUTH)
+		So(err, ShouldBeNil)
+	})
+
+	Convey("Add Normal User Insufficient Privileges (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+		db1.Close()
+
+		// Reconnect as normal user
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+
+		// Add Normal User
+		// Because 'user' is not admin
+		// Adding an normal user should now fail
+		// because we have insufficient privileges
+		// Test lower level AuthUserAdd
+		err = c2.AuthUserAdd("user2", "user2", false)
+		So(err, ShouldNotBeNil)
+		So(err, ShouldEqual, ErrAdminRequired)
+	})
+
+	Convey("Modify Current Connection Password", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Modify Password
+		rv, err := modifyUser(db1, "admin", "admin2", 1)
+		So(err, ShouldBeNil)
+		So(rv, ShouldEqual, 0)
+		db1.Close()
+
+		// Reconnect with new password
+		f2, db2, c2, err := connect(f1, "admin", "admin2")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("Modify Current Connection Password (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db1.Close()
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Modify password through (*SQLiteConn)
+		err = c1.AuthUserChange("admin", "admin2", true)
+		So(err, ShouldBeNil)
+
+		// Reconnect with new password
+		f2, db2, c2, err := connect(f1, "admin", "admin2")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("Modify Current Connection Admin Flag", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db1.Close()
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Modify Administrator Flag
+		// Because we are current logged in as 'admin'
+		// Changing our own admin flag should fail.
+		rv, err := modifyUser(db1, "admin", "admin", 0)
+		So(err, ShouldBeNil)
+		So(rv, ShouldEqual, SQLITE_AUTH)
+	})
+
+	Convey("Modify Current Connection Admin Flag (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db1.Close()
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Modify admin flag through (*SQLiteConn)
+		// Because we are current logged in as 'admin'
+		// Changing our own admin flag should fail.
+		err = c1.AuthUserChange("admin", "admin", false)
+		So(err, ShouldNotBeNil)
+		So(err, ShouldEqual, ErrAdminRequired)
+	})
+
+	Convey("Modify Other User Password", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify User
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		// Modify Password for user
+		rv, err = modifyUser(db1, "user", "user2", 0)
+		So(err, ShouldBeNil)
+		So(rv, ShouldEqual, 0)
+		db1.Close()
+
+		// Reconnect as normal user with new password
+		f2, db2, c2, err := connect(f1, "user", "user2")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("Modify Other User Password (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify User
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		// Modify user password through (*SQLiteConn)
+		// Because we are still logged in as admin
+		// this should succeed.
+		err = c1.AuthUserChange("admin", "admin", false)
+		So(err, ShouldNotBeNil)
+	})
+
+	Convey("Modify Other User Admin Flag", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify User
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		// Modify Password for user
+		// Because we are logged in as admin
+		// This call should succeed.
+		rv, err = modifyUser(db1, "user", "user", 1)
+		So(err, ShouldBeNil)
+		So(rv, ShouldEqual, 0)
+		db1.Close()
+
+		// Reconnect as normal user with new password
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("Modify Other User Admin Flag (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify User
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		// Modify user password through (*SQLiteConn)
+		// Because we are still logged in as admin
+		// this should succeed.
+		err = c1.AuthUserChange("user", "user", true)
+		So(err, ShouldBeNil)
+	})
+
+	Convey("Modify Other User Password as Non-Admin", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Add Normal User
+		rv, err = addUser(db1, "user2", "user2", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify 'user'
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		// Verify 'user2'
+		e, err = userExists(db1, "user2")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user2")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+		db1.Close()
+
+		// Reconnect as normal user
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+
+		// Modify password for user as normal user
+		// Because 'user' is not admin
+		// Modifying password as a normal user should now fail
+		// because we have insufficient privileges
+		rv, err = modifyUser(db2, "user2", "invalid", 0)
+		So(err, ShouldBeNil)
+		So(rv, ShouldEqual, SQLITE_AUTH)
+	})
+
+	Convey("Modify Other User Password as Non-Admin", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Add Normal User
+		rv, err = addUser(db1, "user2", "user2", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify 'user'
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		// Verify 'user2'
+		e, err = userExists(db1, "user2")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user2")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+		db1.Close()
+
+		// Reconnect as normal user
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+
+		// Modify user password through (*SQLiteConn)
+		// for 'user2'
+		// Because 'user' is not admin
+		// Modifying password as a normal user should now fail
+		// because we have insufficient privileges
+		err = c2.AuthUserChange("user2", "invalid", false)
+		So(err, ShouldNotBeNil)
+		So(err, ShouldEqual, ErrAdminRequired)
+	})
+
+	Convey("Delete User as Admin", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify 'user'
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		rv, err = deleteUser(db1, "user")
+		So(err, ShouldBeNil)
+		So(rv, ShouldEqual, 0)
+
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 0)
+	})
+
+	Convey("Delete User as Admin (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify 'user'
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		err = c1.AuthUserDelete("user")
+		So(err, ShouldBeNil)
+
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 0)
+	})
+
+	Convey("Delete User as Non-Admin", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Add Normal User
+		rv, err = addUser(db1, "user2", "user2", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify 'user'
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		// Verify 'user2'
+		e, err = userExists(db1, "user2")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user2")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+		db1.Close()
+
+		// Reconnect as normal user
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+
+		rv, err = deleteUser(db2, "user2")
+		So(err, ShouldBeNil)
+		So(rv, ShouldEqual, SQLITE_AUTH)
+	})
+
+	Convey("Delete User as Non-Admin (*SQLiteConn)", t, func() {
+		f1, db1, c1, err := connect("", "admin", "admin")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+
+		// Add Normal User
+		rv, err := addUser(db1, "user", "user", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Add Normal User
+		rv, err = addUser(db1, "user2", "user2", 0)
+		So(rv, ShouldEqual, 0) // 0 == C.SQLITE_OK
+		So(err, ShouldBeNil)
+
+		// Verify 'user'
+		e, err = userExists(db1, "user")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+
+		// Verify 'user2'
+		e, err = userExists(db1, "user2")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err = isAdmin(db1, "user2")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, false)
+		db1.Close()
+
+		// Reconnect as normal user
+		f2, db2, c2, err := connect(f1, "user", "user")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+
+		err = c2.AuthUserDelete("user2")
+		So(err, ShouldNotBeNil)
+		So(err, ShouldEqual, ErrAdminRequired)
+	})
 }
