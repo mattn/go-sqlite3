@@ -16,13 +16,19 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
+var (
+	conn        *SQLiteConn
+	connect     func(t *testing.T, f string, username, password string) (file string, db *sql.DB, c *SQLiteConn, err error)
+	authEnabled func(db *sql.DB) (exists bool, err error)
+	addUser     func(db *sql.DB, username, password string, admin int) (rv int, err error)
+	userExists  func(db *sql.DB, username string) (rv int, err error)
+	isAdmin     func(db *sql.DB, username string) (rv bool, err error)
+	modifyUser  func(db *sql.DB, username, password string, admin int) (rv int, err error)
+	deleteUser  func(db *sql.DB, username string) (rv int, err error)
+)
+
 func init() {
-
-}
-
-func TestUserAuthentication(t *testing.T) {
 	// Create database connection
-	var conn *SQLiteConn
 	sql.Register("sqlite3_with_conn",
 		&SQLiteDriver{
 			ConnectHook: func(c *SQLiteConn) error {
@@ -31,7 +37,7 @@ func TestUserAuthentication(t *testing.T) {
 			},
 		})
 
-	connect := func(f string, username, password string) (file string, db *sql.DB, c *SQLiteConn, err error) {
+	connect = func(t *testing.T, f string, username, password string) (file string, db *sql.DB, c *SQLiteConn, err error) {
 		conn = nil // Clear connection
 		file = f   // Copy provided file (f) => file
 		if file == "" {
@@ -57,38 +63,40 @@ func TestUserAuthentication(t *testing.T) {
 		return
 	}
 
-	authEnabled := func(db *sql.DB) (exists bool, err error) {
+	authEnabled = func(db *sql.DB) (exists bool, err error) {
 		err = db.QueryRow("select count(type) from sqlite_master WHERE type='table' and name='sqlite_user';").Scan(&exists)
 		return
 	}
 
-	addUser := func(db *sql.DB, username, password string, admin int) (rv int, err error) {
+	addUser = func(db *sql.DB, username, password string, admin int) (rv int, err error) {
 		err = db.QueryRow("select auth_user_add(?, ?, ?);", username, password, admin).Scan(&rv)
 		return
 	}
 
-	userExists := func(db *sql.DB, username string) (rv int, err error) {
+	userExists = func(db *sql.DB, username string) (rv int, err error) {
 		err = db.QueryRow("select count(uname) from sqlite_user where uname=?", username).Scan(&rv)
 		return
 	}
 
-	isAdmin := func(db *sql.DB, username string) (rv bool, err error) {
+	isAdmin = func(db *sql.DB, username string) (rv bool, err error) {
 		err = db.QueryRow("select isAdmin from sqlite_user where uname=?", username).Scan(&rv)
 		return
 	}
 
-	modifyUser := func(db *sql.DB, username, password string, admin int) (rv int, err error) {
+	modifyUser = func(db *sql.DB, username, password string, admin int) (rv int, err error) {
 		err = db.QueryRow("select auth_user_change(?, ?, ?);", username, password, admin).Scan(&rv)
 		return
 	}
 
-	deleteUser := func(db *sql.DB, username string) (rv int, err error) {
+	deleteUser = func(db *sql.DB, username string) (rv int, err error) {
 		err = db.QueryRow("select auth_user_delete(?);", username).Scan(&rv)
 		return
 	}
+}
 
+func TestUserAuthentication(t *testing.T) {
 	Convey("Create Database", t, func() {
-		_, db, c, err := connect("", "admin", "admin")
+		_, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
@@ -108,7 +116,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Authorization Success", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -124,7 +132,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Preform authentication
-		f2, db2, c2, err := connect(f1, "admin", "admin")
+		f2, db2, c2, err := connect(t, f1, "admin", "admin")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -134,7 +142,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Authorization Success (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -155,7 +163,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Authorization Failed", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -171,7 +179,7 @@ func TestUserAuthentication(t *testing.T) {
 
 		// Perform Invalid Authentication when we connect
 		// to a database
-		f2, db2, c2, err := connect(f1, "admin", "invalid")
+		f2, db2, c2, err := connect(t, f1, "admin", "invalid")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldBeNil)
@@ -180,7 +188,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Authorization Failed (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -201,9 +209,11 @@ func TestUserAuthentication(t *testing.T) {
 		So(err, ShouldNotBeNil)
 		So(err, ShouldEqual, ErrUnauthorized)
 	})
+}
 
+func TestUserAuthenticationAddUser(t *testing.T) {
 	Convey("Add Admin User", t, func() {
-		_, db, c, err := connect("", "admin", "admin")
+		_, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
@@ -232,7 +242,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Add Admin User (*SQLiteConn)", t, func() {
-		_, db, c, err := connect("", "admin", "admin")
+		_, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
@@ -260,7 +270,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Add Normal User", t, func() {
-		_, db, c, err := connect("", "admin", "admin")
+		_, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
@@ -289,7 +299,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Add Normal User (*SQLiteConn)", t, func() {
-		_, db, c, err := connect("", "admin", "admin")
+		_, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
@@ -317,7 +327,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Add Admin User Insufficient Privileges", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -346,7 +356,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -364,7 +374,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Add Admin User Insufficient Privileges (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -393,7 +403,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -411,7 +421,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Add Normal User Insufficient Privileges", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -440,7 +450,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -458,7 +468,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Add Normal User Insufficient Privileges (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -487,7 +497,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -504,9 +514,11 @@ func TestUserAuthentication(t *testing.T) {
 		So(err, ShouldNotBeNil)
 		So(err, ShouldEqual, ErrAdminRequired)
 	})
+}
 
+func TestUserAuthenticationModifyUser(t *testing.T) {
 	Convey("Modify Current Connection Password", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -527,7 +539,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect with new password
-		f2, db2, c2, err := connect(f1, "admin", "admin2")
+		f2, db2, c2, err := connect(t, f1, "admin", "admin2")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -537,7 +549,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Current Connection Password (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -557,7 +569,7 @@ func TestUserAuthentication(t *testing.T) {
 		So(err, ShouldBeNil)
 
 		// Reconnect with new password
-		f2, db2, c2, err := connect(f1, "admin", "admin2")
+		f2, db2, c2, err := connect(t, f1, "admin", "admin2")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -567,7 +579,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Current Connection Admin Flag", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -591,7 +603,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Current Connection Admin Flag (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -615,7 +627,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Other User Password", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -650,7 +662,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user with new password
-		f2, db2, c2, err := connect(f1, "user", "user2")
+		f2, db2, c2, err := connect(t, f1, "user", "user2")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -660,7 +672,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Other User Password (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -696,7 +708,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Other User Admin Flag", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -733,7 +745,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user with new password
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -743,7 +755,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Other User Admin Flag (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -779,7 +791,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Other User Password as Non-Admin", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -823,7 +835,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -841,7 +853,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Modify Other User Password as Non-Admin", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -885,7 +897,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -902,9 +914,11 @@ func TestUserAuthentication(t *testing.T) {
 		So(err, ShouldNotBeNil)
 		So(err, ShouldEqual, ErrAdminRequired)
 	})
+}
 
+func TestUserAuthenticationDeleteUser(t *testing.T) {
 	Convey("Delete User as Admin", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -942,7 +956,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Delete User as Admin (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -979,7 +993,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Delete User as Non-Admin", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -1023,7 +1037,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
@@ -1037,7 +1051,7 @@ func TestUserAuthentication(t *testing.T) {
 	})
 
 	Convey("Delete User as Non-Admin (*SQLiteConn)", t, func() {
-		f1, db1, c1, err := connect("", "admin", "admin")
+		f1, db1, c1, err := connect(t, "", "admin", "admin")
 		So(f1, ShouldNotBeBlank)
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
@@ -1081,7 +1095,7 @@ func TestUserAuthentication(t *testing.T) {
 		db1.Close()
 
 		// Reconnect as normal user
-		f2, db2, c2, err := connect(f1, "user", "user")
+		f2, db2, c2, err := connect(t, f1, "user", "user")
 		So(f2, ShouldNotBeBlank)
 		So(f1, ShouldEqual, f2)
 		So(db2, ShouldNotBeNil)
