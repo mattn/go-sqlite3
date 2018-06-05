@@ -96,11 +96,12 @@ func init() {
 
 func TestUserAuthentication(t *testing.T) {
 	Convey("Create Database", t, func() {
-		_, db, c, err := connect(t, "", "admin", "admin")
+		f, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
 		defer db.Close()
+		defer os.Remove(f)
 
 		b, err := authEnabled(db)
 		So(b, ShouldEqual, true)
@@ -121,6 +122,7 @@ func TestUserAuthentication(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -147,6 +149,7 @@ func TestUserAuthentication(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 		defer db1.Close()
 
 		e, err := userExists(db1, "admin")
@@ -168,6 +171,7 @@ func TestUserAuthentication(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -176,6 +180,7 @@ func TestUserAuthentication(t *testing.T) {
 		a, err := isAdmin(db1, "admin")
 		So(err, ShouldBeNil)
 		So(a, ShouldEqual, true)
+		db1.Close()
 
 		// Perform Invalid Authentication when we connect
 		// to a database
@@ -193,6 +198,7 @@ func TestUserAuthentication(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 		defer db1.Close()
 
 		e, err := userExists(db1, "admin")
@@ -213,10 +219,11 @@ func TestUserAuthentication(t *testing.T) {
 
 func TestUserAuthenticationAddUser(t *testing.T) {
 	Convey("Add Admin User", t, func() {
-		_, db, c, err := connect(t, "", "admin", "admin")
+		f, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f)
 		defer db.Close()
 
 		e, err := userExists(db, "admin")
@@ -242,10 +249,11 @@ func TestUserAuthenticationAddUser(t *testing.T) {
 	})
 
 	Convey("Add Admin User (*SQLiteConn)", t, func() {
-		_, db, c, err := connect(t, "", "admin", "admin")
+		f, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f)
 		defer db.Close()
 
 		e, err := userExists(db, "admin")
@@ -270,10 +278,11 @@ func TestUserAuthenticationAddUser(t *testing.T) {
 	})
 
 	Convey("Add Normal User", t, func() {
-		_, db, c, err := connect(t, "", "admin", "admin")
+		f, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f)
 		defer db.Close()
 
 		e, err := userExists(db, "admin")
@@ -299,10 +308,11 @@ func TestUserAuthenticationAddUser(t *testing.T) {
 	})
 
 	Convey("Add Normal User (*SQLiteConn)", t, func() {
-		_, db, c, err := connect(t, "", "admin", "admin")
+		f, db, c, err := connect(t, "", "admin", "admin")
 		So(db, ShouldNotBeNil)
 		So(c, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f)
 		defer db.Close()
 
 		e, err := userExists(db, "admin")
@@ -332,6 +342,7 @@ func TestUserAuthenticationAddUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -379,6 +390,7 @@ func TestUserAuthenticationAddUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -426,6 +438,7 @@ func TestUserAuthenticationAddUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -473,6 +486,7 @@ func TestUserAuthenticationAddUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -523,6 +537,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -554,6 +569,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 		defer db1.Close()
 
 		e, err := userExists(db1, "admin")
@@ -584,6 +600,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 		defer db1.Close()
 
 		e, err := userExists(db1, "admin")
@@ -608,6 +625,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 		defer db1.Close()
 
 		e, err := userExists(db1, "admin")
@@ -632,6 +650,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -677,6 +696,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -713,6 +733,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -760,6 +781,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -796,6 +818,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -858,6 +881,7 @@ func TestUserAuthenticationModifyUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -923,6 +947,7 @@ func TestUserAuthenticationDeleteUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -961,6 +986,7 @@ func TestUserAuthenticationDeleteUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -998,6 +1024,7 @@ func TestUserAuthenticationDeleteUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
@@ -1056,6 +1083,7 @@ func TestUserAuthenticationDeleteUser(t *testing.T) {
 		So(db1, ShouldNotBeNil)
 		So(c1, ShouldNotBeNil)
 		So(err, ShouldBeNil)
+		defer os.Remove(f1)
 
 		e, err := userExists(db1, "admin")
 		So(err, ShouldBeNil)
