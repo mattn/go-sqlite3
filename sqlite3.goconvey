@@ -3,4 +3,6 @@
 // Activate Coverage
 -cover
 
+-tags=sqlite_userauth
+
 // EOF
