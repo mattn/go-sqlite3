@@ -894,6 +894,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	authCreate := false
 	authUser := ""
 	authPass := ""
+	authCrypt := ""
+	authSalt := ""
 	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	txlock := "BEGIN"
 
@@ -928,6 +930,12 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 		if val := params.Get("_auth_pass"); val != "" {
 			authPass = val
+		}
+		if val := params.Get("_auth_crypt"); val != "" {
+			authCrypt = val
+		}
+		if val := params.Get("_auth_salt"); val != "" {
+			authSalt = val
 		}
 
 		// _loc
@@ -1286,6 +1294,56 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	// Create connection to SQLite
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
+
+	// Password Cipher has to be registerd before authentication
+	if len(authCrypt) > 0 {
+		switch strings.ToUpper(authCrypt) {
+		case "SHA1":
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA1, true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSHA1: %s", err)
+			}
+		case "SSHA1":
+			if len(authSalt) == 0 {
+				return nil, fmt.Errorf("_auth_crypt=ssha1, requires _auth_salt")
+			}
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA1(authSalt), true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSSHA1: %s", err)
+			}
+		case "SHA256":
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA256, true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSHA256: %s", err)
+			}
+		case "SSHA256":
+			if len(authSalt) == 0 {
+				return nil, fmt.Errorf("_auth_crypt=ssha256, requires _auth_salt")
+			}
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA256(authSalt), true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSSHA256: %s", err)
+			}
+		case "SHA384":
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA384, true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSHA384: %s", err)
+			}
+		case "SSHA384":
+			if len(authSalt) == 0 {
+				return nil, fmt.Errorf("_auth_crypt=ssha384, requires _auth_salt")
+			}
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA384(authSalt), true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSSHA384: %s", err)
+			}
+		case "SHA512":
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA512, true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSHA512: %s", err)
+			}
+		case "SSHA512":
+			if len(authSalt) == 0 {
+				return nil, fmt.Errorf("_auth_crypt=ssha512, requires _auth_salt")
+			}
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA512(authSalt), true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSSHA512: %s", err)
+			}
+		}
+	}
 
 	// Preform Authentication
 	if err := conn.Authenticate(authUser, authPass); err != nil {

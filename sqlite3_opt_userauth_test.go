@@ -1108,3 +1108,247 @@ func TestUserAuthenticationDeleteUser(t *testing.T) {
 		So(err, ShouldEqual, ErrAdminRequired)
 	})
 }
+
+func TestUserAuthenticationEncoder(t *testing.T) {
+	connectWithCrypt := func(t *testing.T, f string, username, password string, crypt string, salt string) (file string, db *sql.DB, c *SQLiteConn, err error) {
+		conn = nil // Clear connection
+		file = f   // Copy provided file (f) => file
+		if file == "" {
+			// Create dummy file
+			file = TempFilename(t)
+		}
+
+		db, err = sql.Open("sqlite3_with_conn", "file:"+file+fmt.Sprintf("?_auth&_auth_user=%s&_auth_pass=%s&_auth_crypt=%s&_auth_salt=%s", username, password, crypt, salt))
+		if err != nil {
+			defer os.Remove(file)
+			return file, nil, nil, err
+		}
+
+		// Dummy query to force connection and database creation
+		// Will return ErrUnauthorized (SQLITE_AUTH) if user authentication fails
+		if _, err = db.Exec("SELECT 1;"); err != nil {
+			defer os.Remove(file)
+			defer db.Close()
+			return file, nil, nil, err
+		}
+		c = conn
+
+		return
+	}
+
+	Convey("SHA1 Encoder", t, func() {
+		f1, db1, c1, err := connectWithCrypt(t, "", "admin", "admin", "sha1", "")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer os.Remove(f1)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connectWithCrypt(t, f1, "admin", "admin", "sha1", "")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("SSHA1 Encoder", t, func() {
+		f1, db1, c1, err := connectWithCrypt(t, "", "admin", "admin", "ssha1", "salted")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer os.Remove(f1)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connectWithCrypt(t, f1, "admin", "admin", "ssha1", "salted")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("SHA256 Encoder", t, func() {
+		f1, db1, c1, err := connectWithCrypt(t, "", "admin", "admin", "sha256", "")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer os.Remove(f1)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connectWithCrypt(t, f1, "admin", "admin", "sha256", "")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("SSHA256 Encoder", t, func() {
+		f1, db1, c1, err := connectWithCrypt(t, "", "admin", "admin", "ssha256", "salted")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer os.Remove(f1)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connectWithCrypt(t, f1, "admin", "admin", "ssha256", "salted")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("SHA384 Encoder", t, func() {
+		f1, db1, c1, err := connectWithCrypt(t, "", "admin", "admin", "sha384", "")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer os.Remove(f1)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connectWithCrypt(t, f1, "admin", "admin", "sha384", "")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("SSHA384 Encoder", t, func() {
+		f1, db1, c1, err := connectWithCrypt(t, "", "admin", "admin", "ssha384", "salted")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer os.Remove(f1)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connectWithCrypt(t, f1, "admin", "admin", "ssha384", "salted")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("SHA512 Encoder", t, func() {
+		f1, db1, c1, err := connectWithCrypt(t, "", "admin", "admin", "sha512", "")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer os.Remove(f1)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connectWithCrypt(t, f1, "admin", "admin", "sha512", "")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+
+	Convey("SSHA512 Encoder", t, func() {
+		f1, db1, c1, err := connectWithCrypt(t, "", "admin", "admin", "ssha512", "salted")
+		So(f1, ShouldNotBeBlank)
+		So(db1, ShouldNotBeNil)
+		So(c1, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer os.Remove(f1)
+
+		e, err := userExists(db1, "admin")
+		So(err, ShouldBeNil)
+		So(e, ShouldEqual, 1)
+
+		a, err := isAdmin(db1, "admin")
+		So(err, ShouldBeNil)
+		So(a, ShouldEqual, true)
+		db1.Close()
+
+		// Preform authentication
+		f2, db2, c2, err := connectWithCrypt(t, f1, "admin", "admin", "ssha512", "salted")
+		So(f2, ShouldNotBeBlank)
+		So(f1, ShouldEqual, f2)
+		So(db2, ShouldNotBeNil)
+		So(c2, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		defer db2.Close()
+	})
+}
