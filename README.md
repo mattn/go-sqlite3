@@ -81,8 +81,10 @@ Boolean values can be one of:
 | Name | Key | Value(s) | Description |
 |------|-----|----------|-------------|
 | UA - Create | `_auth` | - | Create User Authentication, for more information see [User Authentication](#user-authentication) |
-| UA - Username | `_auth_user` | - | Username for User Authentication, for more information see [User Authentication](#user-authentication) |
-| UA - Password | `_auth_pass` | - | Password for User Authentication, for more information see [User Authentication](#user-authentication) |
+| UA - Username | `_auth_user` | `string` | Username for User Authentication, for more information see [User Authentication](#user-authentication) |
+| UA - Password | `_auth_pass` | `string` | Password for User Authentication, for more information see [User Authentication](#user-authentication) |
+| UA - Crypt | `_auth_crypt` | <ul><li>SHA1</li><li>SSHA1</li><li>SHA256</li><li>SSHA256</li><li>SHA384</li><li>SSHA384</li><li>SHA512</li><li>SSHA512</li></ul> | Password encoder to use for User Authentication, for more information see [User Authentication](#user-authentication) |
+| UA - Salt | `_auth_salt` | `string` | Salt to use if the configure password encoder requires a salt, for User Authentication, for more information see [User Authentication](#user-authentication) |
 | Auto Vacuum | `_auto_vacuum` \| `_vacuum` | <ul><li>`0` \| `none`</li><li>`1` \| `full`</li><li>`2` \| `incremental`</li></ul> | For more information see [PRAGMA auto_vacuum](https://www.sqlite.org/pragma.html#pragma_auto_vacuum) |
 | Busy Timeout | `_busy_timeout` \| `_timeout` | `int` | Specify value for sqlite3_busy_timeout. For more information see [PRAGMA busy_timeout](https://www.sqlite.org/pragma.html#pragma_busy_timeout) |
 | Case Sensitive LIKE | `_case_sensitive_like` \| `_cslike` | `boolean` | For more information see [PRAGMA case_sensitive_like](https://www.sqlite.org/pragma.html#pragma_case_sensitive_like) |
@@ -337,6 +339,30 @@ Example connection string:
 Create an user authentication database with user `admin` and password `admin`.
 
 `file:test.s3db?_auth&_auth_user=admin&_auth_pass=admin`
+
+Create an user authentication database with user `admin` and password `admin` and use `SHA1` for the password encoding.
+
+`file:test.s3db?_auth&_auth_user=admin&_auth_pass=admin&_auth_crypt=sha1`
+
+### Password Encoding
+
+The passwords within the user authentication module of SQLite are encoded with the SQLite function `sqlite_cryp`.
+This function uses a ceasar-cypher which is quite insecure.
+This library provides several additional password encoders which can be configured through the connection string.
+
+The password cypher can be configured with the key `_auth_crypt`. And if the configured password encoder also requires an
+salt this can be configured with `_auth_salt`.
+
+#### Available Encoders
+
+- SHA1
+- SSHA1 (Salted SHA1)
+- SHA256
+- SSHA256 (salted SHA256)
+- SHA384
+- SSHA384 (salted SHA384)
+- SHA512
+- SSHA512 (salted SHA512)
 
 ### Restrictions
 
