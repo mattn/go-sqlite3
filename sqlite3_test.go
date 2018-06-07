@@ -231,6 +231,59 @@ func TestInsert(t *testing.T) {
 	}
 }
 
+func TestUpsert(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("drop table foo")
+	_, err = db.Exec("create table foo (name text unique, count integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	res, err := db.Exec("insert into foo(name, count) values('row1', 1)")
+	if err != nil {
+		t.Fatal("Failed to insert record:", err)
+	}
+	affected, _ := res.RowsAffected()
+	if affected != 1 {
+		t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
+	}
+
+	res, err = db.Exec("insert into foo(name, count) values('row1', 1) ON CONFLICT(name) DO UPDATE SET count=count+1")
+	if err != nil {
+		t.Fatal("Failed to insert record:", err)
+	}
+	affected, _ = res.RowsAffected()
+	if affected != 1 {
+		t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
+	}
+
+	rows, err := db.Query("select name, count from foo")
+	if err != nil {
+		t.Fatal("Failed to select records:", err)
+	}
+	defer rows.Close()
+
+	rows.Next()
+
+	var resultName string
+	var resultCount int
+	rows.Scan(&resultName, &resultCount)
+	if resultName != "row1" {
+		t.Errorf("Expected %s for fetched resultName, but %s:", "row1", resultName)
+	}
+	if resultCount != 2 {
+		t.Errorf("Expected %d for fetched resultCount, but %d:", 2, resultCount)
+	}
+
+}
+
 func TestUpdate(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
