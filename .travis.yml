@@ -87,6 +87,7 @@ before_install:
       brew upgrade icu4c
     fi
   - |
+    go get github.com/smartystreets/goconvey
     if [[ "${GOOS}" != "windows" ]]; then
       go get github.com/mattn/goveralls
       go get golang.org/x/tools/cmd/cover

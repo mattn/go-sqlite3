@@ -1,0 +1,8 @@
+// GoConvey Test Profile
+
+// Activate Coverage
+-cover
+
+-tags=sqlite_userauth
+
+// EOF
