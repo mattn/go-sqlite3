@@ -231,6 +231,56 @@ func TestInsert(t *testing.T) {
 	}
 }
 
+func TestUpsert(t *testing.T) {
+	_, n, _ := Version()
+	if !(n >= 3024000) {
+		t.Log("your version of sqlite3 doesn't support UPSERT featue. Version >= '3.24.0' needed. Skipping test...")
+		return
+	}
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("drop table foo")
+	_, err = db.Exec("create table foo (name string primary key, counter integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		res, err := db.Exec("insert into foo(name, counter) values('key', 1) on conflict (name) do update set counter=counter+1")
+		if err != nil {
+			t.Fatal("Failed to upsert record:", err)
+		}
+		affected, _ := res.RowsAffected()
+		if affected != 1 {
+			t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
+		}
+	}
+	rows, err := db.Query("select name, counter from foo")
+	if err != nil {
+		t.Fatal("Failed to select records:", err)
+	}
+	defer rows.Close()
+
+	rows.Next()
+
+	var resultName string
+	var resultCounter int
+	rows.Scan(&resultName, &resultCounter)
+	if resultName != "key" {
+		t.Errorf("Expected %s for fetched result, but %s:", "key", resultName)
+	}
+	if resultCounter != 10 {
+		t.Errorf("Expected %d for fetched result, but %d:", 10, resultCounter)
+	}
+
+}
+
 func TestUpdate(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
