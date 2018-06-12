@@ -37,7 +37,6 @@ Supported Golang version:
 - [User Authentication](#user-authentication)
   - [Compile](#compile)
   - [Usage](#usage)
-  - 
 - [Extensions](#extensions)
   - [Spatialite](#spatialite)
 - [FAQ](#faq)
@@ -477,6 +476,25 @@ For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatial
     You need to implement the feature or call the sqlite3 cli.
 
     More infomation see [#305](https://github.com/mattn/go-sqlite3/issues/305)
+
+- Error: `database is locked`
+
+    When you get an database is locked. Please use the following options.
+
+    Add to DSN: `cache=shared`
+
+    Example:
+    ```go
+    db, err := sql.Open("sqlite3", "file:locked.sqlite?cache=shared")
+    ```
+
+    Second please set the database connections of the SQL package to 1.
+    
+    ```go
+    db.SetMaxOpenConn(1)
+    ```
+
+    More information see [#209](https://github.com/mattn/go-sqlite3/issues/209)
 
 # License
 
