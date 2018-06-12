@@ -11,9 +11,10 @@ go-sqlite3
 sqlite3 driver conforming to the built-in database/sql interface
 
 Supported Golang version:
-- 1.8.x
 - 1.9.x
 - 1.10.x
+
+[This package follows the official Golang Release Policy.](https://golang.org/doc/devel/release.html#policy)
 
 ### Overview
 
