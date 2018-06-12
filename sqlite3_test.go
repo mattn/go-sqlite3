@@ -1679,6 +1679,7 @@ var testTables = []string{"foo", "bar", "t", "bench"}
 var tests = []testing.InternalTest{
 	{Name: "TestResult", F: testResult},
 	{Name: "TestBlobs", F: testBlobs},
+	{Name: "TestMultiBlobs", F: testMultiBlobs},
 	{Name: "TestManyQueryRow", F: testManyQueryRow},
 	{Name: "TestTxQuery", F: testTxQuery},
 	{Name: "TestPreparedStmt", F: testPreparedStmt},
@@ -1831,6 +1832,56 @@ func testBlobs(t *testing.T) {
 		t.Errorf("string scan: %v", err)
 	} else if got != want {
 		t.Errorf("for string, got %q; want %q", got, want)
+	}
+}
+
+func testMultiBlobs(t *testing.T) {
+	db.tearDown()
+	db.mustExec("create table foo (id integer primary key, bar " + db.blobType(16) + ")")
+	var blob0 = []byte{0, 1, 2, 3, 4, 5, 6, 7}
+	db.mustExec(db.q("insert into foo (id, bar) values(?,?)"), 0, blob0)
+	var blob1 = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	db.mustExec(db.q("insert into foo (id, bar) values(?,?)"), 1, blob1)
+
+	r, err := db.Query(db.q("select bar from foo order by id"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if !r.Next() {
+		if r.Err() != nil {
+			t.Fatal(err)
+		}
+		t.Fatal("expected one rows")
+	}
+
+	want0 := fmt.Sprintf("%x", blob0)
+	b0 := make([]byte, 8)
+	err = r.Scan(&b0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got0 := fmt.Sprintf("%x", b0)
+
+	if !r.Next() {
+		if r.Err() != nil {
+			t.Fatal(err)
+		}
+		t.Fatal("expected one rows")
+	}
+
+	want1 := fmt.Sprintf("%x", blob1)
+	b1 := make([]byte, 16)
+	err = r.Scan(&b1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got1 := fmt.Sprintf("%x", b1)
+	if got0 != want0 {
+		t.Errorf("for []byte, got %q; want %q", got0, want0)
+	}
+	if got1 != want1 {
+		t.Errorf("for []byte, got %q; want %q", got1, want1)
 	}
 }
 

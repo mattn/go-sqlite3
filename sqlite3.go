@@ -1937,8 +1937,6 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			}
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
 			switch dest[i].(type) {
-			case sql.RawBytes:
-				dest[i] = (*[1 << 30]byte)(p)[0:n]
 			default:
 				slice := make([]byte, n)
 				copy(slice[:], (*[1 << 30]byte)(p)[0:n])
