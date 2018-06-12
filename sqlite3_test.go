@@ -234,10 +234,7 @@ func TestInsert(t *testing.T) {
 func TestUpsert(t *testing.T) {
 	_, n, _ := Version()
 	if !(n >= 3024000) {
-		t.Log("Your version of sqlite3 doesn't support UPSERT feature.")
-		t.Log("Version >= '3.24.0' needed.")
-		t.Log("Skipping test...")
-		return
+		t.Skip("UPSERT requires sqlite3 => 3.24.0")
 	}
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
