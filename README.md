@@ -453,14 +453,19 @@ For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatial
 
     Yes for readonly. But, No for writable. See [#50](https://github.com/mattn/go-sqlite3/issues/50), [#51](https://github.com/mattn/go-sqlite3/issues/51), [#209](https://github.com/mattn/go-sqlite3/issues/209), [#274](https://github.com/mattn/go-sqlite3/issues/274).
 
-- Why is it racy if I use a `sql.Open("sqlite3", ":memory:")` database?
+- Why I'm getting `no such table` error?
+
+    Why is it racy if I use a `sql.Open("sqlite3", ":memory:")` database?
 
     Each connection to :memory: opens a brand new in-memory sql database, so if
     the stdlib's sql engine happens to open another connection and you've only
     specified ":memory:", that connection will see a brand new database. A
     workaround is to use "file::memory:?mode=memory&cache=shared". Every
-    connection to this string will point to the same in-memory database. See
-    [#204](https://github.com/mattn/go-sqlite3/issues/204) for more info.
+    connection to this string will point to the same in-memory database. 
+    
+    For more information see
+    * [#204](https://github.com/mattn/go-sqlite3/issues/204)
+    * [#511](https://github.com/mattn/go-sqlite3/issues/511)
 
 - Reading from database with large amount of goroutines fails on OSX.
 
