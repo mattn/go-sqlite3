@@ -162,6 +162,10 @@ func TestUserAuthCreateDatabase(t *testing.T) {
 	if !a {
 		t.Fatal("UserAuth: User is not administrator")
 	}
+
+	if enabled := c.AuthEnabled(); !enabled {
+		t.Fatal("UserAuth Not Enabled")
+	}
 }
 
 func TestUserAuthLogin(t *testing.T) {
