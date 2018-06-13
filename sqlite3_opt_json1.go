@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-// +build sqlite_json sqlite_json1 json1
+// +build sqlite_json sqlite_json1
 
 package sqlite3
 

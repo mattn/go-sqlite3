@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-// +build sqlite_fts5 fts5
+// +build sqlite_fts5
 
 package sqlite3
 
