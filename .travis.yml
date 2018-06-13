@@ -12,10 +12,8 @@ env:
   matrix:
     - GOTAGS=
     - GOTAGS=libsqlite3
-    - GOTAGS="sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth"
+    - GOTAGS="sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable"
     - GOTAGS=sqlite_vacuum_full
-    - GOTAGS=sqlite_vacuum_incr
-    - GOTAGS=sqlite_vtable
 
 go:
   - 1.9.x
