@@ -1129,6 +1129,59 @@ func TestStringContainingZero(t *testing.T) {
 	}
 }
 
+//TestBindOrder demonstrates that this driver cannot handle $1, $2,type bind params when they are out of order.
+func TestBindOrder(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	create table foo (id integer, name text);
+	`)
+	if err != nil {
+		t.Error("Failed to call db.Query:", err)
+	}
+
+	const text = "foo-bar"
+	var id int
+	var name string
+
+	_, err = db.Exec(`insert into foo(id, name ) values($1, $2)`, 1, text)
+	if err != nil {
+		t.Error("Failed to call db.Exec:", err)
+	}
+
+	row := db.QueryRow(`select id, name from foo where id = $1 and name = $2`, 1, text)
+	if row == nil {
+		t.Error("Failed to call db.QueryRow")
+	}
+
+	err = row.Scan(&id, &name)
+	if err != nil {
+		t.Error("Failed to db.Scan:", err)
+	}
+	if id != 1 || name != text {
+		t.Error("Failed to db.QueryRow: not matched results")
+	}
+
+	row = db.QueryRow(`select id, name from foo where id = $2 and name = $1`, text, 1)
+	if row == nil {
+		t.Error("Failed to call db.QueryRow")
+	}
+
+	err = row.Scan(&id, &name)
+	if err != nil {
+		t.Error("Failed to db.Scan:", err)
+	}
+	if id != 1 || name != text {
+		t.Error("Failed to db.QueryRow: not matched results")
+	}
+}
+
 const CurrentTimeStamp = "2006-01-02 15:04:05"
 
 type TimeStamp struct{ *time.Time }
