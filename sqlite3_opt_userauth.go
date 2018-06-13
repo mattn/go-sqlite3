@@ -61,17 +61,11 @@ _sqlite3_auth_enabled(sqlite3* db)
 */
 import "C"
 import (
-	"errors"
 	"unsafe"
 )
 
 const (
 	SQLITE_AUTH = C.SQLITE_AUTH
-)
-
-var (
-	ErrUnauthorized  = errors.New("SQLITE_AUTH: Unauthorized")
-	ErrAdminRequired = errors.New("SQLITE_AUTH: Unauthorized; Admin Privileges Required")
 )
 
 // Authenticate will perform an authentication of the provided username
@@ -91,7 +85,7 @@ func (c *SQLiteConn) Authenticate(username, password string) error {
 	rv := c.authenticate(username, password)
 	switch rv {
 	case C.SQLITE_ERROR, C.SQLITE_AUTH:
-		return ErrUnauthorized
+		return Error{Code: ErrNo(rv)}
 	case C.SQLITE_OK:
 		return nil
 	default:
@@ -138,7 +132,7 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 	rv := c.authUserAdd(username, password, isAdmin)
 	switch rv {
 	case C.SQLITE_ERROR, C.SQLITE_AUTH:
-		return ErrAdminRequired
+		return Error{Code: ErrNo(rv)}
 	case C.SQLITE_OK:
 		return nil
 	default:
@@ -187,7 +181,7 @@ func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error
 	rv := c.authUserChange(username, password, isAdmin)
 	switch rv {
 	case C.SQLITE_ERROR, C.SQLITE_AUTH:
-		return ErrAdminRequired
+		return Error{Code: ErrNo(rv)}
 	case C.SQLITE_OK:
 		return nil
 	default:
@@ -234,7 +228,7 @@ func (c *SQLiteConn) AuthUserDelete(username string) error {
 	rv := c.authUserDelete(username)
 	switch rv {
 	case C.SQLITE_ERROR, C.SQLITE_AUTH:
-		return ErrAdminRequired
+		return Error{Code: ErrNo(rv)}
 	case C.SQLITE_OK:
 		return nil
 	default:

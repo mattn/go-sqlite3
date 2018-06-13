@@ -191,14 +191,14 @@ func TestUserAuthLogin(t *testing.T) {
 	if err == nil {
 		t.Fatal("Login successful while expecting to fail")
 	}
-	if err != ErrUnauthorized {
+	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal(err)
 	}
 	err = c2.Authenticate("admin", "invalid")
 	if err == nil {
 		t.Fatal("Login successful while expecting to fail")
 	}
-	if err != ErrUnauthorized {
+	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal(err)
 	}
 }
@@ -339,7 +339,7 @@ func TestUserAuthAddUser(t *testing.T) {
 	}
 
 	err = c2.AuthUserAdd("admin3", "admin3", true)
-	if err != ErrAdminRequired {
+	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal("Created admin user while not allowed")
 	}
 
@@ -353,7 +353,7 @@ func TestUserAuthAddUser(t *testing.T) {
 	}
 
 	err = c2.AuthUserAdd("user4", "user4", false)
-	if err != ErrAdminRequired {
+	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal("Created user while not allowed")
 	}
 }
@@ -397,7 +397,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 	// Because we are current logged in as 'admin'
 	// Changing our own admin flag should fail.
 	err = c1.AuthUserChange("admin", "admin3", false)
-	if err != ErrAdminRequired {
+	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal("Successfully changed admin flag while not allowed")
 	}
 
@@ -452,7 +452,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 
 	// Modify other user password and flag through *SQLiteConn
 	err = c2.AuthUserChange("user2", "invalid", false)
-	if err != ErrAdminRequired {
+	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal("Password change succesful while not allowed")
 	}
 }
@@ -583,7 +583,7 @@ func TestUserAuthDeleteUser(t *testing.T) {
 	// Delete user while logged in as normal user
 	// through *SQLiteConn
 	err = c2.AuthUserDelete("user2")
-	if err != ErrAdminRequired {
+	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal("Successfully deleted user wthout proper privileges")
 	}
 }
