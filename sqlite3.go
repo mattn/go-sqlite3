@@ -23,6 +23,7 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
 #cgo CFLAGS: -Wno-deprecated-declarations
 #cgo linux,!android CFLAGS: -DHAVE_PREAD64=1 -DHAVE_PWRITE64=1
+
 #ifndef USE_LIBSQLITE3
 #include <sqlite3-binding.h>
 #else
