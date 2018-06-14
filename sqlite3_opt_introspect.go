@@ -9,7 +9,7 @@
 package sqlite3
 
 /*
-#cgo CFLAGS: -DSQLITE_INTROSPECTION_PRAGMAS
+#cgo CFLAGS: -DSQLITE_INTROSPECTION_PRAGMAS=1
 #cgo LDFLAGS: -lm
 */
 import "C"
