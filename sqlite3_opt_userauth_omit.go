@@ -132,12 +132,8 @@ func (c *SQLiteConn) authUserDelete(username string) int {
 
 // AuthEnabled checks if the database is protected by user authentication
 func (c *SQLiteConn) AuthEnabled() (exists bool) {
-	rv := c.authEnabled()
-	if rv == 1 {
-		exists = true
-	}
-
-	return
+	_ := c.authEnabled()
+	return false
 }
 
 // authEnabled perform the actual check for user authentication.
