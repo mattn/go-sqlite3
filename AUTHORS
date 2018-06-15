@@ -1,0 +1,15 @@
+# This is the official list of Go-SQLite3 authors for copyright purposes.
+
+# If you are submitting a patch, please add your name or the name of the
+# organization which holds the copyright to this list in alphabetical order.
+
+# Names should be added to this file as
+#	Name <email address>
+# The email address is not required for organizations.
+# Please keep the list sorted.
+
+# Individual Persons
+G.J.R. Timmer <gjr.timmer@gmail.com>
+Yasuhiro Matsumoto <mattn.jp@gmail.com>
+
+# Organizations

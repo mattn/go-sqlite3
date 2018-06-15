@@ -1,3 +1,6 @@
+# Get Current Directory
+CURDIR = $(shell pwd)
+
 ifeq ($(OS),Windows_NT)
 EXE=extension.exe
 EXT=sqlite3_mod_vtable.dll
@@ -12,13 +15,16 @@ LDFLAG=-fPIC
 LIBCURL=-lcurl
 endif
 
-all : $(EXE) $(EXT)
+# Include source from repository
+CFLAGS=-I$(CURDIR)/../../
+
+all : $(EXT) $(EXE)
 
 $(EXE) : extension.go
-	go build $<
+	go build -v -a -tags=sqlite_vtable $<
 
 $(EXT) : sqlite3_mod_vtable.cc
-	g++ $(LDFLAG) -shared -o $@ $< -lsqlite3 $(LIBCURL)
+	g++ $(LDFLAG) $(CFLAGS) -shared -o $@ $< $(LIBCURL)
 
 clean :
 	@-$(RM) $(EXE) $(EXT)

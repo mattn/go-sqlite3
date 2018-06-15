@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/mattn/go-sqlite3"
 )
@@ -21,17 +22,28 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	fmt.Println(">")
 
-	db.Exec("create virtual table repo using github(id, full_name, description, html_url)")
+	_, err = db.Exec("create virtual table repo using github(id, full_name, description, html_url)")
+	if err != nil {
+		fmt.Println("-")
+		log.Fatal(err)
+	}
+	fmt.Println("-")
 
+	fmt.Println("-")
 	rows, err := db.Query("select id, full_name, description, html_url from repo")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer rows.Close()
+	fmt.Println("-")
 	for rows.Next() {
 		var id, fullName, description, htmlURL string
 		rows.Scan(&id, &fullName, &description, &htmlURL)
 		fmt.Printf("%s: %s\n\t%s\n\t%s\n\n", id, fullName, description, htmlURL)
 	}
+
+	fmt.Println("Clean Exit")
+	os.Exit(0)
 }

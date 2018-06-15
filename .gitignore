@@ -7,8 +7,18 @@
 .vscode
 
 # Exclude from upgrade
-upgrade/*.c
-upgrade/*.h
+tools/upgrade/*.c
+tools/upgrade/*.h
 
 # Exclude upgrade binary
-upgrade/upgrade
+cmd/upgrade/upgrade
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+.idea
