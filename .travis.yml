@@ -33,9 +33,9 @@ before_install:
     fi
 
 script:
-  - GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -v -tags "${GOTAGS}" .
+  - GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -v -tags "${GOTAGS}" ./driver
   - |
     if [[ "${GOOS}" != "windows" ]]; then
       $HOME/gopath/bin/goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx
-      go test -race -v . -tags "${GOTAGS}"
+      go test -race -v ./driver -tags "${GOTAGS}"
     fi
