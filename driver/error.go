@@ -1,11 +1,29 @@
-// Copyright (C) 2014 Yasuhiro Matsumoto <mattn.jp@gmail.com>.
+// Copyright (C) 2018 The Go-SQLite3 Authors.
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+// +build cgo
+
 package sqlite3
 
+/*
+#ifndef USE_LIBSQLITE3
+#include <sqlite3-binding.h>
+#else
+#include <sqlite3.h>
+#endif
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef __CYGWIN__
+# include <errno.h>
+#endif
+*/
 import "C"
+import (
+	"fmt"
+)
 
 // ErrNo inherit errno.
 type ErrNo int
@@ -133,3 +151,24 @@ var (
 	ErrNoticeRecoverRollback  = ErrNotice.Extend(2)
 	ErrWarningAutoIndex       = ErrWarning.Extend(1)
 )
+
+func lastError(db *C.sqlite3) error {
+	rv := C.sqlite3_errcode(db)
+	if rv == C.SQLITE_OK {
+		return nil
+	}
+	return Error{
+		Code:         ErrNo(rv),
+		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(db)),
+		err:          C.GoString(C.sqlite3_errmsg(db)),
+	}
+}
+
+func errorString(err Error) string {
+	fmt.Println("errorString")
+	return C.GoString(C.sqlite3_errstr(C.int(err.Code)))
+}
+
+func (c *SQLiteConn) lastError() error {
+	return lastError(c.db)
+}

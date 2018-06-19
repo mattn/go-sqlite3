@@ -1,7 +1,9 @@
-// Copyright (C) 2014 Yasuhiro Matsumoto <mattn.jp@gmail.com>.
+// Copyright (C) 2018 The Go-SQLite3 Authors.
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
+
+// +build cgo
 
 package sqlite3
 
@@ -11,6 +13,7 @@ package sqlite3
 #else
 #include <sqlite3.h>
 #endif
+
 #include <stdlib.h>
 
 // These wrappers are necessary because SQLITE_TRANSIENT
