@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-// +build !sqlite_omit_load_extension
+// +build !sqlite_omit_load_extension !sqlite_disable_extensions
 
 package sqlite3
 
@@ -38,7 +38,6 @@ func (c *SQLiteConn) loadExtensions(extensions []string) error {
 		if rv != C.SQLITE_OK {
 			// Disable Extension Loading
 			rv = C.sqlite3_enable_load_extension(c.db, 0)
-			fmt.Printf("%d\n", rv)
 			if rv != C.SQLITE_OK {
 				return errors.New("Failed to disable extension loading")
 			}

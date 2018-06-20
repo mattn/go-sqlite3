@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-// +build sqlite_omit_load_extension
+// +build sqlite_omit_load_extension sqlite_disable_extensions
 
 package sqlite3
 
