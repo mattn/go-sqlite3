@@ -28,14 +28,18 @@ import "C"
 import (
 	"database/sql/driver"
 	"io"
+	"reflect"
 	"strings"
 	"time"
 	"unsafe"
 )
 
 var (
-	_ driver.Result = (*SQLiteResult)(nil)
-	_ driver.Rows   = (*SQLiteRows)(nil)
+	_ driver.Result                         = (*SQLiteResult)(nil)
+	_ driver.Rows                           = (*SQLiteRows)(nil)
+	_ driver.RowsColumnTypeDatabaseTypeName = (*SQLiteRows)(nil)
+	_ driver.RowsColumnTypeNullable         = (*SQLiteRows)(nil)
+	_ driver.RowsColumnTypeDatabaseTypeName = (*SQLiteRows)(nil)
 )
 
 // SQLiteResult implement sql.Result.
@@ -214,4 +218,37 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		}
 	}
 	return nil
+}
+
+// ColumnTypeDatabaseTypeName implement RowsColumnTypeDatabaseTypeName.
+func (rc *SQLiteRows) ColumnTypeDatabaseTypeName(i int) string {
+	return C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i)))
+}
+
+// ColumnTypeNullable implement RowsColumnTypeNullable.
+func (rc *SQLiteRows) ColumnTypeNullable(i int) (nullable, ok bool) {
+	return true, true
+}
+
+// ColumnTypeScanType implement RowsColumnTypeScanType.
+func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
+	switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
+	case C.SQLITE_INTEGER:
+		switch C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))) {
+		case "timestamp", "datetime", "date":
+			return reflect.TypeOf(time.Time{})
+		case "boolean":
+			return reflect.TypeOf(false)
+		}
+		return reflect.TypeOf(int64(0))
+	case C.SQLITE_FLOAT:
+		return reflect.TypeOf(float64(0))
+	case C.SQLITE_BLOB:
+		return reflect.SliceOf(reflect.TypeOf(byte(0)))
+	case C.SQLITE_NULL:
+		return reflect.TypeOf(nil)
+	case C.SQLITE_TEXT:
+		return reflect.TypeOf("")
+	}
+	return reflect.SliceOf(reflect.TypeOf(byte(0)))
 }
