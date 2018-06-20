@@ -154,3 +154,20 @@ func TestExecCancel(t *testing.T) {
 		}
 	}
 }
+
+func TestPinger(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	err = db.Ping()
+	fmt.Println(err)
+	if err == nil {
+		t.Fatal("Should be closed")
+	}
+}
