@@ -14,21 +14,19 @@ import (
 )
 
 var (
-	_ driver.Connector = (*Connector)(nil)
+	_ driver.Connector = (*Config)(nil)
 )
-
-// Connector is a driver in a fixed configuration.
-type Connector struct {
-}
 
 // Connect implements driver.Connector interface.
 // Connect returns a connection to the database.
-func (c Connector) Connect(ctx context.Context) (driver.Conn, error) {
-	return nil, nil
+func (c *Config) Connect(ctx context.Context) (driver.Conn, error) {
+	return c.createConnection()
 }
 
 // Driver implements driver.Connector interface.
-// Driver returns &MySQLDriver{}.
-func (c Connector) Driver() driver.Driver {
-	return nil
+// Driver returns &SQLiteDriver{}.
+func (c *Config) Driver() driver.Driver {
+	return &SQLiteDriver{
+		Config: c,
+	}
 }

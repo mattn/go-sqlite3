@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-package crypt
+package sqlite3
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ func TestEncoders(t *testing.T) {
 	}
 
 	for _, e := range tests {
-		var enc Encoder
+		var enc CryptEncoder
 		switch e.enc {
 		case "sha1":
 			enc = NewSHA1Encoder()
@@ -49,8 +49,8 @@ func TestEncoders(t *testing.T) {
 			enc = NewSSHA512Encoder(e.salt)
 		}
 
-		if _, ok := enc.(Salter); ok {
-			if strings.Compare(enc.(Salter).Salt(), e.salt) != 0 {
+		if _, ok := enc.(CryptSaltedEncoder); ok {
+			if strings.Compare(enc.(CryptSaltedEncoder).Salt(), e.salt) != 0 {
 				t.Fatal("Salt Mismatch")
 			}
 		}

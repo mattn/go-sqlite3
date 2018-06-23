@@ -47,117 +47,48 @@ import "C"
 // Run-Time Limit Categories.
 // See: http://www.sqlite.org/c3ref/c_limit_attached.html
 const (
-	// SQLiteLimitLength defines the maximum size of any string or BLOB or table row, in bytes.
-	SQLiteLimitLength = C.SQLITE_LIMIT_LENGTH
-
-	// SQLiteLimitSQLLength defines the maximum length of an SQL statement, in bytes.
-	SQLiteLimitSQLLength = C.SQLITE_LIMIT_SQL_LENGTH
-
-	// SQLiteLimitColumn defines the maximum number of columns in a table definition
-	// or in the result set of a SELECT or the maximum number of columns
-	// in an index or in an ORDER BY or GROUP BY clause.
-	SQLiteLimitColumn = C.SQLITE_LIMIT_COLUMN
-
-	// SQLiteLimitExprDepth defines the maximum depth of the parse tree on any expression.
-	SQLiteLimitExprDepth = C.SQLITE_LIMIT_EXPR_DEPTH
-
-	// SQLiteLimitCompoundSelect defines the maximum number of terms in a compound SELECT statement.
-	SQLiteLimitCompoundSelect = C.SQLITE_LIMIT_COMPOUND_SELECT
-
-	// SQLiteLimitVDBEOp defines the maximum number of instructions
-	// in a virtual machine program used to implement an SQL statement.
-	// If sqlite3_prepare_v2() or the equivalent tries to allocate space
-	// for more than this many opcodes in a single prepared statement,
-	// an SQLITE_NOMEM error is returned.
-	SQLiteLimitVDBEOp = C.SQLITE_LIMIT_VDBE_OP
-
-	// SQLiteLimitFunctionArg defines the maximum number of arguments on a function.
-	SQLiteLimitFunctionArg = C.SQLITE_LIMIT_FUNCTION_ARG
-
-	// SQLiteLimitAttached defines the maximum number of attached databases.
-	SQLiteLimitAttached = C.SQLITE_LIMIT_ATTACHED
-
-	// SQLiteLimitLikePatternLength defines the maximum length of the pattern argument to the LIKE or GLOB operators.
-	SQLiteLimitLikePatternLength = C.SQLITE_LIMIT_LIKE_PATTERN_LENGTH
-
-	// SQLiteLimitVariableNumber defines the maximum index number of any parameter in an SQL statement.
-	SQLiteLimitVariableNumber = C.SQLITE_LIMIT_VARIABLE_NUMBER
-
-	// SQLiteLimitTriggerDepth defines the maximum depth of recursion for triggers.
-	SQLiteLimitTriggerDepth = C.SQLITE_LIMIT_TRIGGER_DEPTH
-
-	// SQLiteLimitWorkerThreads defines the maximum number
-	// of auxiliary worker threads that a single prepared statement may start.
-	SQLiteLimitWorkerThreads = C.SQLITE_LIMIT_WORKER_THREADS
-)
-
-const (
 	// SQLITE_LIMIT_LENGTH defines the maximum size of any string or BLOB or table row, in bytes.
-	//
-	// Deprecated: Use SQLiteLimitLength instead.
-	SQLITE_LIMIT_LENGTH = SQLiteLimitLength
+	SQLITE_LIMIT_LENGTH = C.SQLITE_LIMIT_LENGTH
 
 	// SQLITE_LIMIT_SQL_LENGTH defines the maximum length of an SQL statement, in bytes.
-	//
-	// Deprecated: Use SQLiteLimitSQLLength instead.
-	SQLITE_LIMIT_SQL_LENGTH = SQLiteLimitSQLLength
+	SQLITE_LIMIT_SQL_LENGTH = C.SQLITE_LIMIT_SQL_LENGTH
 
 	// SQLITE_LIMIT_COLUMN defines the maximum number of columns in a table definition
 	// or in the result set of a SELECT or the maximum number of columns
 	// in an index or in an ORDER BY or GROUP BY clause.
-	//
-	// Deprecated: Use SQLiteLimitColumn instead.
-	SQLITE_LIMIT_COLUMN = SQLiteLimitColumn
+	SQLITE_LIMIT_COLUMN = C.SQLITE_LIMIT_COLUMN
 
 	// SQLITE_LIMIT_EXPR_DEPTH defines the maximum depth of the parse tree on any expression.
-	//
-	// Deprecated: Use SQLiteLimitExprDepth instead.
-	SQLITE_LIMIT_EXPR_DEPTH = SQLiteLimitExprDepth
+	SQLITE_LIMIT_EXPR_DEPTH = C.SQLITE_LIMIT_EXPR_DEPTH
 
 	// SQLITE_LIMIT_COMPOUND_SELECT defines the maximum number of terms in a compound SELECT statement.
-	//
-	// Deprecated: Use SQLiteLimitCompoundSelect instead.
-	SQLITE_LIMIT_COMPOUND_SELECT = SQLiteLimitCompoundSelect
+	SQLITE_LIMIT_COMPOUND_SELECT = C.SQLITE_LIMIT_COMPOUND_SELECT
 
 	// SQLITE_LIMIT_VDBE_OP defines the maximum number of instructions
 	// in a virtual machine program used to implement an SQL statement.
 	// If sqlite3_prepare_v2() or the equivalent tries to allocate space
 	// for more than this many opcodes in a single prepared statement,
 	// an SQLITE_NOMEM error is returned.
-	//
-	// Deprecated: Use SQLiteLimitVDBEOp instead.
-	SQLITE_LIMIT_VDBE_OP = SQLiteLimitVDBEOp
+	SQLITE_LIMIT_VDBE_OP = C.SQLITE_LIMIT_VDBE_OP
 
 	// SQLITE_LIMIT_FUNCTION_ARG defines the maximum number of arguments on a function.
-	//
-	// Deprecated: Use SQLiteLimitFunctionArg instead.
-	SQLITE_LIMIT_FUNCTION_ARG = SQLiteLimitFunctionArg
+	SQLITE_LIMIT_FUNCTION_ARG = C.SQLITE_LIMIT_FUNCTION_ARG
 
 	// SQLITE_LIMIT_ATTACHED defines the maximum number of attached databases.
-	//
-	// Deprecated: Use SQLiteLimitAttached instead.
-	SQLITE_LIMIT_ATTACHED = SQLiteLimitAttached
+	SQLITE_LIMIT_ATTACHED = C.SQLITE_LIMIT_ATTACHED
 
 	// SQLITE_LIMIT_LIKE_PATTERN_LENGTH defines the maximum length of the pattern argument to the LIKE or GLOB operators.
-	//
-	// Deprecated: Use SQLiteLimitLikePatternLength instead.
-	SQLITE_LIMIT_LIKE_PATTERN_LENGTH = SQLiteLimitLikePatternLength
+	SQLITE_LIMIT_LIKE_PATTERN_LENGTH = C.SQLITE_LIMIT_LIKE_PATTERN_LENGTH
 
 	// SQLITE_LIMIT_VARIABLE_NUMBER defines the maximum index number of any parameter in an SQL statement.
-	//
-	// Deprecated: Use SQLiteLimitVariableNumber instead.
-	SQLITE_LIMIT_VARIABLE_NUMBER = SQLiteLimitVariableNumber
+	SQLITE_LIMIT_VARIABLE_NUMBER = C.SQLITE_LIMIT_VARIABLE_NUMBER
 
 	// SQLITE_LIMIT_TRIGGER_DEPTH defines the maximum depth of recursion for triggers.
-	//
-	// Deprecated: Use SQLiteLimitTriggerDepth instead.
-	SQLITE_LIMIT_TRIGGER_DEPTH = SQLiteLimitTriggerDepth
+	SQLITE_LIMIT_TRIGGER_DEPTH = C.SQLITE_LIMIT_TRIGGER_DEPTH
 
 	// SQLITE_LIMIT_WORKER_THREADS defines the maximum number
 	// of auxiliary worker threads that a single prepared statement may start.
-	//
-	// Deprecated: Use SQLiteLimitWorkerThreads instead.
-	SQLITE_LIMIT_WORKER_THREADS = SQLiteLimitWorkerThreads
+	SQLITE_LIMIT_WORKER_THREADS = C.SQLITE_LIMIT_WORKER_THREADS
 )
 
 // GetLimit returns the current value of a run-time limit.

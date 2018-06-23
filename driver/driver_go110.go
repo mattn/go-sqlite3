@@ -19,6 +19,6 @@ var (
 // instead of invoking the Driver's Open method for each connection.
 // The two-step sequence allows drivers to parse the name just once and also provides
 // access to per-Conn contexts.
-func (d *SQLiteDriver) OpenConnector(name string) (driver.Connector, error) {
-	return nil, nil
+func (d *SQLiteDriver) OpenConnector(dsn string) (driver.Connector, error) {
+	return ParseDSN(dsn)
 }

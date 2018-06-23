@@ -160,8 +160,8 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 					t = time.Unix(val, 0)
 				}
 				t = t.UTC()
-				if rc.s.c.loc != nil {
-					t = t.In(rc.s.c.loc)
+				if rc.s.c.tz != nil {
+					t = t.In(rc.s.c.tz)
 				}
 				dest[i] = t
 			case "boolean":
@@ -207,8 +207,8 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 					// The column is a time value, so return the zero time on parse failure.
 					t = time.Time{}
 				}
-				if rc.s.c.loc != nil {
-					t = t.In(rc.s.c.loc)
+				if rc.s.c.tz != nil {
+					t = t.In(rc.s.c.tz)
 				}
 				dest[i] = t
 			default:

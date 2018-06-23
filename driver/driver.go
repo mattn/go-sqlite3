@@ -46,11 +46,21 @@ package sqlite3
 #ifndef SQLITE_DETERMINISTIC
 # define SQLITE_DETERMINISTIC 0
 #endif
+
+static int
+_sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
+#ifdef SQLITE_OPEN_URI
+  return sqlite3_open_v2(filename, ppDb, flags | SQLITE_OPEN_URI, zVfs);
+#else
+  return sqlite3_open_v2(filename, ppDb, flags, zVfs);
+#endif
+}
 */
 import "C"
 import (
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 )
 
 var (
@@ -63,11 +73,21 @@ func init() {
 
 // SQLiteDriver implement sql.Driver.
 type SQLiteDriver struct {
+	Config      *Config
 	Extensions  []string
 	ConnectHook func(*SQLiteConn) error
 }
 
 // Open database and return a new connection.
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
-	return nil, nil
+	if C.sqlite3_threadsafe() == 0 {
+		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
+	}
+
+	cfg, err := ParseDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg.createConnection()
 }

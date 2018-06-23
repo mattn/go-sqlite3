@@ -17,31 +17,14 @@ package sqlite3
 import "C"
 
 const (
-	// SQLiteDelete authorizer action code
-	SQLiteDelete = C.SQLITE_DELETE
-
-	// SQLiteInsert authorizer action code
-	SQLiteInsert = C.SQLITE_INSERT
-
-	// SQLiteUpdate authorizer action code
-	SQLiteUpdate = C.SQLITE_UPDATE
-)
-
-const (
 	// SQLITE_DELETE authorizer action code
-	//
-	// Deprecated: Use SQLiteDelete instead.
-	SQLITE_DELETE = SQLiteDelete
+	SQLITE_DELETE = C.SQLITE_DELETE
 
 	// SQLITE_INSERT authorizer action code
-	//
-	// Deprecated: Use SQLiteInsert instead.
-	SQLITE_INSERT = SQLiteInsert
+	SQLITE_INSERT = C.SQLITE_INSERT
 
 	// SQLITE_UPDATE authorizer action code
-	//
-	// Deprecated: Use SQLiteUpdate instead.
-	SQLITE_UPDATE = SQLiteUpdate
+	SQLITE_UPDATE = C.SQLITE_UPDATE
 )
 
 const (
