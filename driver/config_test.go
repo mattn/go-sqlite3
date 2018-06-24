@@ -621,7 +621,112 @@ func TestParseDSN(t *testing.T) {
 }
 
 func TestFormatDSN(t *testing.T) {
-	// TODO: TestFormatDSN
-	cfg := NewConfig()
-	cfg.FormatDSN()
+	ams, _ := time.LoadLocation("Europe/Amsterdam")
+
+	cases := map[string]*Config{
+		"file::memory:?cache=private&mode=rwc&mutex=full": NewConfig(),
+		"file:test.db?mode=ro&mutex=no": &Config{
+			Database: "test.db",
+			Mode:     ModeReadOnly,
+			Mutex:    MutexNo,
+		},
+		"file:test.db": &Config{
+			Database: "test.db",
+		},
+		"file:test.db?cache=private&cslike=true&defer_fk=true&fk=true&ignore_check_contraints=true&immutable=true&mode=ro&mutex=full&query_only=true&recursive_triggers=true&writable_schema=true": &Config{
+			Database:               "test.db",
+			Mode:                   ModeReadOnly,
+			Mutex:                  MutexFull,
+			Cache:                  CacheModePrivate,
+			Immutable:              true,
+			CaseSensitiveLike:      true,
+			DeferForeignKeys:       true,
+			ForeignKeyConstraints:  true,
+			IgnoreCheckConstraints: true,
+			QueryOnly:              true,
+			RecursiveTriggers:      true,
+			WriteableSchema:        true,
+		},
+		"file:test.db?cache=shared&mode=rw&mutex=full&tz=auto": &Config{
+			Database: "test.db",
+			Mode:     ModeReadWrite,
+			Mutex:    MutexFull,
+			Cache:    CacheModeShared,
+			TimeZone: time.Local,
+		},
+		"file::memory:?cache=private&mode=memory&mutex=full&tz=Europe%2FAmsterdam": &Config{
+			Database: ":memory:",
+			Mode:     ModeMemory,
+			Mutex:    MutexFull,
+			Cache:    CacheModePrivate,
+			TimeZone: ams,
+		},
+		"file:test.db?cache=private&mode=ro&mutex=full&txlock=immediate": &Config{
+			Database:        "test.db",
+			Mode:            ModeReadOnly,
+			Mutex:           MutexFull,
+			Cache:           CacheModePrivate,
+			TransactionLock: TxLockImmediate,
+		},
+		"file:test.db?cache=private&mode=ro&mutex=full&txlock=exclusive": &Config{
+			Database:        "test.db",
+			Mode:            ModeReadOnly,
+			Mutex:           MutexFull,
+			Cache:           CacheModePrivate,
+			TransactionLock: TxLockExclusive,
+		},
+		"file:test.db?cache=private&lock=exclusive&mode=ro&mutex=full": &Config{
+			Database:    "test.db",
+			Mode:        ModeReadOnly,
+			Mutex:       MutexFull,
+			Cache:       CacheModePrivate,
+			LockingMode: LockingModeExclusive,
+		},
+		"file:test.db?cache=private&mode=ro&mutex=full&vacuum=full": &Config{
+			Database:   "test.db",
+			Mode:       ModeReadOnly,
+			Mutex:      MutexFull,
+			Cache:      CacheModePrivate,
+			AutoVacuum: AutoVacuumFull,
+		},
+		"file:test.db?cache=private&journal=wal&mode=ro&mutex=full": &Config{
+			Database:    "test.db",
+			Mode:        ModeReadOnly,
+			Mutex:       MutexFull,
+			Cache:       CacheModePrivate,
+			JournalMode: JournalModeWAL,
+		},
+		"file:test.db?cache=private&mode=ro&mutex=full&secure_delete=fast": &Config{
+			Database:     "test.db",
+			Mode:         ModeReadOnly,
+			Mutex:        MutexFull,
+			Cache:        CacheModePrivate,
+			SecureDelete: SecureDeleteFast,
+		},
+		"file:test.db?cache=private&mode=ro&mutex=full&sync=extra": &Config{
+			Database:    "test.db",
+			Mode:        ModeReadOnly,
+			Mutex:       MutexFull,
+			Cache:       CacheModePrivate,
+			Synchronous: SynchronousExtra,
+		},
+		"file:test.db?cache=private&crypt=sha1&mode=ro&mutex=full&pass=admin&salt=salt&user=admin": &Config{
+			Database: "test.db",
+			Mode:     ModeReadOnly,
+			Mutex:    MutexFull,
+			Cache:    CacheModePrivate,
+			Authentication: &Auth{
+				Username: "admin",
+				Password: "admin",
+				Salt:     "salt",
+				Encoder:  NewSHA1Encoder(),
+			},
+		},
+	}
+
+	for dsn, cfg := range cases {
+		if cfg.FormatDSN() != dsn {
+			t.Fatalf("Failed to format DSN; expected: %s, got: %s", dsn, cfg.FormatDSN())
+		}
+	}
 }

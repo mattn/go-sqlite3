@@ -576,12 +576,8 @@ type Auth struct {
 // NewConfig creates a new Config and sets default values.
 func NewConfig() *Config {
 	return &Config{
-		// This is the behavior that is always used
-		// for sqlite3_open() and sqlite3_open16().
-		// This is way it is set as default.
-		Mode: ModeReadWriteCreate,
-
 		Database:               ":memory:",
+		Mode:                   ModeReadWriteCreate,
 		Cache:                  CacheModePrivate,
 		Immutable:              false,
 		Mutex:                  MutexFull,
@@ -610,9 +606,17 @@ func (cfg *Config) FormatDSN() string {
 	var buf bytes.Buffer
 
 	params := url.Values{}
-	params.Set("mode", cfg.Mode.String())
-	params.Set("cache", cfg.Cache.String())
-	params.Set("mutex", cfg.Mutex.String())
+	if len(cfg.Cache.String()) > 0 {
+		params.Set("cache", cfg.Cache.String())
+	}
+
+	if len(cfg.Mode.String()) > 0 {
+		params.Set("mode", cfg.Mode.String())
+	}
+
+	if len(cfg.Mutex.String()) > 0 {
+		params.Set("mutex", cfg.Mutex.String())
+	}
 
 	if cfg.Immutable {
 		params.Set("immutable", "true")
@@ -626,15 +630,15 @@ func (cfg *Config) FormatDSN() string {
 		}
 	}
 
-	if cfg.TransactionLock != TxLockDeferred {
+	if len(cfg.TransactionLock.String()) > 0 && cfg.TransactionLock != TxLockDeferred {
 		params.Set("txlock", cfg.TransactionLock.String())
 	}
 
-	if cfg.LockingMode != LockingModeNormal {
+	if len(cfg.LockingMode) > 0 && cfg.LockingMode != LockingModeNormal {
 		params.Set("lock", cfg.LockingMode.String())
 	}
 
-	if cfg.AutoVacuum != AutoVacuumNone {
+	if len(cfg.AutoVacuum) > 0 && cfg.AutoVacuum != AutoVacuumNone {
 		params.Set("vacuum", cfg.AutoVacuum.String())
 	}
 
@@ -654,7 +658,7 @@ func (cfg *Config) FormatDSN() string {
 		params.Set("ignore_check_contraints", "true")
 	}
 
-	if cfg.JournalMode != JournalModeDelete {
+	if len(cfg.JournalMode) > 0 && cfg.JournalMode != JournalModeDelete {
 		params.Set("journal", cfg.JournalMode.String())
 	}
 
@@ -666,28 +670,30 @@ func (cfg *Config) FormatDSN() string {
 		params.Set("recursive_triggers", "true")
 	}
 
-	if cfg.SecureDelete != SecureDeleteOff {
+	if len(cfg.SecureDelete) > 0 && cfg.SecureDelete != SecureDeleteOff {
 		params.Set("secure_delete", cfg.SecureDelete.String())
 	}
 
-	if cfg.Synchronous != SynchronousNormal {
-		params.Set("syn", cfg.Synchronous.String())
+	if len(cfg.Synchronous) > 0 && cfg.Synchronous != SynchronousNormal {
+		params.Set("sync", cfg.Synchronous.String())
 	}
 
 	if cfg.WriteableSchema {
 		params.Set("writable_schema", "true")
 	}
 
-	if len(cfg.Authentication.Username) > 0 && len(cfg.Authentication.Password) > 0 {
-		params.Set("user", cfg.Authentication.Username)
-		params.Set("pass", cfg.Authentication.Password)
+	if cfg.Authentication != nil {
+		if len(cfg.Authentication.Username) > 0 && len(cfg.Authentication.Password) > 0 {
+			params.Set("user", cfg.Authentication.Username)
+			params.Set("pass", cfg.Authentication.Password)
 
-		if len(cfg.Authentication.Salt) > 0 {
-			params.Set("salt", cfg.Authentication.Salt)
-		}
+			if len(cfg.Authentication.Salt) > 0 {
+				params.Set("salt", cfg.Authentication.Salt)
+			}
 
-		if cfg.Authentication.Encoder != nil {
-			params.Set("crypt", cfg.Authentication.Encoder.String())
+			if cfg.Authentication.Encoder != nil {
+				params.Set("crypt", cfg.Authentication.Encoder.String())
+			}
 		}
 	}
 
@@ -697,8 +703,10 @@ func (cfg *Config) FormatDSN() string {
 	buf.WriteString(cfg.Database)
 
 	// Append Options
-	buf.WriteRune('?')
-	buf.WriteString(params.Encode())
+	if len(params) > 0 {
+		buf.WriteRune('?')
+		buf.WriteString(params.Encode())
+	}
 
 	return buf.String()
 }
