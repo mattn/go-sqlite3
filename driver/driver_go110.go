@@ -8,7 +8,9 @@
 
 package sqlite3
 
-import "database/sql/driver"
+import (
+	"database/sql/driver"
+)
 
 var (
 	_ driver.DriverContext = (*SQLiteDriver)(nil)
@@ -20,5 +22,19 @@ var (
 // The two-step sequence allows drivers to parse the name just once and also provides
 // access to per-Conn contexts.
 func (d *SQLiteDriver) OpenConnector(dsn string) (driver.Connector, error) {
-	return ParseDSN(dsn)
+	cfg, err := ParseDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure Extensions
+	cfg.Extensions = d.Extensions
+
+	// Configure ConnectHook
+	cfg.ConnectHook = d.ConnectHook
+
+	// Set Configuration
+	d.Config = cfg
+
+	return cfg, nil
 }

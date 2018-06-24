@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file.
 
 // +build cgo
+// +build sqlite_vtable
 
 package sqlite3
 

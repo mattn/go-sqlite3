@@ -21,9 +21,6 @@ package sqlite3
 #endif
 */
 import "C"
-import (
-	"fmt"
-)
 
 // ErrNo inherit errno.
 type ErrNo int
@@ -165,7 +162,6 @@ func lastError(db *C.sqlite3) error {
 }
 
 func errorString(err Error) string {
-	fmt.Println("errorString")
 	return C.GoString(C.sqlite3_errstr(C.int(err.Code)))
 }
 

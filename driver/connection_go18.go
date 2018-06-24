@@ -29,6 +29,7 @@ func (c *SQLiteConn) Ping(ctx context.Context) error {
 	if c.db == nil {
 		return errors.New("Connection was closed")
 	}
+
 	return nil
 }
 

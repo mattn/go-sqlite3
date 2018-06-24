@@ -47,6 +47,6 @@ func TestStat4(t *testing.T) {
 	}
 
 	if exists != 1 {
-		t.Fatal("Failed to enabled STAT4")
+		t.Fatal("Failed to enable STAT4")
 	}
 }

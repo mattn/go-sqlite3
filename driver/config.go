@@ -13,33 +13,159 @@ package sqlite3
 #else
 #include <sqlite3.h>
 #endif
+
+#include <stdlib.h>
+#include <string.h>
+
+#ifndef SQLITE_OPEN_READWRITE
+# define SQLITE_OPEN_READWRITE 0
+#endif
+
+#ifndef SQLITE_OPEN_FULLMUTEX
+# define SQLITE_OPEN_FULLMUTEX 0
+#endif
+
+#ifndef SQLITE_DETERMINISTIC
+# define SQLITE_DETERMINISTIC 0
+#endif
+
+static int
+_sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
+#ifdef SQLITE_OPEN_URI
+  return sqlite3_open_v2(filename, ppDb, flags | SQLITE_OPEN_URI, zVfs);
+#else
+  return sqlite3_open_v2(filename, ppDb, flags, zVfs);
+#endif
+}
 */
 import "C"
 import (
+	"bytes"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 )
 
+// Mode represents the open open for the database connection
+type Mode C.int
+
+func (m Mode) String() string {
+	switch m {
+	case ModeReadOnly:
+		return "ro"
+	case ModeReadWrite:
+		return "rw"
+	case ModeReadWriteCreate:
+		return "rwc"
+	case ModeMemory:
+		return "memory"
+	default:
+		return ""
+	}
+}
+
+// C returns the C.int of Mode
+func (m Mode) C() C.int {
+	return C.int(m)
+}
+
 const (
-	// SQLITE_OPEN_MUTEX_NO will force the database connection opens
+	// ModeReadOnly defines SQLITE_OPEN_READONLY for the database connection.
+	ModeReadOnly = Mode(C.SQLITE_OPEN_READONLY)
+
+	// ModeReadWrite defines SQLITE_OPEN_READWRITE for the database connection.
+	ModeReadWrite = Mode(C.SQLITE_OPEN_READWRITE)
+
+	// ModeReadWriteCreate defines SQLITE_OPEN_READWRITE and SQLITE_OPEN_CREATE.
+	ModeReadWriteCreate = Mode(C.SQLITE_OPEN_READWRITE | C.SQLITE_OPEN_CREATE)
+
+	// ModeMemory defines mode=memory which will
+	// create a pure in-memory database that never reads or writes from disk
+	ModeMemory = Mode(C.SQLITE_OPEN_MEMORY)
+)
+
+// CacheMode represents the current CacheMode
+type CacheMode C.int
+
+func (c CacheMode) String() string {
+	switch c {
+	case CacheModeShared:
+		return "shared"
+	case CacheModePrivate:
+		return "private"
+	default:
+		return ""
+	}
+}
+
+// C returns the C.int of CacheMode
+func (c CacheMode) C() C.int {
+	return C.int(c)
+}
+
+const (
+	// CacheModeShared sets the cache mode of SQLite to 'shared'
+	CacheModeShared = CacheMode(C.SQLITE_OPEN_SHAREDCACHE)
+
+	// CacheModePrivate sets the cache mode of SQLite to 'private'
+	CacheModePrivate = CacheMode(C.SQLITE_OPEN_PRIVATECACHE)
+)
+
+// Mutex represents how the database opens connections within
+// single or multi-threading
+type Mutex C.int
+
+func (m Mutex) String() string {
+	switch m {
+	case MutexNo:
+		return "no"
+	case MutexFull:
+		return "full"
+	default:
+		return ""
+	}
+}
+
+// C returns the C.int of Mutex
+func (m Mutex) C() C.int {
+	return C.int(m)
+}
+
+const (
+	// MutexNo will force the database connection opens
 	// in the multi-thread threading mode as long as the
 	// single-thread mode has not been set at compile-time or start-time.
-	SQLITE_OPEN_MUTEX_NO = C.SQLITE_OPEN_NOMUTEX
+	MutexNo = Mutex(C.SQLITE_OPEN_NOMUTEX)
 
-	// SQLITE_OPEN_MUTEX_FULL will force the database connection opens
+	// MutexFull will force the database connection opens
 	// in the serialized threading mode unless single-thread
 	// was previously selected at compile-time or start-time.
-	SQLITE_OPEN_MUTEX_FULL = C.SQLITE_OPEN_FULLMUTEX
+	MutexFull = Mutex(C.SQLITE_OPEN_FULLMUTEX)
 )
 
 // TxLock defines the Transaction Lock Behaviour.
 type TxLock string
 
 func (tx TxLock) String() string {
+	switch tx {
+	case TxLockDeferred:
+		return "deferred"
+	case TxLockImmediate:
+		return "immediate"
+	case TxLockExclusive:
+		return "exclusive"
+	default:
+		return ""
+	}
+}
+
+func (tx TxLock) Value() string {
 	return string(tx)
 }
 
@@ -116,21 +242,25 @@ const (
 // If the locking mode is NORMAL when first entering WAL journal mode,
 //then the locking mode can be changed between NORMAL and EXCLUSIVE
 // and back again at any time and without needing to exit WAL journal mode.
-type LockingMode uint8
+type LockingMode string
+
+func (l LockingMode) String() string {
+	return strings.ToLower(string(l))
+}
 
 const (
 	// LockingModeNormal In NORMAL locking-mode
 	// (the default unless overridden at compile-time using SQLITE_DEFAULT_LOCKING_MODE),
 	// a database connection unlocks the database file at the conclusion
 	// of each read or write transaction.
-	LockingModeNormal LockingMode = iota
+	LockingModeNormal = LockingMode("NORMAL")
 
 	// LockingModeExclusive When the locking-mode is set to EXCLUSIVE,
 	// the database connection never releases file-locks.
 	// The first time the database is read in EXCLUSIVE mode,
 	// a shared lock is obtained and held.
 	// The first time the database is written, an exclusive lock is obtained and held.
-	LockingModeExclusive
+	LockingModeExclusive = LockingMode("EXCLUSIVE")
 )
 
 // AutoVacuum defines the auto vacuum status of the database.
@@ -142,7 +272,11 @@ const (
 // that allows each database page to be traced backwards to its referrer.
 // Therefore, auto-vacuuming must be turned on before any tables are created.
 // It is not possible to enable or disable auto-vacuum after a table has been created.
-type AutoVacuum uint8
+type AutoVacuum string
+
+func (av AutoVacuum) String() string {
+	return strings.ToLower(string(av))
+}
 
 const (
 	// AutoVacuumNone setting means that auto-vacuum is disabled.
@@ -164,7 +298,7 @@ const (
 	// then invoke the VACUUM command to reorganize the entire database file.
 	// To change from "full" or "incremental" back to "none"
 	// always requires running VACUUM even on an empty database.
-	AutoVacuumNone = AutoVacuum(0)
+	AutoVacuumNone = AutoVacuum("NONE")
 
 	// AutoVacuumFull sets auto vacuum of the database to FULL.
 	//
@@ -176,7 +310,7 @@ const (
 	// the way that the VACUUM command does.
 	// In fact, because it moves pages around within the file,
 	// auto-vacuum can actually make fragmentation worse.
-	AutoVacuumFull = AutoVacuum(1)
+	AutoVacuumFull = AutoVacuum("FULL")
 
 	// AutoVacuumIncremental sets the auto vacuum of the database to INCREMENTAL.
 	//
@@ -186,7 +320,7 @@ const (
 	// at each commit as it does with auto_vacuum=full.
 	// In incremental mode, the separate incremental_vacuum pragma must be invoked
 	//  to cause the auto-vacuum to occur.
-	AutoVacuumIncremental = AutoVacuum(2)
+	AutoVacuumIncremental = AutoVacuum("INCREMENTAL")
 )
 
 // JournalMode defines the journal mode associated with the current database connection.
@@ -198,19 +332,23 @@ const (
 // Note also that the journal_mode cannot be changed while a transaction is active.
 type JournalMode string
 
+func (j JournalMode) String() string {
+	return strings.ToLower(string(j))
+}
+
 const (
 	// JournalModeDelete  is the normal behavior.
 	// In the DELETE mode, the rollback journal is deleted at the conclusion
 	// of each transaction.
 	// Indeed, the delete operation is the action that causes the transaction to commit.
 	// (See the document titled Atomic Commit In SQLite for additional detail.)
-	JournalModeDelete JournalMode = "DELETE"
+	JournalModeDelete = JournalMode("DELETE")
 
 	// JournalModeTruncate commits transactions by truncating the rollback journal
 	// to zero-length instead of deleting it.
 	// On many systems, truncating a file is much faster
 	// than deleting the file since the containing directory does not need to be changed.
-	JournalModeTruncate JournalMode = "TRUNCATE"
+	JournalModeTruncate = JournalMode("TRUNCATE")
 
 	// JournalModePersist prevents the rollback journal from being deleted
 	// at the end of each transaction.
@@ -220,26 +358,26 @@ const (
 	// where deleting or truncating a file is much more expensive
 	// than overwriting the first block of a file with zeros.
 	// See also: PRAGMA journal_size_limit and SQLITE_DEFAULT_JOURNAL_SIZE_LIMIT.
-	JournalModePersist JournalMode = "PERSIST"
+	JournalModePersist = JournalMode("PERSIST")
 
 	// JournalModeMemory stores the rollback journal in volatile RAM.
 	// This saves disk I/O but at the expense of database safety and integrity.
 	// If the application using SQLite crashes in the middle of a transaction
 	// when the MEMORY journaling mode is set,
 	// then the database file will very likely go corrupt.
-	JournalModeMemory JournalMode = "MEMORY"
+	JournalModeMemory = JournalMode("MEMORY")
 
 	// JournalModeWAL uses a write-ahead log instead of a rollback journal
 	// to implement transactions.
 	// The WAL journaling mode is persistent;
 	// after being set it stays in effect across multiple database connections
 	// and after closing and reopening the database.
-	JournalModeWAL JournalMode = "WAL"
+	JournalModeWAL = JournalMode("WAL")
 
-	// JournalModeDisabled disables the rollback journal completely.
+	// JournalModeOff disables the rollback journal completely.
 	// No rollback journal is ever created and hence there is never a rollback journal to delete.
 	// The OFF journaling mode disables the atomic commit and rollback capabilities of SQLite. The ROLLBACK command no longer works; it behaves in an undefined way. Applications must avoid using the ROLLBACK command when the journal mode is OFF. If the application crashes in the middle of a transaction when the OFF journaling mode is set, then the database file will very likely go corrupt.
-	JournalModeDisabled JournalMode = "OFF"
+	JournalModeOff = JournalMode("OFF")
 )
 
 // SecureDelete defines the secure-delete setting.
@@ -253,6 +391,10 @@ const (
 // or updated should enable the secure_delete pragma prior to performing the delete or update,
 // or else run VACUUM after the delete or update.
 type SecureDelete string
+
+func (sd SecureDelete) String() string {
+	return strings.ToLower(string(sd))
+}
 
 const (
 	// SecureDeleteOff disables secure deletion of content.
@@ -272,7 +414,11 @@ const (
 )
 
 // Synchronous sync setting of the database connection.
-type Synchronous uint8
+type Synchronous string
+
+func (s Synchronous) String() string {
+	return strings.ToLower(string(s))
+}
 
 const (
 	// SynchronousOff sets synchronous to OFF (0),
@@ -281,7 +427,7 @@ const (
 	// but the database might become corrupted if the operating system crashes
 	// or the computer loses power before that data has been written to the disk surface.
 	// On the other hand, commits can be orders of magnitude faster with synchronous OFF.
-	SynchronousOff = Synchronous(0)
+	SynchronousOff = Synchronous("OFF")
 
 	// SynchronousNormal sets synchronous to NORMAL (1),
 	// the SQLite database engine will still sync at the most critical moments,
@@ -297,7 +443,7 @@ const (
 	// Transactions are durable across application crashes regardless
 	// of the synchronous setting or journal mode.
 	// The synchronous=NORMAL setting is a good choice for most applications running in WAL mode.
-	SynchronousNormal = Synchronous(1)
+	SynchronousNormal = Synchronous("NORMAL")
 
 	// SynchronousFull sets synchronous to FULL (2),
 	// the SQLite database engine will use the xSync method of the VFS
@@ -306,42 +452,13 @@ const (
 	// will not corrupt the database. FULL synchronous is very safe,
 	// but it is also slower.
 	///FULL is the most commonly used synchronous setting when not in WAL mode.
-	SynchronousFull = Synchronous(2)
+	SynchronousFull = Synchronous("FULL")
 
 	// SynchronousExtra is like FULL with the addition that the directory containing
 	// a rollback journal is synced after that journal is unlinked to commit a transaction
 	// in DELETE mode. EXTRA provides additional durability if the commit
 	// is followed closely by a power loss.
-	SynchronousExtra = Synchronous(3)
-)
-
-// CacheMode defines the shared-cache mode of SQLite.
-type CacheMode string
-
-const (
-	// CacheModeShared sets the cache mode of SQLite to 'shared'
-	CacheModeShared = CacheMode("SHARED")
-
-	// CacheModePrivate sets the cache mode of SQLite to 'private'
-	CacheModePrivate = CacheMode("PRIVATE")
-)
-
-// Mode defines the open mode of the SQLite database.
-type Mode string
-
-const (
-	// ModeReadOnly defines SQLITE_OPEN_READONLY for the database connection.
-	ModeReadOnly = Mode("RO")
-
-	// ModeReadWrite defines SQLITE_OPEN_READWRITE for the database connection.
-	ModeReadWrite = Mode("RW")
-
-	// ModeReadWriteCreate defines SQLITE_OPEN_READWRITE and SQLITE_OPEN_CREATE.
-	ModeReadWriteCreate = Mode("RWC")
-
-	// ModeMemory defines mode=memory which will
-	// create a pure in-memory database that never reads or writes from disk
-	ModeMemory = Mode("MEMORY")
+	SynchronousExtra = Synchronous("EXTRA")
 )
 
 // Config is configuration parsed from a DSN string.
@@ -349,11 +466,18 @@ const (
 // the NewConfig function should be used, which sets default values.
 // Manual usage is allowed
 type Config struct {
+	// Database
+	Database string
+
 	// Mode of the SQLite database
 	Mode Mode
 
 	// CacheMode of the SQLite Connection
 	Cache CacheMode
+
+	// Mutex flag SQLITE_OPEN_MUTEX_NO, SQLITE_OPEN_MUTEX_FULL
+	// Defaults to SQLITE_OPEN_MUTEX_FULL
+	Mutex Mutex
 
 	// The immutable parameter is a boolean query parameter that indicates
 	// that the database file is stored on read-only media. When immutable is set,
@@ -363,10 +487,6 @@ type Config struct {
 	// Caution: Setting the immutable property on a database file that
 	// does in fact change can result in incorrect query results and/or SQLITE_CORRUPT errors.
 	Immutable bool
-
-	// Mutex flag SQLITE_OPEN_MUTEX_NO, SQLITE_OPEN_MUTEX_FULL
-	// Defaults to SQLITE_OPEN_MUTEX_FULL
-	Mutex int
 
 	// TimeZone location
 	TimeZone *time.Location
@@ -430,6 +550,12 @@ type Config struct {
 	// WriteableSchema enables of disables the ability to using UPDATE, INSERT, DELETE
 	// Warning: misuse of this pragma can easily result in a corrupt database file.
 	WriteableSchema bool
+
+	// Extensions
+	Extensions []string
+
+	// ConnectHook
+	ConnectHook func(*SQLiteConn) error
 }
 
 // Auth holds the authentication configuration for the SQLite UserAuth module.
@@ -450,10 +576,15 @@ type Auth struct {
 // NewConfig creates a new Config and sets default values.
 func NewConfig() *Config {
 	return &Config{
+		// This is the behavior that is always used
+		// for sqlite3_open() and sqlite3_open16().
+		// This is way it is set as default.
+		Mode: ModeReadWriteCreate,
+
+		Database:               ":memory:",
 		Cache:                  CacheModePrivate,
 		Immutable:              false,
-		Authentication:         &Auth{},
-		Mutex:                  SQLITE_OPEN_MUTEX_FULL,
+		Mutex:                  MutexFull,
 		TransactionLock:        TxLockDeferred,
 		LockingMode:            LockingModeNormal,
 		AutoVacuum:             AutoVacuumNone,
@@ -467,57 +598,386 @@ func NewConfig() *Config {
 		SecureDelete:           SecureDeleteOff,
 		Synchronous:            SynchronousNormal,
 		WriteableSchema:        false,
+		Authentication: &Auth{
+			Encoder: NewSHA1Encoder(),
+		},
 	}
 }
 
 // FormatDSN formats the given Config into a DSN string which can be passed to
 // the driver.
 func (cfg *Config) FormatDSN() string {
-	// TODO: FormatDSN
-	return ""
+	var buf bytes.Buffer
+
+	params := url.Values{}
+	params.Set("mode", cfg.Mode.String())
+	params.Set("cache", cfg.Cache.String())
+	params.Set("mutex", cfg.Mutex.String())
+
+	if cfg.Immutable {
+		params.Set("immutable", "true")
+	}
+
+	if cfg.TimeZone != nil {
+		if cfg.TimeZone == time.Local {
+			params.Set("tz", "auto")
+		} else {
+			params.Set("tz", cfg.TimeZone.String())
+		}
+	}
+
+	if cfg.TransactionLock != TxLockDeferred {
+		params.Set("txlock", cfg.TransactionLock.String())
+	}
+
+	if cfg.LockingMode != LockingModeNormal {
+		params.Set("lock", cfg.LockingMode.String())
+	}
+
+	if cfg.AutoVacuum != AutoVacuumNone {
+		params.Set("vacuum", cfg.AutoVacuum.String())
+	}
+
+	if cfg.CaseSensitiveLike {
+		params.Set("cslike", "true")
+	}
+
+	if cfg.DeferForeignKeys {
+		params.Set("defer_fk", "true")
+	}
+
+	if cfg.ForeignKeyConstraints {
+		params.Set("fk", "true")
+	}
+
+	if cfg.IgnoreCheckConstraints {
+		params.Set("ignore_check_contraints", "true")
+	}
+
+	if cfg.JournalMode != JournalModeDelete {
+		params.Set("journal", cfg.JournalMode.String())
+	}
+
+	if cfg.QueryOnly {
+		params.Set("query_only", "true")
+	}
+
+	if cfg.RecursiveTriggers {
+		params.Set("recursive_triggers", "true")
+	}
+
+	if cfg.SecureDelete != SecureDeleteOff {
+		params.Set("secure_delete", cfg.SecureDelete.String())
+	}
+
+	if cfg.Synchronous != SynchronousNormal {
+		params.Set("syn", cfg.Synchronous.String())
+	}
+
+	if cfg.WriteableSchema {
+		params.Set("writable_schema", "true")
+	}
+
+	if len(cfg.Authentication.Username) > 0 && len(cfg.Authentication.Password) > 0 {
+		params.Set("user", cfg.Authentication.Username)
+		params.Set("pass", cfg.Authentication.Password)
+
+		if len(cfg.Authentication.Salt) > 0 {
+			params.Set("salt", cfg.Authentication.Salt)
+		}
+
+		if cfg.Authentication.Encoder != nil {
+			params.Set("crypt", cfg.Authentication.Encoder.String())
+		}
+	}
+
+	if !strings.HasPrefix(cfg.Database, "file:") {
+		buf.WriteString("file:")
+	}
+	buf.WriteString(cfg.Database)
+
+	// Append Options
+	buf.WriteRune('?')
+	buf.WriteString(params.Encode())
+
+	return buf.String()
 }
 
 // Create connection from Configuration
 func (cfg *Config) createConnection() (driver.Conn, error) {
-	//var db *C.sqlite3
+	if C.sqlite3_threadsafe() == 0 {
+		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
+	}
 
+	if len(cfg.Database) == 0 {
+		return nil, fmt.Errorf("No database configured")
+	}
 
-	// name := C.CString(dsn)
-	// defer C.free(unsafe.Pointer(name))
-	// rv := C._sqlite3_open_v2(name, &db,
-	// 	mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
-	// 	nil)
-	// if rv != 0 {
-	// 	return nil, Error{Code: ErrNo(rv)}
-	// }
-	// if db == nil {
-	// 	return nil, errors.New("sqlite succeeded without returning a database")
-	// }
+	var db *C.sqlite3
 
-	// rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
-	// if rv != C.SQLITE_OK {
-	// 	C.sqlite3_close_v2(db)
-	// 	return nil, Error{Code: ErrNo(rv)}
-	// }
+	// Configure Database URI
+	// Because we are adding the 'immutable' flag to the database file
+	// We are required to conform the database path to an URI
+	// The immutable flag is an query parameter which means that the URI needs
+	// to start with 'file:'. Regardless if it is an in-memory database or not.
+	uri := cfg.Database
+	if !strings.HasPrefix(uri, "file:") {
+		uri = fmt.Sprintf("file:%s", uri)
+	}
+	if !strings.Contains(uri, ":memory:") {
+		uri = fmt.Sprintf("%s?immutable=%t", uri, cfg.Immutable)
+	}
+	database := C.CString(uri)
 
-	// exec := func(s string) error {
-	// 	cs := C.CString(s)
-	// 	rv := C.sqlite3_exec(db, cs, nil, nil, nil)
-	// 	C.free(unsafe.Pointer(cs))
-	// 	if rv != C.SQLITE_OK {
-	// 		fmt.Printf("-Open-Exec() %d\n", rv)
-	// 		return lastError(db)
-	// 	}
-	// 	return nil
-	// }
+	// Free CString on return
+	defer C.free(unsafe.Pointer(database))
 
-	// &SQLiteConn{
-	// 	db: db,
-	// 	tz: cfg.TimeZone,
-	// 	txlock: cfg.TransactionLock.String(),
-	// }
+	// Open the database
+	// https://www.sqlite.org/c3ref/open.html
+	rv := C._sqlite3_open_v2(
+		database,
+		&db,
+		cfg.Mutex.C()|cfg.Cache.C()|cfg.Mode.C(),
+		nil)
 
-	return nil, nil
+	// Check if the database was opened succesful.
+	if rv != C.SQLITE_OK {
+		fmt.Println(Error{Code: ErrNo(rv)})
+		return nil, Error{Code: ErrNo(rv)}
+	}
+
+	// Verify we have a database pointer
+	if db == nil {
+		return nil, errors.New("sqlite succeeded without returning a database")
+	}
+
+	// Set SQLITE Busy Timeout Handler
+	rv = C.sqlite3_busy_timeout(db, C.int(cfg.BusyTimeout))
+	if rv != C.SQLITE_OK {
+		// Failed to set busy timeout
+		// close the database and return the error
+		C.sqlite3_close_v2(db)
+
+		return nil, Error{Code: ErrNo(rv)}
+	}
+
+	// Create basic connection
+	conn := &SQLiteConn{
+		db:     db,
+		tz:     cfg.TimeZone,
+		txlock: cfg.TransactionLock.Value(),
+	}
+
+	// At this point we have the following
+	// - database pointer
+	// - basic connection
+	//
+	// Now we need to configure the connection according to the *Config
+
+	// USER AUTHENTICATION
+	//
+	// User Authentication is always performed even when
+	// sqlite_userauth is not compiled in, because without user authentication
+	// the authentication is a no-op.
+	//
+	// Workflow
+	//	- Authenticate
+	//		ON::SUCCESS		=> Continue
+	//		ON::SQLITE_AUTH => Return error and exit Open(...)
+	//
+	//  - Activate User Authentication
+	//		Check if the user wants to activate User Authentication.
+	//		If so then first create a temporary AuthConn to the database
+	//		This is possible because we are already succesfully authenticated.
+	//
+	//	- Check if `sqlite_user`` table exists
+	//		YES				=> Add the provided user from DSN as Admin User and
+	//						   activate user authentication.
+	//		NO				=> Continue
+	//
+	//
+	// Because we need to perform authentication we need to register
+	// the required functions on the connection.
+
+	// Register sqlite_crypt function with the CryptEncoder provided
+	// within *Config.Authentication
+	if err := conn.RegisterFunc("sqlite_crypt", cfg.Authentication.Encoder.Encode, true); err != nil {
+		return nil, fmt.Errorf("CryptEncoderSHA1: %s", err)
+	}
+
+	// Register: authenticate
+	// Authenticate will perform an authentication of the provided username
+	// and password against the database.
+	//
+	// If a database contains the SQLITE_USER table, then the
+	// call to Authenticate must be invoked with an
+	// appropriate username and password prior to enable read and write
+	// access to the database.
+	//
+	// Return SQLITE_OK on success or SQLITE_ERROR if the username/password
+	// combination is incorrect or unknown.
+	//
+	// If the SQLITE_USER table is not present in the database file, then
+	// this interface is a harmless no-op returnning SQLITE_OK.
+	if err := conn.RegisterFunc("authenticate", conn.authenticate, true); err != nil {
+		return nil, err
+	}
+
+	// Register: auth_user_add
+	// auth_user_add can be used (by an admin user only)
+	// to create a new user. When called on a no-authentication-required
+	// database, this routine converts the database into an authentication-
+	// required database, automatically makes the added user an
+	// administrator, and logs in the current connection as that user.
+	// The AuthUserAdd only works for the "main" database, not
+	// for any ATTACH-ed databases. Any call to AuthUserAdd by a
+	// non-admin user results in an error.
+	if err := conn.RegisterFunc("auth_user_add", conn.authUserAdd, true); err != nil {
+		return nil, err
+	}
+
+	// Register: auth_user_change
+	// auth_user_change can be used to change a users
+	// login credentials or admin privilege.  Any user can change their own
+	// login credentials. Only an admin user can change another users login
+	// credentials or admin privilege setting. No user may change their own
+	// admin privilege setting.
+	if err := conn.RegisterFunc("auth_user_change", conn.authUserChange, true); err != nil {
+		return nil, err
+	}
+
+	// Register: auth_user_delete
+	// auth_user_delete can be used (by an admin user only)
+	// to delete a user. The currently logged-in user cannot be deleted,
+	// which guarantees that there is always an admin user and hence that
+	// the database cannot be converted into a no-authentication-required
+	// database.
+	if err := conn.RegisterFunc("auth_user_delete", conn.authUserDelete, true); err != nil {
+		return nil, err
+	}
+
+	// Register: auth_enabled
+	// auth_enabled can be used to check if user authentication is enabled
+	if err := conn.RegisterFunc("auth_enabled", conn.authEnabled, true); err != nil {
+		return nil, err
+	}
+
+	// Preform Authentication only if username and password are provided
+	// If authentication is not enabled on the database
+	// this call is a NO-OP.
+	// Only call this when Username and Password are provided in the *Config
+	if len(cfg.Authentication.Username) > 0 && len(cfg.Authentication.Password) > 0 {
+		if err := conn.Authenticate(cfg.Authentication.Username, cfg.Authentication.Password); err != nil {
+			return nil, err
+		}
+	}
+
+	// AUTO VACUUM
+	// The user preference for auto_vacuum needs to be implemented directly after
+	// the authentication and before the sqlite_user table gets created if the user
+	// decides to activate User Authentication because
+	// auto_vacuum needs to be set before any tables are created
+	// and activating user authentication creates the internal table `sqlite_user`.
+	if err := conn.PRAGMA(PRAGMA_AUTO_VACUUM, cfg.AutoVacuum.String()); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Check if authentication is enabled
+	// This can now be succesfully checked because we are successfully connected.
+	// Only issue this when Username and Password are configured.
+	// If this is an unauthenticated database
+	// the provided user will be created as Admin.
+	if len(cfg.Authentication.Username) > 0 && len(cfg.Authentication.Password) > 0 {
+		authExists := conn.AuthEnabled()
+		if !authExists {
+			if err := conn.AuthUserAdd(cfg.Authentication.Username, cfg.Authentication.Password, true); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Case Sensitive LIKE
+	if err := conn.PRAGMA(PRAGMA_CASE_SENSITIVE_LIKE, strconv.FormatBool(cfg.CaseSensitiveLike)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Defer Foreign Keys
+	if err := conn.PRAGMA(PRAGMA_DEFER_FOREIGN_KEYS, strconv.FormatBool(cfg.DeferForeignKeys)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Ignore CHECK constraints
+	if err := conn.PRAGMA(PRAGMA_IGNORE_CHECK_CONTRAINTS, strconv.FormatBool(cfg.IgnoreCheckConstraints)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Journal Mode
+	if err := conn.PRAGMA(PRAGMA_JOURNAL_MODE, cfg.JournalMode.String()); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Locking Mode
+	if err := conn.PRAGMA(PRAGMA_LOCKING_MODE, cfg.LockingMode.String()); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Query Only
+	if err := conn.PRAGMA(PRAGMA_QUERY_ONLY, strconv.FormatBool(cfg.QueryOnly)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Recursive Triggers
+	if err := conn.PRAGMA(PRAGMA_RECURSIVE_TRIGGERS, strconv.FormatBool(cfg.RecursiveTriggers)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Secure Delete
+	if err := conn.PRAGMA(PRAGMA_SECURE_DELETE, cfg.SecureDelete.String()); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Synchronous
+	if err := conn.PRAGMA(PRAGMA_SYNCHRONOUS, cfg.SecureDelete.String()); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Writable Schema
+	if err := conn.PRAGMA(PRAGMA_WRITABLE_SCHEMA, strconv.FormatBool(cfg.WriteableSchema)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
+	// Load Extensions
+	if len(cfg.Extensions) > 0 {
+		if err := conn.loadExtensions(cfg.Extensions); err != nil {
+			//fmt.Println("Error while loading Extensions")
+			conn.Close()
+			return nil, err
+		}
+	}
+
+	// Configure Connect Hooks
+	if cfg.ConnectHook != nil {
+		if err := cfg.ConnectHook(conn); err != nil {
+			conn.Close()
+			return nil, err
+		}
+	}
+
+	// Configure Finalizer
+	runtime.SetFinalizer(conn, (*SQLiteConn).Close)
+
+	return conn, nil
 }
 
 // ParseDSN parses the DSN string to a Config
@@ -525,8 +985,13 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 	// New default with default values
 	cfg = NewConfig()
 
+	cfg.Database = dsn
+
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
+		// Update DatabaseURI
+		cfg.Database = dsn[0:pos]
+
 		// Parse Options
 		params, err := url.ParseQuery(dsn[pos+1:])
 		if err != nil {
@@ -592,10 +1057,29 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 			if k == "mode" {
 				val := params.Get(k)
 				switch strings.ToUpper(val) {
-				case "RO", "RW", "RWC", "MEMORY":
-					cfg.Mode = Mode(strings.ToUpper(val))
+				case "RO":
+					cfg.Mode = ModeReadOnly
+				case "RW":
+					cfg.Mode = ModeReadWrite
+				case "RWC":
+					cfg.Mode = ModeReadWriteCreate
+				case "MEMORY":
+					cfg.Mode = ModeMemory
 				default:
 					return nil, fmt.Errorf("Unknown mode: %v, expecting value of 'ro, rw, rwc, memory'", val)
+				}
+			}
+
+			// Mutex
+			if k == "mutex" {
+				val := params.Get(k)
+				switch strings.ToLower(val) {
+				case "no":
+					cfg.Mutex = MutexNo
+				case "full":
+					cfg.Mutex = MutexFull
+				default:
+					return nil, fmt.Errorf("Invalid mutex: %v, expecting value of 'no, full", val)
 				}
 			}
 
@@ -610,19 +1094,6 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 					if err != nil {
 						return nil, fmt.Errorf("Invalid tz: %v: %v", val, err)
 					}
-				}
-			}
-
-			// Mutex
-			if k == "mutex" {
-				val := params.Get(k)
-				switch strings.ToLower(val) {
-				case "no":
-					cfg.Mutex = SQLITE_OPEN_MUTEX_NO
-				case "full":
-					cfg.Mutex = SQLITE_OPEN_MUTEX_FULL
-				default:
-					return nil, fmt.Errorf("Invalid mutex: %v, expecting value of 'no, full", val)
 				}
 			}
 

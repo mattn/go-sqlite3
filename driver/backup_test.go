@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file.
 
 // +build cgo
+// +build go1.8
 
 package sqlite3
 
@@ -255,10 +256,10 @@ func TestBackupError(t *testing.T) {
 	const driverName = "sqlite3_TestBackupError"
 
 	// The driver's connection will be needed in order to perform the backup.
-	var dbDriverConn *SQLiteConn
+	var dbDriverConn []*SQLiteConn
 	sql.Register(driverName, &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
-			dbDriverConn = conn
+			dbDriverConn = append(dbDriverConn, conn)
 			return nil
 		},
 	})
@@ -266,21 +267,23 @@ func TestBackupError(t *testing.T) {
 	// Connect to the database.
 	dbTempFilename := TempFilename(t)
 	defer os.Remove(dbTempFilename)
-	db, err := sql.Open(driverName, dbTempFilename)
+	srcDb, err := sql.Open(driverName, dbTempFilename)
 	if err != nil {
 		t.Fatal("Failed to open the database:", err)
 	}
-	defer db.Close()
-	db.Ping()
+	defer srcDb.Close()
+	srcDb.Ping()
+
+	srcDriverConn := dbDriverConn[0]
 
 	// Need the driver connection in order to perform the backup.
-	if dbDriverConn == nil {
+	if srcDriverConn == nil {
 		t.Fatal("Failed to get the driver connection.")
 	}
 
 	// Prepare to perform the backup.
 	// Intentionally using the same connection for both the source and destination databases, to trigger an error result.
-	backup, err := dbDriverConn.Backup("main", dbDriverConn, "main")
+	backup, err := srcDriverConn.Backup("main", srcDriverConn, "main")
 	if err == nil {
 		t.Fatal("Failed to get the expected error result.")
 	}
@@ -290,5 +293,66 @@ func TestBackupError(t *testing.T) {
 	}
 	if backup != nil {
 		t.Fatal("Failed to get the expected nil backup result.")
+	}
+
+	// Generate some test data for the given ID.
+	var generateTestData = func(id int) string {
+		return fmt.Sprintf("test-%v", id)
+	}
+
+	// Populate the source database with a test table containing some test data.
+	tx, err := srcDb.Begin()
+	if err != nil {
+		t.Fatal("Failed to begin a transaction when populating the source database:", err)
+	}
+	_, err = srcDb.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
+	if err != nil {
+		tx.Rollback()
+		t.Fatal("Failed to create the source database \"test\" table:", err)
+	}
+	for id := 0; id < testRowCount; id++ {
+		_, err = srcDb.Exec("INSERT INTO test (id, value) VALUES (?, ?)", id, generateTestData(id))
+		if err != nil {
+			tx.Rollback()
+			t.Fatal("Failed to insert a row into the source database \"test\" table:", err)
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		t.Fatal("Failed to populate the source database:", err)
+	}
+
+	destTempFilename := TempFilename(t)
+	defer os.Remove(destTempFilename)
+
+	// TODO: Rewrite for Golang:1.8
+	// Current part of test uses golang:1.10
+	destCfg := NewConfig()
+	destCfg.Database = destTempFilename
+	destDB := sql.OpenDB(destCfg) // Needs to be rewritten
+	destDB.Close()
+
+	// Reconfigure to open READ-ONLY
+	destCfg.Mode = ModeReadOnly
+	var destConn *SQLiteConn
+	destCfg.ConnectHook = func(conn *SQLiteConn) error {
+		destConn = conn
+		return nil
+	}
+
+	// OpenDB with Config
+	destDB = sql.OpenDB(destCfg)
+	destDB.Ping()
+	defer destDB.Close()
+
+	backup, err = destConn.Backup("main", srcDriverConn, "main")
+	_, err = backup.Step(0)
+	if err == nil || err.(Error).Code != ErrReadonly {
+		t.Fatalf("Expected read-only error; received: (%d) %s", err.(Error).Code, err.(Error).Error())
+	}
+
+	err = backup.Close()
+	if err == nil || err.(Error).Code != ErrReadonly {
+		t.Fatalf("Expected read-only error; received: (%d) %s", err.(Error).Code, err.(Error).Error())
 	}
 }

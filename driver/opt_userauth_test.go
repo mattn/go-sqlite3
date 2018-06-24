@@ -61,7 +61,7 @@ func init() {
 			file = TempFilename(t)
 		}
 
-		db, err = sql.Open("sqlite3_with_conn", "file:"+file+fmt.Sprintf("?_auth&_auth_user=%s&_auth_pass=%s", username, password))
+		db, err = sql.Open("sqlite3_with_conn", "file:"+file+fmt.Sprintf("?user=%s&pass=%s", username, password))
 		if err != nil {
 			defer os.Remove(file)
 			return file, nil, nil, err
@@ -87,7 +87,7 @@ func init() {
 			file = TempFilename(t)
 		}
 
-		db, err = sql.Open("sqlite3_with_conn", "file:"+file+fmt.Sprintf("?_auth&_auth_user=%s&_auth_pass=%s&_auth_crypt=%s&_auth_salt=%s", username, password, crypt, salt))
+		db, err = sql.Open("sqlite3_with_conn", "file:"+file+fmt.Sprintf("?user=%s&pass=%s&crypt=%s&salt=%s", username, password, crypt, salt))
 		if err != nil {
 			defer os.Remove(file)
 			return file, nil, nil, err
@@ -270,7 +270,7 @@ func TestUserAuthAddAdmin(t *testing.T) {
 
 func TestUserAuthAddUser(t *testing.T) {
 	f1, db1, c, err := connect(t, "", "admin", "admin")
-	if err != nil && c == nil && db == nil {
+	if err != nil && c == nil && db1 == nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f1)
@@ -365,7 +365,7 @@ func TestUserAuthAddUser(t *testing.T) {
 
 func TestUserAuthModifyUser(t *testing.T) {
 	f1, db1, c1, err := connect(t, "", "admin", "admin")
-	if err != nil && c1 == nil && db == nil {
+	if err != nil && c1 == nil && db1 == nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f1)
@@ -464,7 +464,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 
 func TestUserAuthDeleteUser(t *testing.T) {
 	f1, db1, c, err := connect(t, "", "admin", "admin")
-	if err != nil && c == nil && db == nil {
+	if err != nil && c == nil && db1 == nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f1)

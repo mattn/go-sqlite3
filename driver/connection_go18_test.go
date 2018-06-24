@@ -156,17 +156,37 @@ func TestExecCancel(t *testing.T) {
 }
 
 func TestPinger(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:")
+	driverName := "sqlite3_pinger"
+
+	var dbDriverConn []*SQLiteConn
+	sql.Register(driverName, &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			dbDriverConn = append(dbDriverConn, conn)
+			return nil
+		},
+	})
+
+	db, err := sql.Open(driverName, ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Ping Database
 	err = db.Ping()
 	if err != nil {
 		t.Fatal(err)
 	}
 	db.Close()
+
+	// Ping database
+	// response should be: database closed
 	err = db.Ping()
-	fmt.Println(err)
+	if err == nil {
+		t.Fatal("Should be closed")
+	}
+
+	// Ping Database through connection
+	err = dbDriverConn[0].Ping(context.Background())
 	if err == nil {
 		t.Fatal("Should be closed")
 	}

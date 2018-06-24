@@ -28,39 +28,11 @@ package sqlite3
 #else
 #include <sqlite3.h>
 #endif
-#include <stdlib.h>
-#include <string.h>
-
-#ifdef __CYGWIN__
-# include <errno.h>
-#endif
-
-#ifndef SQLITE_OPEN_READWRITE
-# define SQLITE_OPEN_READWRITE 0
-#endif
-
-#ifndef SQLITE_OPEN_FULLMUTEX
-# define SQLITE_OPEN_FULLMUTEX 0
-#endif
-
-#ifndef SQLITE_DETERMINISTIC
-# define SQLITE_DETERMINISTIC 0
-#endif
-
-static int
-_sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
-#ifdef SQLITE_OPEN_URI
-  return sqlite3_open_v2(filename, ppDb, flags | SQLITE_OPEN_URI, zVfs);
-#else
-  return sqlite3_open_v2(filename, ppDb, flags, zVfs);
-#endif
-}
 */
 import "C"
 import (
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 )
 
 var (
@@ -80,14 +52,19 @@ type SQLiteDriver struct {
 
 // Open database and return a new connection.
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
-	if C.sqlite3_threadsafe() == 0 {
-		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
-	}
-
 	cfg, err := ParseDSN(dsn)
 	if err != nil {
 		return nil, err
 	}
+
+	// Configure Extensions
+	cfg.Extensions = d.Extensions
+
+	// Configure ConnectHook
+	cfg.ConnectHook = d.ConnectHook
+
+	// Set Configuration
+	d.Config = cfg
 
 	return cfg.createConnection()
 }

@@ -27,6 +27,8 @@ func (c *Config) Connect(ctx context.Context) (driver.Conn, error) {
 // Driver returns &SQLiteDriver{}.
 func (c *Config) Driver() driver.Driver {
 	return &SQLiteDriver{
-		Config: c,
+		Config:      c,
+		Extensions:  c.Extensions,
+		ConnectHook: c.ConnectHook,
 	}
 }

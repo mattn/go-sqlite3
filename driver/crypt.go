@@ -46,6 +46,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"fmt"
 )
 
 // Force Implementation
@@ -63,6 +64,7 @@ var (
 // CryptEncoder provides the interface for implementing
 // a sqlite_crypt encoder.
 type CryptEncoder interface {
+	fmt.Stringer
 	Encode(pass []byte, hash interface{}) []byte
 }
 
@@ -78,6 +80,10 @@ type sha1Encoder struct{}
 func (e *sha1Encoder) Encode(pass []byte, hash interface{}) []byte {
 	h := sha1.Sum(pass)
 	return h[:]
+}
+
+func (e *sha1Encoder) String() string {
+	return "sha1"
 }
 
 // NewSHA1Encoder returns a new SHA1 Encoder.
@@ -100,6 +106,10 @@ func (e *ssha1Encoder) Salt() string {
 	return e.salt
 }
 
+func (e *ssha1Encoder) String() string {
+	return "ssha1"
+}
+
 // NewSSHA1Encoder returns a new salted SHA1 Encoder.
 func NewSSHA1Encoder(salt string) CryptSaltedEncoder {
 	return &ssha1Encoder{
@@ -112,6 +122,10 @@ type sha256Encoder struct{}
 func (e *sha256Encoder) Encode(pass []byte, hash interface{}) []byte {
 	h := sha256.Sum256(pass)
 	return h[:]
+}
+
+func (e *sha256Encoder) String() string {
+	return "sha256"
 }
 
 // NewSHA256Encoder returns a new SHA256 Encoder.
@@ -134,6 +148,10 @@ func (e *ssha256Encoder) Salt() string {
 	return e.salt
 }
 
+func (e *ssha256Encoder) String() string {
+	return "ssha256"
+}
+
 // NewSSHA256Encoder returns a new salted SHA256 Encoder.
 func NewSSHA256Encoder(salt string) CryptSaltedEncoder {
 	return &ssha256Encoder{
@@ -146,6 +164,10 @@ type sha384Encoder struct{}
 func (e *sha384Encoder) Encode(pass []byte, hash interface{}) []byte {
 	h := sha512.Sum384(pass)
 	return h[:]
+}
+
+func (e *sha384Encoder) String() string {
+	return "sha384"
 }
 
 // NewSHA384Encoder returns a new SHA384 Encoder.
@@ -168,6 +190,10 @@ func (e *ssha384Encoder) Salt() string {
 	return e.salt
 }
 
+func (e *ssha384Encoder) String() string {
+	return "ssha384"
+}
+
 // NewSSHA384Encoder returns a new salted SHA384 Encoder.
 func NewSSHA384Encoder(salt string) CryptSaltedEncoder {
 	return &ssha384Encoder{
@@ -180,6 +206,10 @@ type sha512Encoder struct{}
 func (e *sha512Encoder) Encode(pass []byte, hash interface{}) []byte {
 	h := sha512.Sum512(pass)
 	return h[:]
+}
+
+func (e *sha512Encoder) String() string {
+	return "sha512"
 }
 
 // NewSHA512Encoder returns a new SHA512 Encoder.
@@ -202,7 +232,11 @@ func (e *ssha512Encoder) Salt() string {
 	return e.salt
 }
 
-// NewSSHA384Encoder returns a new salted SHA512 Encoder.
+func (e *ssha512Encoder) String() string {
+	return "ssha512"
+}
+
+// NewSSHA512Encoder returns a new salted SHA512 Encoder.
 func NewSSHA512Encoder(salt string) CryptSaltedEncoder {
 	return &ssha512Encoder{
 		salt: salt,

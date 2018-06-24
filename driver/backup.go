@@ -80,7 +80,7 @@ func (b *SQLiteBackup) Close() error {
 	b.b = nil
 	runtime.SetFinalizer(b, nil)
 
-	if ret != 0 {
+	if ret != C.SQLITE_OK {
 		return Error{Code: ErrNo(ret)}
 	}
 	return nil

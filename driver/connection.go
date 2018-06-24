@@ -45,6 +45,20 @@ type SQLiteConn struct {
 	aggregators []*aggInfo
 }
 
+func (c *SQLiteConn) PRAGMA(name, value string) error {
+	stmt := fmt.Sprintf("PRAGMA %s = %s;", name, value)
+
+	cs := C.CString(stmt)
+	rv := C.sqlite3_exec(c.db, cs, nil, nil, nil)
+	C.free(unsafe.Pointer(cs))
+
+	if rv != C.SQLITE_OK {
+		return lastError(c.db)
+	}
+
+	return nil
+}
+
 type functionInfo struct {
 	f                 reflect.Value
 	argConverters     []callbackArgConverter
