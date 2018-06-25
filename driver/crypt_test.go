@@ -59,5 +59,9 @@ func TestEncoders(t *testing.T) {
 		if strings.Compare(fmt.Sprintf("%x", h), e.expected) != 0 {
 			t.Fatalf("Invalid %s hash: expected: %s; got: %x", strings.ToUpper(e.enc), e.expected, h)
 		}
+
+		if e.enc != enc.String() {
+			t.Fatalf("Invalid encoder; expected: %s, got: %s", e.enc, enc.String())
+		}
 	}
 }

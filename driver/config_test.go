@@ -13,10 +13,6 @@ import (
 	"time"
 )
 
-func TestConfig(t *testing.T) {
-
-}
-
 func TestParseDSN(t *testing.T) {
 	// URI
 	uriCases := map[string]*Config{

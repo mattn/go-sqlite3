@@ -85,12 +85,12 @@ const (
 func (c *SQLiteConn) Authenticate(username, password string) error {
 	rv := c.authenticate(username, password)
 	switch rv {
-	case C.SQLITE_ERROR, C.SQLITE_AUTH:
+	case C.SQLITE_AUTH:
 		return Error{Code: ErrNo(rv)}
 	case C.SQLITE_OK:
 		return nil
 	default:
-		return c.lastError()
+		return Error{Code: ErrNo(rv)}
 	}
 }
 
@@ -132,12 +132,12 @@ func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
 
 	rv := c.authUserAdd(username, password, isAdmin)
 	switch rv {
-	case C.SQLITE_ERROR, C.SQLITE_AUTH:
+	case C.SQLITE_AUTH:
 		return Error{Code: ErrNo(rv)}
 	case C.SQLITE_OK:
 		return nil
 	default:
-		return c.lastError()
+		return Error{Code: ErrNo(rv)}
 	}
 }
 
@@ -181,12 +181,12 @@ func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error
 
 	rv := c.authUserChange(username, password, isAdmin)
 	switch rv {
-	case C.SQLITE_ERROR, C.SQLITE_AUTH:
+	case C.SQLITE_AUTH:
 		return Error{Code: ErrNo(rv)}
 	case C.SQLITE_OK:
 		return nil
 	default:
-		return c.lastError()
+		return Error{Code: ErrNo(rv)}
 	}
 }
 
@@ -228,12 +228,12 @@ func (c *SQLiteConn) authUserChange(username, password string, admin int) int {
 func (c *SQLiteConn) AuthUserDelete(username string) error {
 	rv := c.authUserDelete(username)
 	switch rv {
-	case C.SQLITE_ERROR, C.SQLITE_AUTH:
+	case C.SQLITE_AUTH:
 		return Error{Code: ErrNo(rv)}
 	case C.SQLITE_OK:
 		return nil
 	default:
-		return c.lastError()
+		return Error{Code: ErrNo(rv)}
 	}
 }
 

@@ -165,6 +165,7 @@ func (tx TxLock) String() string {
 	}
 }
 
+// Value returns the Transaction Lock Value
 func (tx TxLock) Value() string {
 	return string(tx)
 }
@@ -717,7 +718,7 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
 	}
 
-	if len(cfg.Database) == 0 {
+	if len(cfg.Database) == 0 || cfg.Database == "file:" {
 		return nil, fmt.Errorf("No database configured")
 	}
 
@@ -750,7 +751,6 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 
 	// Check if the database was opened succesful.
 	if rv != C.SQLITE_OK {
-		fmt.Println(Error{Code: ErrNo(rv)})
 		return nil, Error{Code: ErrNo(rv)}
 	}
 
@@ -810,7 +810,7 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 	// Register sqlite_crypt function with the CryptEncoder provided
 	// within *Config.Authentication
 	if err := conn.RegisterFunc("sqlite_crypt", cfg.Authentication.Encoder.Encode, true); err != nil {
-		return nil, fmt.Errorf("CryptEncoderSHA1: %s", err)
+		return nil, fmt.Errorf("CryptEncoder: %s", err)
 	}
 
 	// Register: authenticate

@@ -3,6 +3,8 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+package sqlite3
+
 // The crypt functions provides several different implementations for the
 // default embedded sqlite_crypt function.
 // This function is uses a ceasar-cypher by default
@@ -40,7 +42,6 @@
 // sqlite3_create_function() interface to provide an alternative
 // implementation of sqlite_crypt() that computes a stronger password hash,
 // perhaps using a cryptographic hash function like SHA1.
-package sqlite3
 
 import (
 	"crypto/sha1"

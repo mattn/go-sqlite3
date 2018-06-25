@@ -31,29 +31,29 @@ func (c *SQLiteConn) loadExtensions(extensions []string) error {
 
 	for _, extension := range extensions {
 		cext := C.CString(extension)
-		cerr := C.CString("")
 		defer C.free(unsafe.Pointer(cext))
-		defer C.free(unsafe.Pointer(cerr))
-		rv = C.sqlite3_load_extension(c.db, cext, nil, &cerr)
+
+		rv = C.sqlite3_load_extension(c.db, cext, nil, nil)
 		if rv != C.SQLITE_OK {
-			// Disable Extension Loading
+			// Disable extension loading on return
 			rv = C.sqlite3_enable_load_extension(c.db, 0)
 			if rv != C.SQLITE_OK {
-				return errors.New("Failed to disable extension loading")
+				return fmt.Errorf("Failed to disable extension loading: %s", C.GoString(C.sqlite3_errmsg(c.db)))
 			}
-			fmt.Println(">>>")
-			fmt.Println(*cerr)
-			fmt.Printf("%v\n", cerr)
-			fmt.Printf("%v\n", *cerr)
-			return errors.New(C.GoString(C.sqlite3_errmsg(c.db)))
+
+			// Store last error
+			// Required because other wise next statement to disable extension loading
+			// will override the error
+			return fmt.Errorf("Failed to load extension: '%s'", extension)
 		}
 	}
 
-	// Disable extension loading
+	// Disable extension loading on return
 	rv = C.sqlite3_enable_load_extension(c.db, 0)
 	if rv != C.SQLITE_OK {
-		return errors.New(C.GoString(C.sqlite3_errmsg(c.db)))
+		return fmt.Errorf("Failed to disable extension loading: %s", C.GoString(C.sqlite3_errmsg(c.db)))
 	}
+
 	return nil
 }
 

@@ -463,8 +463,8 @@ func TestUserAuthModifyUser(t *testing.T) {
 }
 
 func TestUserAuthDeleteUser(t *testing.T) {
-	f1, db1, c, err := connect(t, "", "admin", "admin")
-	if err != nil && c == nil && db1 == nil {
+	f1, db1, c1, err := connect(t, "", "admin", "admin")
+	if err != nil && c1 == nil && db1 == nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f1)
@@ -522,12 +522,9 @@ func TestUserAuthDeleteUser(t *testing.T) {
 	}
 
 	// Delete user through *SQLiteConn
-	rv, err = deleteUser(db1, "admin3")
+	err = c1.AuthUserDelete("admin3")
 	if err != nil {
 		t.Fatal(err)
-	}
-	if rv != 0 {
-		t.Fatal("Failed to delete admin3")
 	}
 
 	// Verify user admin3 deleted

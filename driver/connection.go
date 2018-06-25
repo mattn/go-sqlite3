@@ -45,6 +45,7 @@ type SQLiteConn struct {
 	aggregators []*aggInfo
 }
 
+// PRAGMA executes a PRAGMA statement
 func (c *SQLiteConn) PRAGMA(name, value string) error {
 	stmt := fmt.Sprintf("PRAGMA %s = %s;", name, value)
 
