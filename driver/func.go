@@ -18,6 +18,10 @@ package sqlite3
 #include <stdio.h>
 #include <stdint.h>
 
+#ifndef SQLITE_DETERMINISTIC
+# define SQLITE_DETERMINISTIC 0
+#endif
+
 void callbackTrampoline(sqlite3_context*, int, sqlite3_value**);
 void stepTrampoline(sqlite3_context*, int, sqlite3_value**);
 void doneTrampoline(sqlite3_context*);
