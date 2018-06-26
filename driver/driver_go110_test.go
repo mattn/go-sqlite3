@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"os"
 	"testing"
 )
@@ -47,6 +48,18 @@ func TestOpenConnector(t *testing.T) {
 	// Verify database has been created
 	if _, err := os.Stat(tempFilename); os.IsNotExist(err) {
 		t.Fatalf("Failed to create database: '%s'; %s", tempFilename, err)
+	}
+}
+
+func TestOpenConnectorInvalidDSN(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+
+	drv := &SQLiteDriver{}
+
+	_, err := drv.OpenConnector(fmt.Sprintf("file:%s?%35%2%%43?test=false", tempFilename))
+	if err == nil {
+		t.Fatal("Opened connector while error was expected")
 	}
 }
 
