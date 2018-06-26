@@ -253,7 +253,7 @@ func TestBackupAllRemainingPages(t *testing.T) {
 
 // Test the error reporting when preparing to perform a backup.
 func TestBackupError(t *testing.T) {
-	const driverName = "sqlite3_TestBackupError"
+	driverName := "sqlite3_TestBackupError"
 
 	// The driver's connection will be needed in order to perform the backup.
 	var dbDriverConn []*SQLiteConn
@@ -325,27 +325,41 @@ func TestBackupError(t *testing.T) {
 	destTempFilename := TempFilename(t)
 	defer os.Remove(destTempFilename)
 
-	// TODO: Rewrite for Golang:1.8
-	// Current part of test uses golang:1.10
-	destCfg := NewConfig()
-	destCfg.Database = destTempFilename
-	destDB := sql.OpenDB(destCfg) // Needs to be rewritten
-	destDB.Close()
+	// Create Database
+	destDb, err := sql.Open(driverName, fmt.Sprintf("file:%s", destTempFilename))
+	if err != nil {
+		t.Fatal("Failed to open the database:", err)
+	}
+	destDb.Ping()
+	_, err = destDb.Exec("SELECT 1;") // Create Database
+	if err != nil {
+		t.Fatal(err)
+	}
+	destDb.Close()
 
-	// Reconfigure to open READ-ONLY
-	destCfg.Mode = ModeReadOnly
-	var destConn *SQLiteConn
-	destCfg.ConnectHook = func(conn *SQLiteConn) error {
-		destConn = conn
-		return nil
+	var destDriverConn *SQLiteConn
+	driverName = "sqlite3_dest_readonly"
+	sql.Register(driverName, &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			destDriverConn = conn
+			return nil
+		},
+	})
+
+	// Re-Open as ReadOnly
+	destDb, err = sql.Open(driverName, fmt.Sprintf("file:%s?mode=ro", destTempFilename))
+	if err != nil {
+		t.Fatal("Failed to open the database:", err)
+	}
+	destDb.Ping()
+	defer destDb.Close()
+
+	// Need the driver connection in order to perform the backup.
+	if destDriverConn == nil {
+		t.Fatal("Failed to get the driver connection.")
 	}
 
-	// OpenDB with Config
-	destDB = sql.OpenDB(destCfg)
-	destDB.Ping()
-	defer destDB.Close()
-
-	backup, err = destConn.Backup("main", srcDriverConn, "main")
+	backup, err = destDriverConn.Backup("main", srcDriverConn, "main")
 	_, err = backup.Step(0)
 	if err == nil || err.(Error).Code != ErrReadonly {
 		t.Fatalf("Expected read-only error; received: (%d) %s", err.(Error).Code, err.(Error).Error())
