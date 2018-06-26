@@ -71,6 +71,11 @@ func TestParseDSN(t *testing.T) {
 	}
 
 	// Crypt
+	RegisterCryptEncoder(NewSSHA1Encoder("salt"))
+	RegisterCryptEncoder(NewSSHA256Encoder("salt"))
+	RegisterCryptEncoder(NewSSHA384Encoder("salt"))
+	RegisterCryptEncoder(NewSSHA512Encoder("salt"))
+
 	cryptCases := map[string]*Config{
 		"test.db?crypt=auto": nil,
 		"test.db?crypt=sha1": &Config{

@@ -62,6 +62,28 @@ var (
 	_ CryptSaltedEncoder = (*ssha512Encoder)(nil)
 )
 
+var (
+	cryptEncoders map[string]CryptEncoder
+)
+
+// RegisterCryptEncoder will register a CryptEncoder to the sqlite3 driver
+// which will automatically be found when used from a DSN string
+func RegisterCryptEncoder(e CryptEncoder) {
+	cryptEncoders[e.String()] = e
+}
+
+func init() {
+	cryptEncoders = make(map[string]CryptEncoder, 0)
+
+	// Register Default Encoders
+	RegisterCryptEncoder(NewSHA1Encoder())
+	RegisterCryptEncoder(NewSHA256Encoder())
+	RegisterCryptEncoder(NewSHA384Encoder())
+	RegisterCryptEncoder(NewSHA512Encoder())
+}
+
+// #############################################################################
+
 // CryptEncoder provides the interface for implementing
 // a sqlite_crypt encoder.
 type CryptEncoder interface {
@@ -75,6 +97,8 @@ type CryptSaltedEncoder interface {
 	CryptEncoder
 	Salt() string
 }
+
+// #############################################################################
 
 type sha1Encoder struct{}
 

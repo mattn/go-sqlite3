@@ -917,6 +917,12 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 		return nil, err
 	}
 
+	// Foreign Keys
+	if err := conn.PRAGMA(PRAGMA_FOREIGN_KEYS, strconv.FormatBool(cfg.ForeignKeyConstraints)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
+	}
+
 	// Ignore CHECK constraints
 	if err := conn.PRAGMA(PRAGMA_IGNORE_CHECK_CONTRAINTS, strconv.FormatBool(cfg.IgnoreCheckConstraints)); err != nil {
 		C.sqlite3_close_v2(db)
@@ -968,7 +974,6 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 	// Load Extensions
 	if len(cfg.Extensions) > 0 {
 		if err := conn.loadExtensions(cfg.Extensions); err != nil {
-			//fmt.Println("Error while loading Extensions")
 			conn.Close()
 			return nil, err
 		}
@@ -1027,9 +1032,14 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 		}
 
 		if val := params.Get("crypt"); val != "" {
-			if cfg.Authentication.Encoder, err = parseCryptEncoder(val, cfg.Authentication.Salt); err != nil {
-				return nil, err
+			var enc CryptEncoder
+			var ok bool
+
+			if enc, ok = cryptEncoders[val]; !ok {
+				return nil, fmt.Errorf("Unknown CryptEncoder(%s); please register first with 'RegisterCryptEncoder()'", val)
 			}
+
+			cfg.Authentication.Encoder = enc
 		}
 
 		// Parse Multi name options
@@ -1308,40 +1318,5 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 func normalizeParams(params url.Values) {
 	for k, v := range params {
 		params[strings.ToLower(k)] = v
-	}
-}
-
-func parseCryptEncoder(crypt, salt string) (CryptEncoder, error) {
-	switch strings.ToUpper(crypt) {
-	case "SHA1":
-		return NewSHA1Encoder(), nil
-	case "SSHA1":
-		if len(salt) == 0 {
-			return nil, fmt.Errorf("crypt=ssha1, requires salt")
-		}
-		return NewSSHA1Encoder(salt), nil
-	case "SHA256":
-		return NewSHA256Encoder(), nil
-	case "SSHA256":
-		if len(salt) == 0 {
-			return nil, fmt.Errorf("crypt=ssha256, requires salt")
-		}
-		return NewSSHA256Encoder(salt), nil
-	case "SHA384":
-		return NewSHA384Encoder(), nil
-	case "SSHA384":
-		if len(salt) == 0 {
-			return nil, fmt.Errorf("crypt=ssha384, requires salt")
-		}
-		return NewSSHA384Encoder(salt), nil
-	case "SHA512":
-		return NewSHA512Encoder(), nil
-	case "SSHA512":
-		if len(salt) == 0 {
-			return nil, fmt.Errorf("crypt=ssha512, requires salt")
-		}
-		return NewSSHA512Encoder(salt), nil
-	default:
-		return nil, fmt.Errorf("Unknown crypt encoder provider")
 	}
 }

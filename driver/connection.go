@@ -213,7 +213,6 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue)
 
 // Exec implements Execer.
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	fmt.Println("Exec()")
 	list := make([]namedValue, len(args))
 	for i, v := range args {
 		list[i] = namedValue{
@@ -244,7 +243,6 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) 
 			res, err = s.(*SQLiteStmt).exec(ctx, args[:na])
 			if err != nil && err != driver.ErrSkip {
 				s.Close()
-				fmt.Printf("exec() %s\n", err)
 				return nil, err
 			}
 			args = args[na:]

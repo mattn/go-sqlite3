@@ -70,3 +70,25 @@ func TestOpenDB(t *testing.T) {
 		t.Fatalf("Failed to create database: '%s'; %s", tempFilename, err)
 	}
 }
+
+func TestOpenDBReadOnly(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+
+	cfg := NewConfig()
+	cfg.Database = tempFilename
+
+	// OpenDB
+	db1 := sql.OpenDB(cfg)
+	defer db1.Close()
+	db1.Exec("CREATE TABLE test (x int, y float)")
+
+	cfg.Mode = ModeReadOnly
+	db2 := sql.OpenDB(cfg)
+	defer db2.Close()
+
+	_, err := db2.Exec("INSERT INTO test VALUES (1, 3.14)")
+	if err == nil {
+		t.Fatal("didn't expect INSERT into read-only database to work")
+	}
+}

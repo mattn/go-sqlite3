@@ -591,6 +591,11 @@ func TestUserAuthDeleteUser(t *testing.T) {
 }
 
 func TestUserAuthEncoders(t *testing.T) {
+	RegisterCryptEncoder(NewSSHA1Encoder("salted"))
+	RegisterCryptEncoder(NewSSHA256Encoder("salted"))
+	RegisterCryptEncoder(NewSSHA384Encoder("salted"))
+	RegisterCryptEncoder(NewSSHA512Encoder("salted"))
+
 	cases := map[string]string{
 		"sha1":    "",
 		"ssha1":   "salted",
