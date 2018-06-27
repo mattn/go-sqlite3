@@ -37,6 +37,7 @@ var (
 
 // SQLiteConn implement sql.Conn.
 type SQLiteConn struct {
+	cfg         *Config
 	mu          sync.Mutex
 	db          *C.sqlite3
 	tz          *time.Location

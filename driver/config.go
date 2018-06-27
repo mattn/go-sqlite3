@@ -767,6 +767,7 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 
 	// Create basic connection
 	conn := &SQLiteConn{
+		cfg:    cfg,
 		db:     db,
 		tz:     cfg.TimeZone,
 		txlock: cfg.TransactionLock.Value(),
