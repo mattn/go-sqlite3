@@ -10,11 +10,12 @@ package sqlite3
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 )
 
-func TestUpdateAndTransactionHooks(t *testing.T) {
+func TestHooksUpdateAndTransaction(t *testing.T) {
 	var events []string
 	var commitHookReturn = 0
 
@@ -73,4 +74,32 @@ func TestUpdateAndTransactionHooks(t *testing.T) {
 	if !reflect.DeepEqual(events, expected) {
 		t.Errorf("Expected notifications %v but got %v", expected, events)
 	}
+}
+
+func TestHooksNil(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+
+	driverName := fmt.Sprintf("sqlite3-%s", t.Name())
+
+	var driverConn *SQLiteConn
+	sql.Register(driverName, &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			driverConn = conn
+			return nil
+		},
+	})
+
+	db, err := sql.Open(driverName, tempFilename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Ping(); err != nil {
+		t.Fatal(err)
+	}
+
+	driverConn.RegisterCommitHook(nil)
+	driverConn.RegisterRollbackHook(nil)
+	driverConn.RegisterUpdateHook(nil)
 }

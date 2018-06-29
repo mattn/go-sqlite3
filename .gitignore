@@ -13,6 +13,7 @@ tools/upgrade/*.h
 # Exclude upgrade binary
 cmd/upgrade/upgrade
 
+debug.test
 .DS_Store
 .DS_Store?
 ._*

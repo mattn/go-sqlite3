@@ -222,7 +222,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 // ColumnTypeDatabaseTypeName implement RowsColumnTypeDatabaseTypeName.
 func (rc *SQLiteRows) ColumnTypeDatabaseTypeName(i int) string {
-	return C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i)))
+	return strings.ToUpper(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
 }
 
 // ColumnTypeNullable implement RowsColumnTypeNullable.
@@ -231,10 +231,12 @@ func (rc *SQLiteRows) ColumnTypeNullable(i int) (nullable, ok bool) {
 }
 
 // ColumnTypeScanType implement RowsColumnTypeScanType.
+// This can only be successfull retrieved while within Next()
+// The underlying SQLite function depends upon sqlite_step to be called.
 func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
 	switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
 	case C.SQLITE_INTEGER:
-		switch C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))) {
+		switch strings.ToLower(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i)))) {
 		case "timestamp", "datetime", "date":
 			return reflect.TypeOf(time.Time{})
 		case "boolean":
