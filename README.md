@@ -473,7 +473,7 @@ For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatial
 
     For more information see [#289](https://github.com/mattn/go-sqlite3/issues/289)
 
-- Trying to execure a `.` (dot) command throws an error.
+- Trying to execute a `.` (dot) command throws an error.
 
     Error: `Error: near ".": syntax error`
     Dot command are part of SQLite3 CLI not of this library.
