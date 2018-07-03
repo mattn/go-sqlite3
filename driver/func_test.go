@@ -9,11 +9,60 @@ package sqlite3
 
 import (
 	"database/sql"
+	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
 	"testing"
 )
+
+func TestInvalidFunctionRegistration(t *testing.T) {
+	afn := "func"
+	zeroArgsFn := func(a bool) {}
+	nonErrorArgsFn := func(a bool) (int, int) { return 0, 0 }
+
+	sql.Register(fmt.Sprintf("sqlite3-%s-afn", t.Name()), &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			if err := conn.RegisterFunc("afn", afn, true); err != nil {
+				return err
+			}
+
+			return nil
+		},
+	})
+
+	sql.Register(fmt.Sprintf("sqlite3-%s-zeroArgsFn", t.Name()), &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			if err := conn.RegisterFunc("zeroArgsFn", zeroArgsFn, true); err != nil {
+				return err
+			}
+
+			return nil
+		},
+	})
+
+	sql.Register(fmt.Sprintf("sqlite3-%s-nonErrorArgsFn", t.Name()), &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			if err := conn.RegisterFunc("nonErrorArgsFn", nonErrorArgsFn, true); err != nil {
+				return err
+			}
+
+			return nil
+		},
+	})
+
+	for _, s := range []string{"sqlite3-%s-afn", "sqlite3-%s-zeroArgsFn", "sqlite3-%s-nonErrorArgsFn"} {
+		db, err := sql.Open(fmt.Sprintf(s, t.Name()), ":memory:")
+		if err != nil {
+			t.Fatal("Failed to open database:", err)
+		}
+		defer db.Close()
+
+		if err := db.Ping(); err == nil {
+			t.Fatal("Expected error from RegisterFunc")
+		}
+	}
+}
 
 func TestFunctionRegistration(t *testing.T) {
 	addi8_16_32 := func(a int8, b int16) int32 { return int32(a) + int32(b) }

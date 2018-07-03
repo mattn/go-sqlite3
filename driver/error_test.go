@@ -238,5 +238,4 @@ func TestExtendedErrorCodes_Unique(t *testing.T) {
 				extended, expected)
 		}
 	}
-
 }
