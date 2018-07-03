@@ -319,7 +319,6 @@ func TestInsert(t *testing.T) {
 
 func TestUpsert(t *testing.T) {
 	_, n, _ := Version()
-	fmt.Printf("Version: %d\n", n)
 	if !(n >= 3024000) {
 		t.Skip("UPSERT requires sqlite3 => 3.24.0")
 	}
