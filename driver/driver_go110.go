@@ -22,6 +22,9 @@ var (
 // The two-step sequence allows drivers to parse the name just once and also provides
 // access to per-Conn contexts.
 func (d *SQLiteDriver) OpenConnector(dsn string) (driver.Connector, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	cfg, err := ParseDSN(dsn)
 	if err != nil {
 		return nil, err

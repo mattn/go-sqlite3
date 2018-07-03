@@ -33,6 +33,7 @@ import "C"
 import (
 	"database/sql"
 	"database/sql/driver"
+	"sync"
 )
 
 var (
@@ -45,6 +46,7 @@ func init() {
 
 // SQLiteDriver implement sql.Driver.
 type SQLiteDriver struct {
+	mu          sync.Mutex
 	Config      *Config
 	Extensions  []string
 	ConnectHook func(*SQLiteConn) error
@@ -52,6 +54,9 @@ type SQLiteDriver struct {
 
 // Open database and return a new connection.
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	cfg, err := ParseDSN(dsn)
 	if err != nil {
 		return nil, err
