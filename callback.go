@@ -29,8 +29,11 @@ import (
 	"math"
 	"reflect"
 	"sync"
+	"time"
 	"unsafe"
 )
+
+var timetype = reflect.TypeOf(time.Now())
 
 //export callbackTrampoline
 func callbackTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
@@ -243,8 +246,38 @@ func callbackArg(typ reflect.Type) (callbackArgConverter, error) {
 		c := callbackArgCast{callbackArgFloat64, typ}
 		return c.Run, nil
 	default:
-		return nil, fmt.Errorf("don't know how to convert to %s", typ)
+		switch typ {
+		case timetype:
+			return callbackArgTime, nil
+		default:
+			return nil, fmt.Errorf("don't know how to convert to %s", typ)
+		}
 	}
+}
+
+func callbackArgTime(v *C.sqlite3_value) (reflect.Value, error) {
+	var t time.Time
+	var err error
+	var c *C.char
+	switch C.sqlite3_value_type(v) {
+	case C.SQLITE_BLOB:
+		c = (*C.char)(C.sqlite3_value_blob(v))
+	case C.SQLITE_TEXT:
+		c = (*C.char)(unsafe.Pointer(C.sqlite3_value_text(v)))
+	default:
+		return reflect.Value{}, errors.New("argument must be BLOB or TEXT")
+	}
+	lc := C.sqlite3_value_bytes(v)
+	tv := C.GoStringN(c, lc)
+	for _, format := range SQLiteTimestampFormats {
+		if t, err = time.ParseInLocation(format, tv, time.UTC); err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return reflect.Value{}, errors.New("argument could not be parsed into known Timestamp formats")
+	}
+	return reflect.ValueOf(t), nil
 }
 
 func callbackConvertArgs(argv []*C.sqlite3_value, converters []callbackArgConverter, variadic callbackArgConverter) ([]reflect.Value, error) {
@@ -335,6 +368,12 @@ func callbackRetNil(ctx *C.sqlite3_context, v reflect.Value) error {
 	return nil
 }
 
+func callbackRetTime(ctx *C.sqlite3_context, v reflect.Value) error {
+	rv := v.Interface().(time.Time)
+	C._sqlite3_result_text(ctx, C.CString(rv.Format(SQLiteTimestampFormats[0])))
+	return nil
+}
+
 func callbackRet(typ reflect.Type) (callbackRetConverter, error) {
 	switch typ.Kind() {
 	case reflect.Interface:
@@ -355,7 +394,12 @@ func callbackRet(typ reflect.Type) (callbackRetConverter, error) {
 	case reflect.Float32, reflect.Float64:
 		return callbackRetFloat, nil
 	default:
-		return nil, fmt.Errorf("don't know how to convert to %s", typ)
+		switch typ {
+		case timetype:
+			return callbackRetTime, nil
+		default:
+			return nil, fmt.Errorf("don't know how to convert to %s", typ)
+		}
 	}
 }
 
