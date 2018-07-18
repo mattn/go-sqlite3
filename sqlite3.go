@@ -1883,11 +1883,11 @@ func (rc *SQLiteRows) DeclTypes() []string {
 
 // Next move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
+	rc.s.mu.Lock()
+	defer rc.s.mu.Unlock()
 	if rc.s.closed {
 		return io.EOF
 	}
-	rc.s.mu.Lock()
-	defer rc.s.mu.Unlock()
 	rv := C.sqlite3_step(rc.s.s)
 	if rv == C.SQLITE_DONE {
 		return io.EOF
