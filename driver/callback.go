@@ -100,7 +100,7 @@ func newHandle(db *SQLiteConn, v interface{}) uintptr {
 	return i
 }
 
-func lookupHandle(handle uintptr) interface{} {
+func lookupHandleVal(handle uintptr) handleVal {
 	handleLock.Lock()
 	defer handleLock.Unlock()
 	r, ok := handleVals[handle]
@@ -111,7 +111,11 @@ func lookupHandle(handle uintptr) interface{} {
 			panic("invalid handle")
 		}
 	}
-	return r.val
+	return r
+}
+
+func lookupHandle(handle uintptr) interface{} {
+	return lookupHandleVal(handle).val
 }
 
 func deleteHandles(db *SQLiteConn) {

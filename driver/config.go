@@ -627,6 +627,10 @@ func (cfg *Config) FormatDSN() string {
 		}
 	}
 
+	if cfg.BusyTimeout > 0 {
+		params.Set("timeout", cfg.BusyTimeout.String())
+	}
+
 	if len(cfg.TransactionLock.String()) > 0 && cfg.TransactionLock != TxLockDeferred {
 		params.Set("txlock", cfg.TransactionLock.String())
 	}
@@ -756,13 +760,15 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 	}
 
 	// Set SQLITE Busy Timeout Handler
-	rv = C.sqlite3_busy_timeout(db, C.int(cfg.BusyTimeout))
-	if rv != C.SQLITE_OK {
-		// Failed to set busy timeout
-		// close the database and return the error
-		C.sqlite3_close_v2(db)
+	if cfg.BusyTimeout > 0 {
+		rv = C.sqlite3_busy_timeout(db, C.int(cfg.BusyTimeout))
+		if rv != C.SQLITE_OK {
+			// Failed to set busy timeout
+			// close the database and return the error
+			C.sqlite3_close_v2(db)
 
-		return nil, Error{Code: ErrNo(rv)}
+			return nil, Error{Code: ErrNo(rv)}
+		}
 	}
 
 	// Create basic connection

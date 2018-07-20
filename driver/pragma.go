@@ -8,6 +8,7 @@
 package sqlite3
 
 const (
+	PRAGMA_SSE_KEY                 = "key"
 	PRAGMA_AUTO_VACUUM             = "auto_vacuum"
 	PRAGMA_CASE_SENSITIVE_LIKE     = "case_sensitive_like"
 	PRAGMA_DEFER_FOREIGN_KEYS      = "defer_foreign_keys"
