@@ -9,6 +9,10 @@ Before creating a new Issue, please check first if a similar Issue [already exis
 By contributing to this project, you share your code under the MIT License, as specified in the LICENSE file.
 Don't forget to add yourself to the AUTHORS file.
 
+### Errors
+
+Errors are preferred to be started with and fully in lower case, with the exception only to names in which uppercase letters are common. For example: NULL, SQLite Go-SQLite3 or function names.
+
 ### Code Review
 
 Everyone is invited to review and comment on pull requests.
