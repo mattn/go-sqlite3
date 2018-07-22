@@ -36,7 +36,7 @@ func TestHooksUpdateAndTransaction(t *testing.T) {
 	})
 	db, err := sql.Open("sqlite3_UpdateHook", ":memory:")
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -49,14 +49,14 @@ func TestHooksUpdateAndTransaction(t *testing.T) {
 	for _, statement := range statements {
 		_, err = db.Exec(statement)
 		if err != nil {
-			t.Fatalf("Unable to prepare test data [%v]: %v", statement, err)
+			t.Fatalf("unable to prepare test data [%v]: %v", statement, err)
 		}
 	}
 
 	commitHookReturn = 1
 	_, err = db.Exec("insert into foo values (5)")
 	if err == nil {
-		t.Error("Commit hook failed to rollback transaction")
+		t.Error("commit hook failed to rollback transaction")
 	}
 
 	var expected = []string{
@@ -72,7 +72,7 @@ func TestHooksUpdateAndTransaction(t *testing.T) {
 		"rollback",
 	}
 	if !reflect.DeepEqual(events, expected) {
-		t.Errorf("Expected notifications %v but got %v", expected, events)
+		t.Errorf("expected notifications %v but got %v", expected, events)
 	}
 }
 

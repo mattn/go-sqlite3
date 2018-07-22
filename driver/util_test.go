@@ -14,6 +14,6 @@ import (
 func TestVersion(t *testing.T) {
 	s, n, id := Version()
 	if s == "" || n == 0 || id == "" {
-		t.Errorf("Version failed %q, %d, %q\n", s, n, id)
+		t.Errorf("version failed %q, %d, %q\n", s, n, id)
 	}
 }

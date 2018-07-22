@@ -24,7 +24,7 @@ func init() {
 
 type SQLiteDriver struct{}
 
-var errCgoDisabled = errors.New("Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to be enabled.")
+var errCgoDisabled = errors.New("binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to be enabled.")
 
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	return nil, errCgoDisabled

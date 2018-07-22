@@ -41,7 +41,7 @@ func TestIntrospectFunctionList(t *testing.T) {
 	}
 
 	if len(list) == 0 {
-		t.Fatal("Introspect: No Function List Available")
+		t.Fatal("introspect: No Function List Available")
 	}
 }
 
@@ -71,7 +71,7 @@ func TestIntrospectModuleList(t *testing.T) {
 	}
 
 	if len(list) == 0 {
-		t.Fatal("Introspect: No Module List Available")
+		t.Fatal("introspect: No Module List Available")
 	}
 }
 
@@ -101,6 +101,6 @@ func TestIntrospectPRAGMAList(t *testing.T) {
 	}
 
 	if len(list) == 0 {
-		t.Fatal("Introspect: No PRAGMA List Available")
+		t.Fatal("introspect: No PRAGMA List Available")
 	}
 }

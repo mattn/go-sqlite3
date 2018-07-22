@@ -39,10 +39,10 @@ func TestLimit(t *testing.T) {
 	}
 
 	if rv := driverConn.SetLimit(SQLITE_LIMIT_TRIGGER_DEPTH, 5); rv != 1000 && rv != -1 {
-		t.Fatalf("Unable to set limit; %d", rv)
+		t.Fatalf("unable to set limit; %d", rv)
 	}
 
 	if limit := driverConn.GetLimit(SQLITE_LIMIT_TRIGGER_DEPTH); limit != 5 {
-		t.Fatal("Limit was not set correctly")
+		t.Fatal("limit was not set correctly")
 	}
 }

@@ -38,7 +38,7 @@ func TestParseDSN(t *testing.T) {
 		}
 		if c != nil {
 			if cfg.Database != c.Database {
-				t.Fatalf("Failed to parse database uri; expected: %s, got: %s", c.Database, cfg.Database)
+				t.Fatalf("failed to parse database uri; expected: %s, got: %s", c.Database, cfg.Database)
 			}
 		}
 	}
@@ -60,13 +60,13 @@ func TestParseDSN(t *testing.T) {
 			t.Fatal(err)
 		}
 		if cfg.Authentication.Username != c.Authentication.Username {
-			t.Fatalf("Failed to parse 'user'; expected: %s, got %s", c.Authentication.Username, cfg.Authentication.Username)
+			t.Fatalf("failed to parse 'user'; expected: %s, got %s", c.Authentication.Username, cfg.Authentication.Username)
 		}
 		if cfg.Authentication.Password != c.Authentication.Password {
-			t.Fatalf("Failed to parse 'pass'; expected: %s, got %s", c.Authentication.Password, cfg.Authentication.Password)
+			t.Fatalf("failed to parse 'pass'; expected: %s, got %s", c.Authentication.Password, cfg.Authentication.Password)
 		}
 		if cfg.Authentication.Salt != c.Authentication.Salt {
-			t.Fatalf("Failed to parse 'salt'; expected: %s, got %s", c.Authentication.Salt, cfg.Authentication.Salt)
+			t.Fatalf("failed to parse 'salt'; expected: %s, got %s", c.Authentication.Salt, cfg.Authentication.Salt)
 		}
 	}
 
@@ -131,15 +131,15 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range cryptCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'crypt'")
+			t.Fatal("failed to parse 'crypt'")
 		}
 		if c != nil {
 			if reflect.TypeOf(cfg.Authentication.Encoder).String() != reflect.TypeOf(c.Authentication.Encoder).String() {
-				t.Fatal("Failed to parse 'crypt'")
+				t.Fatal("failed to parse 'crypt'")
 			}
 			if len(cfg.Authentication.Salt) > 0 {
 				if cfg.Authentication.Salt != c.Authentication.Salt {
-					t.Fatal("Failed to parse: 'salt'")
+					t.Fatal("failed to parse: 'salt'")
 				}
 			}
 		}
@@ -159,11 +159,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range cacheCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'cache'")
+			t.Fatal("failed to parse 'cache'")
 		}
 		if c != nil {
 			if cfg.Cache != c.Cache {
-				t.Fatalf("Failed to parse 'cache'; expected: %d, got: %d", c.Cache, cfg.Cache)
+				t.Fatalf("failed to parse 'cache'; expected: %d, got: %d", c.Cache, cfg.Cache)
 			}
 		}
 	}
@@ -182,11 +182,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range immutableCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'immutable'")
+			t.Fatal("failed to parse 'immutable'")
 		}
 		if c != nil {
 			if cfg.Immutable != c.Immutable {
-				t.Fatalf("Failed to parse 'immutable'; expected: %t, got: %t", c.Immutable, cfg.Immutable)
+				t.Fatalf("failed to parse 'immutable'; expected: %t, got: %t", c.Immutable, cfg.Immutable)
 			}
 		}
 	}
@@ -211,11 +211,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range modeCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'mode'")
+			t.Fatal("failed to parse 'mode'")
 		}
 		if c != nil {
 			if cfg.Mode != c.Mode {
-				t.Fatalf("Failed to parse 'mode'; expected: %d, got: %d", c.Mode, cfg.Mode)
+				t.Fatalf("failed to parse 'mode'; expected: %d, got: %d", c.Mode, cfg.Mode)
 			}
 		}
 	}
@@ -238,7 +238,7 @@ func TestParseDSN(t *testing.T) {
 		}
 		if c != nil {
 			if cfg.Mutex != c.Mutex {
-				t.Fatalf("Failed to parse 'mutex'; expected: %d, got: %d", c.Mutex, cfg.Mutex)
+				t.Fatalf("failed to parse 'mutex'; expected: %d, got: %d", c.Mutex, cfg.Mutex)
 			}
 		}
 	}
@@ -262,7 +262,7 @@ func TestParseDSN(t *testing.T) {
 		}
 		if c != nil {
 			if cfg.TimeZone.String() != c.TimeZone.String() {
-				t.Fatal("Failed to parse timezone")
+				t.Fatal("failed to parse timezone")
 			}
 		}
 	}
@@ -288,7 +288,7 @@ func TestParseDSN(t *testing.T) {
 		}
 		if c != nil {
 			if cfg.TransactionLock != c.TransactionLock {
-				t.Fatalf("Failed to parse txlock; expected: %s, got: %s", c.TransactionLock, cfg.Database)
+				t.Fatalf("failed to parse txlock; expected: %s, got: %s", c.TransactionLock, cfg.Database)
 			}
 		}
 	}
@@ -310,11 +310,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range vacuumCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'autovacuum, vacuum'")
+			t.Fatal("failed to parse 'autovacuum, vacuum'")
 		}
 		if c != nil {
 			if cfg.AutoVacuum != c.AutoVacuum {
-				t.Fatalf("Failed to parse 'autovacuum'; expected: %s, got: %s", c.AutoVacuum, cfg.AutoVacuum)
+				t.Fatalf("failed to parse 'autovacuum'; expected: %s, got: %s", c.AutoVacuum, cfg.AutoVacuum)
 			}
 		}
 	}
@@ -330,11 +330,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range timeoutCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'timeout'")
+			t.Fatal("failed to parse 'timeout'")
 		}
 		if c != nil {
 			if cfg.BusyTimeout != c.BusyTimeout {
-				t.Fatalf("Failed to parse 'timeout'; expected: %d, got: %d", c.BusyTimeout, cfg.BusyTimeout)
+				t.Fatalf("failed to parse 'timeout'; expected: %d, got: %d", c.BusyTimeout, cfg.BusyTimeout)
 			}
 		}
 	}
@@ -353,11 +353,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range cslikeCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'cslike'")
+			t.Fatal("failed to parse 'cslike'")
 		}
 		if c != nil {
 			if cfg.CaseSensitiveLike != c.CaseSensitiveLike {
-				t.Fatalf("Failed to parse 'cslike'; expected: %t, got: %t", c.CaseSensitiveLike, cfg.CaseSensitiveLike)
+				t.Fatalf("failed to parse 'cslike'; expected: %t, got: %t", c.CaseSensitiveLike, cfg.CaseSensitiveLike)
 			}
 		}
 	}
@@ -376,11 +376,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range dfkCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'defer_fk'")
+			t.Fatal("failed to parse 'defer_fk'")
 		}
 		if c != nil {
 			if cfg.DeferForeignKeys != c.DeferForeignKeys {
-				t.Fatalf("Failed to parse 'defer_fk'; expected: %t, got: %t", c.DeferForeignKeys, cfg.DeferForeignKeys)
+				t.Fatalf("failed to parse 'defer_fk'; expected: %t, got: %t", c.DeferForeignKeys, cfg.DeferForeignKeys)
 			}
 		}
 	}
@@ -399,11 +399,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range fkCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'fk'")
+			t.Fatal("failed to parse 'fk'")
 		}
 		if c != nil {
 			if cfg.ForeignKeyConstraints != c.ForeignKeyConstraints {
-				t.Fatalf("Failed to parse 'fk'; expected: %t, got: %t", c.ForeignKeyConstraints, cfg.ForeignKeyConstraints)
+				t.Fatalf("failed to parse 'fk'; expected: %t, got: %t", c.ForeignKeyConstraints, cfg.ForeignKeyConstraints)
 			}
 		}
 	}
@@ -422,11 +422,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range iCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'ignore_check_constraints'")
+			t.Fatal("failed to parse 'ignore_check_constraints'")
 		}
 		if c != nil {
 			if cfg.IgnoreCheckConstraints != c.IgnoreCheckConstraints {
-				t.Fatalf("Failed to parse 'ignore_check_constraints'; expected: %t, got: %t", c.IgnoreCheckConstraints, cfg.IgnoreCheckConstraints)
+				t.Fatalf("failed to parse 'ignore_check_constraints'; expected: %t, got: %t", c.IgnoreCheckConstraints, cfg.IgnoreCheckConstraints)
 			}
 		}
 	}
@@ -451,11 +451,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range syncCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'sync'")
+			t.Fatal("failed to parse 'sync'")
 		}
 		if c != nil {
 			if cfg.Synchronous != c.Synchronous {
-				t.Fatalf("Failed to parse 'sync'; expected: %s, got: %s", c.Synchronous, cfg.Synchronous)
+				t.Fatalf("failed to parse 'sync'; expected: %s, got: %s", c.Synchronous, cfg.Synchronous)
 			}
 		}
 	}
@@ -487,15 +487,15 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range journalCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'journal'")
+			t.Fatal("failed to parse 'journal'")
 		}
 		if c != nil {
 			if cfg.JournalMode != c.JournalMode {
-				t.Fatalf("Failed to parse 'journal'; expected: %s, got: %s", c.JournalMode, cfg.JournalMode)
+				t.Fatalf("failed to parse 'journal'; expected: %s, got: %s", c.JournalMode, cfg.JournalMode)
 			} else {
 				if c.JournalMode == JournalModeWAL {
 					if cfg.Synchronous != c.Synchronous {
-						t.Fatal("Failed to auto adjust Synchronous mode to normal")
+						t.Fatal("failed to auto adjust Synchronous mode to normal")
 					}
 				}
 			}
@@ -516,11 +516,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range lockingModeCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'locking_mode'")
+			t.Fatal("failed to parse 'locking_mode'")
 		}
 		if c != nil {
 			if cfg.LockingMode != c.LockingMode {
-				t.Fatalf("Failed to parse 'locking_mode'; expected: %s, got: %s", c.LockingMode, cfg.LockingMode)
+				t.Fatalf("failed to parse 'locking_mode'; expected: %s, got: %s", c.LockingMode, cfg.LockingMode)
 			}
 		}
 	}
@@ -539,11 +539,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range qCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'query_only'")
+			t.Fatal("failed to parse 'query_only'")
 		}
 		if c != nil {
 			if cfg.QueryOnly != c.QueryOnly {
-				t.Fatalf("Failed to parse 'query_only'; expected: %t, got: %t", c.QueryOnly, cfg.QueryOnly)
+				t.Fatalf("failed to parse 'query_only'; expected: %t, got: %t", c.QueryOnly, cfg.QueryOnly)
 			}
 		}
 	}
@@ -562,11 +562,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range rtCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'recursive_triggers'")
+			t.Fatal("failed to parse 'recursive_triggers'")
 		}
 		if c != nil {
 			if cfg.RecursiveTriggers != c.RecursiveTriggers {
-				t.Fatalf("Failed to parse 'recursive_triggers'; expected: %t, got: %t", c.RecursiveTriggers, cfg.RecursiveTriggers)
+				t.Fatalf("failed to parse 'recursive_triggers'; expected: %t, got: %t", c.RecursiveTriggers, cfg.RecursiveTriggers)
 			}
 		}
 	}
@@ -588,11 +588,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range scCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'secure_delete'")
+			t.Fatal("failed to parse 'secure_delete'")
 		}
 		if c != nil {
 			if cfg.SecureDelete != c.SecureDelete {
-				t.Fatalf("Failed to parse 'secure_delete'; expected: %s, got: %s", c.SecureDelete, cfg.SecureDelete)
+				t.Fatalf("failed to parse 'secure_delete'; expected: %s, got: %s", c.SecureDelete, cfg.SecureDelete)
 			}
 		}
 	}
@@ -611,11 +611,11 @@ func TestParseDSN(t *testing.T) {
 	for dsn, c := range wsCases {
 		cfg, err := ParseDSN(dsn)
 		if err != nil && c != nil {
-			t.Fatal("Failed to parse 'writable_schema'")
+			t.Fatal("failed to parse 'writable_schema'")
 		}
 		if c != nil {
 			if cfg.WriteableSchema != c.WriteableSchema {
-				t.Fatalf("Failed to parse 'writable_schema'; expected: %t, got: %t", c.WriteableSchema, cfg.WriteableSchema)
+				t.Fatalf("failed to parse 'writable_schema'; expected: %t, got: %t", c.WriteableSchema, cfg.WriteableSchema)
 			}
 		}
 	}
@@ -727,7 +727,7 @@ func TestFormatDSN(t *testing.T) {
 
 	for dsn, cfg := range cases {
 		if cfg.FormatDSN() != dsn {
-			t.Fatalf("Failed to format DSN; expected: %s, got: %s", dsn, cfg.FormatDSN())
+			t.Fatalf("failed to format DSN; expected: %s, got: %s", dsn, cfg.FormatDSN())
 		}
 	}
 }

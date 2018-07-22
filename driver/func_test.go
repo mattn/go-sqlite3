@@ -54,12 +54,12 @@ func TestInvalidFunctionRegistration(t *testing.T) {
 	for _, s := range []string{"sqlite3-%s-afn", "sqlite3-%s-zeroArgsFn", "sqlite3-%s-nonErrorArgsFn"} {
 		db, err := sql.Open(fmt.Sprintf(s, t.Name()), ":memory:")
 		if err != nil {
-			t.Fatal("Failed to open database:", err)
+			t.Fatal("failed to open database:", err)
 		}
 		defer db.Close()
 
 		if err := db.Ping(); err == nil {
-			t.Fatal("Expected error from RegisterFunc")
+			t.Fatal("expected error from RegisterFunc")
 		}
 	}
 }
@@ -140,7 +140,7 @@ func TestFunctionRegistration(t *testing.T) {
 	})
 	db, err := sql.Open("sqlite3_FunctionRegistration", ":memory:")
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -172,9 +172,9 @@ func TestFunctionRegistration(t *testing.T) {
 		ret := reflect.New(reflect.TypeOf(op.expected))
 		err = db.QueryRow(op.query).Scan(ret.Interface())
 		if err != nil {
-			t.Errorf("Query %q failed: %s", op.query, err)
+			t.Errorf("query %q failed: %s", op.query, err)
 		} else if !reflect.DeepEqual(ret.Elem().Interface(), op.expected) {
-			t.Errorf("Query %q returned wrong value: got %v (%T), want %v (%T)", op.query, ret.Elem().Interface(), ret.Elem().Interface(), op.expected, op.expected)
+			t.Errorf("query %q returned wrong value: got %v (%T), want %v (%T)", op.query, ret.Elem().Interface(), ret.Elem().Interface(), op.expected, op.expected)
 		}
 	}
 }
@@ -205,19 +205,19 @@ func TestAggregatorRegistration(t *testing.T) {
 	})
 	db, err := sql.Open("sqlite3_AggregatorRegistration", ":memory:")
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("create table foo (department integer, profits integer)")
 	if err != nil {
 		// trace feature is not implemented
-		t.Skip("Failed to create table:", err)
+		t.Skip("failed to create table:", err)
 	}
 
 	_, err = db.Exec("insert into foo values (1, 10), (1, 20), (2, 42)")
 	if err != nil {
-		t.Fatal("Failed to insert records:", err)
+		t.Fatal("failed to insert records:", err)
 	}
 
 	tests := []struct {
@@ -231,10 +231,10 @@ func TestAggregatorRegistration(t *testing.T) {
 		var ret int64
 		err = db.QueryRow("select customSum(profits) from foo where department = $1 group by department", test.dept).Scan(&ret)
 		if err != nil {
-			t.Fatal("Query failed:", err)
+			t.Fatal("query failed:", err)
 		}
 		if ret != test.sum {
-			t.Fatalf("Custom sum returned wrong value, got %d, want %d", ret, test.sum)
+			t.Fatalf("custom sum returned wrong value, got %d, want %d", ret, test.sum)
 		}
 	}
 }
@@ -272,7 +272,7 @@ func TestCollationRegistration(t *testing.T) {
 
 	db, err := sql.Open("sqlite3_CollationRegistration", ":memory:")
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -286,7 +286,7 @@ func TestCollationRegistration(t *testing.T) {
 	}
 	for _, stmt := range populate {
 		if _, err := db.Exec(stmt); err != nil {
-			t.Fatal("Failed to populate test DB:", err)
+			t.Fatal("failed to populate test DB:", err)
 		}
 	}
 
@@ -339,23 +339,23 @@ func TestCollationRegistration(t *testing.T) {
 	for _, op := range ops {
 		rows, err := db.Query(op.query)
 		if err != nil {
-			t.Fatalf("Query %q failed: %s", op.query, err)
+			t.Fatalf("query %q failed: %s", op.query, err)
 		}
 		got := []string{}
 		defer rows.Close()
 		for rows.Next() {
 			var s string
 			if err = rows.Scan(&s); err != nil {
-				t.Fatalf("Reading row for %q: %s", op.query, err)
+				t.Fatalf("reading row for %q: %s", op.query, err)
 			}
 			got = append(got, s)
 		}
 		if err = rows.Err(); err != nil {
-			t.Fatalf("Reading rows for %q: %s", op.query, err)
+			t.Fatalf("reading rows for %q: %s", op.query, err)
 		}
 
 		if !reflect.DeepEqual(got, op.want) {
-			t.Fatalf("Unexpected output from %q\ngot:\n%s\n\nwant:\n%s", op.query, strings.Join(got, "\n"), strings.Join(op.want, "\n"))
+			t.Fatalf("unexpected output from %q\ngot:\n%s\n\nwant:\n%s", op.query, strings.Join(got, "\n"), strings.Join(op.want, "\n"))
 		}
 	}
 }

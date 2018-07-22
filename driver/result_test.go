@@ -56,11 +56,11 @@ func TestResultColumnTypeNULL(t *testing.T) {
 
 	ins, err := db.Prepare("INSERT INTO type (t) VALUES(?)")
 	if err != nil {
-		t.Fatalf("Prepare Failed: %v", err)
+		t.Fatalf("prepare Failed: %v", err)
 	}
 
 	if ins.Exec(nil); err != nil {
-		t.Fatalf("Insert Failed: %v", err)
+		t.Fatalf("insert Failed: %v", err)
 	}
 
 	rows, err := db.Query("SELECT t FROM type LIMIT 1;")
@@ -76,7 +76,7 @@ func TestResultColumnTypeNULL(t *testing.T) {
 		}
 
 		if types[0].DatabaseTypeName() != "TEXT" {
-			t.Fatalf("Invalid column type; expected: %s, got: %s", "TEXT", types[0].DatabaseTypeName())
+			t.Fatalf("invalid column type; expected: %s, got: %s", "TEXT", types[0].DatabaseTypeName())
 		}
 
 		if v := types[0].ScanType(); v != reflect.TypeOf(nil) {
@@ -101,11 +101,11 @@ func testColumnType(t *testing.T, dtype string, def interface{}, rtype reflect.T
 
 	ins, err := db.Prepare("INSERT INTO type (t) VALUES(?)")
 	if err != nil {
-		t.Fatalf("Prepare Failed: %v", err)
+		t.Fatalf("prepare Failed: %v", err)
 	}
 
 	if ins.Exec(def); err != nil {
-		t.Fatalf("Insert Failed: %v", err)
+		t.Fatalf("insert Failed: %v", err)
 	}
 
 	rows, err := db.Query("SELECT t FROM type LIMIT 1;")
@@ -121,11 +121,11 @@ func testColumnType(t *testing.T, dtype string, def interface{}, rtype reflect.T
 		}
 
 		if types[0].DatabaseTypeName() != dtype {
-			t.Fatalf("Invalid column type; expected: %s, got: %s", dtype, types[0].DatabaseTypeName())
+			t.Fatalf("invalid column type; expected: %s, got: %s", dtype, types[0].DatabaseTypeName())
 		}
 
 		if v := types[0].ScanType(); v != rtype {
-			t.Fatalf("Wrong scan type returned, expected: %v; got: %v", rtype, v)
+			t.Fatalf("wrong scan type returned, expected: %v; got: %v", rtype, v)
 		}
 	}
 }

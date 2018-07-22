@@ -719,7 +719,7 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 	}
 
 	if len(cfg.Database) == 0 || cfg.Database == "file:" {
-		return nil, fmt.Errorf("No database configured")
+		return nil, fmt.Errorf("no database configured")
 	}
 
 	var db *C.sqlite3
@@ -1039,7 +1039,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 			var ok bool
 
 			if enc, ok = cryptEncoders[val]; !ok {
-				return nil, fmt.Errorf("Unknown CryptEncoder(%s); please register first with 'RegisterCryptEncoder()'", val)
+				return nil, fmt.Errorf("unknown CryptEncoder(%s); please register first with 'RegisterCryptEncoder()'", val)
 			}
 
 			cfg.Authentication.Encoder = enc
@@ -1057,7 +1057,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "private":
 					cfg.Cache = CacheModePrivate
 				default:
-					return nil, fmt.Errorf("Unknown cache mode: %v, expecting value of 'shared, private'", val)
+					return nil, fmt.Errorf("unknown cache mode: %v, expecting value of 'shared, private'", val)
 				}
 			}
 
@@ -1070,7 +1070,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "1", "yes", "true", "on":
 					cfg.Immutable = true
 				default:
-					return nil, fmt.Errorf("Unknown immutable: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+					return nil, fmt.Errorf("unknown immutable: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 				}
 			}
 
@@ -1087,7 +1087,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "MEMORY":
 					cfg.Mode = ModeMemory
 				default:
-					return nil, fmt.Errorf("Unknown mode: %v, expecting value of 'ro, rw, rwc, memory'", val)
+					return nil, fmt.Errorf("unknown mode: %v, expecting value of 'ro, rw, rwc, memory'", val)
 				}
 			}
 
@@ -1100,7 +1100,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "full":
 					cfg.Mutex = MutexFull
 				default:
-					return nil, fmt.Errorf("Invalid mutex: %v, expecting value of 'no, full", val)
+					return nil, fmt.Errorf("invalid mutex: %v, expecting value of 'no, full", val)
 				}
 			}
 
@@ -1113,7 +1113,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				default:
 					cfg.TimeZone, err = time.LoadLocation(val)
 					if err != nil {
-						return nil, fmt.Errorf("Invalid tz: %v: %v", val, err)
+						return nil, fmt.Errorf("invalid tz: %v: %v", val, err)
 					}
 				}
 			}
@@ -1129,7 +1129,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "deferred":
 					cfg.TransactionLock = TxLockDeferred
 				default:
-					return nil, fmt.Errorf("Invalid txlock: %v, expecting value of 'deferred, immediate, exclusive'", val)
+					return nil, fmt.Errorf("invalid txlock: %v, expecting value of 'deferred, immediate, exclusive'", val)
 				}
 			}
 
@@ -1144,7 +1144,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "2", "incremental":
 					cfg.AutoVacuum = AutoVacuumIncremental
 				default:
-					return nil, fmt.Errorf("Invalid auto_vacuum: %v, expecting value of '0 NONE 1 FULL 2 INCREMENTAL'", val)
+					return nil, fmt.Errorf("invalid auto_vacuum: %v, expecting value of '0 NONE 1 FULL 2 INCREMENTAL'", val)
 				}
 			}
 
@@ -1153,7 +1153,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				val := params.Get(k)
 				iv, err := strconv.ParseInt(val, 10, 64)
 				if err != nil {
-					return nil, fmt.Errorf("Invalid busy_timeout: %v: %v", val, err)
+					return nil, fmt.Errorf("invalid busy_timeout: %v: %v", val, err)
 				}
 
 				cfg.BusyTimeout, _ = time.ParseDuration(fmt.Sprintf("%dms", iv))
@@ -1168,7 +1168,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "1", "yes", "true", "on":
 					cfg.CaseSensitiveLike = true
 				default:
-					return nil, fmt.Errorf("Invalid case_sensitive_like: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+					return nil, fmt.Errorf("invalid case_sensitive_like: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 				}
 			}
 
@@ -1181,7 +1181,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "1", "yes", "true", "on":
 					cfg.DeferForeignKeys = true
 				default:
-					return nil, fmt.Errorf("Invalid defer_foreign_keys: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+					return nil, fmt.Errorf("invalid defer_foreign_keys: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 				}
 			}
 
@@ -1194,7 +1194,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "1", "yes", "true", "on":
 					cfg.ForeignKeyConstraints = true
 				default:
-					return nil, fmt.Errorf("Invalid foreign_keys: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+					return nil, fmt.Errorf("invalid foreign_keys: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 				}
 			}
 
@@ -1207,7 +1207,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "1", "yes", "true", "on":
 					cfg.IgnoreCheckConstraints = true
 				default:
-					return nil, fmt.Errorf("Invalid ignore_check_constraints: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+					return nil, fmt.Errorf("invalid ignore_check_constraints: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 				}
 			}
 
@@ -1226,7 +1226,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "3", "EXTRA":
 					cfg.Synchronous = SynchronousExtra
 				default:
-					return nil, fmt.Errorf("Invalid synchronous: %v, expecting value of '0 OFF 1 NORMAL 2 FULL 3 EXTRA'", val)
+					return nil, fmt.Errorf("invalid synchronous: %v, expecting value of '0 OFF 1 NORMAL 2 FULL 3 EXTRA'", val)
 				}
 			}
 
@@ -1243,7 +1243,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 					// See https://www.sqlite.org/pragma.html#pragma_synchronous
 					cfg.Synchronous = SynchronousNormal
 				default:
-					return nil, fmt.Errorf("Invalid journal: %v, expecting value of 'DELETE TRUNCATE PERSIST MEMORY WAL OFF'", val)
+					return nil, fmt.Errorf("invalid journal: %v, expecting value of 'DELETE TRUNCATE PERSIST MEMORY WAL OFF'", val)
 				}
 			}
 
@@ -1256,7 +1256,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "EXCLUSIVE":
 					cfg.LockingMode = LockingModeExclusive
 				default:
-					return nil, fmt.Errorf("Invalid locking_mode: %v, expecting value of 'NORMAL EXCLUSIVE", val)
+					return nil, fmt.Errorf("invalid locking_mode: %v, expecting value of 'NORMAL EXCLUSIVE", val)
 				}
 			}
 
@@ -1269,7 +1269,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "1", "yes", "true", "on":
 					cfg.QueryOnly = true
 				default:
-					return nil, fmt.Errorf("Invalid query_only: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+					return nil, fmt.Errorf("invalid query_only: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 				}
 			}
 
@@ -1282,7 +1282,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "1", "yes", "true", "on":
 					cfg.RecursiveTriggers = true
 				default:
-					return nil, fmt.Errorf("Invalid recursive_triggers: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+					return nil, fmt.Errorf("invalid recursive_triggers: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 				}
 			}
 
@@ -1297,7 +1297,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "fast":
 					cfg.SecureDelete = SecureDeleteFast
 				default:
-					return nil, fmt.Errorf("Invalid secure_delete: %v, expecting boolean value of '0 1 false true no yes off on fast'", val)
+					return nil, fmt.Errorf("invalid secure_delete: %v, expecting boolean value of '0 1 false true no yes off on fast'", val)
 				}
 			}
 
@@ -1309,7 +1309,7 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 				case "1", "yes", "true", "on":
 					cfg.WriteableSchema = true
 				default:
-					return nil, fmt.Errorf("Invalid writable_schema: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+					return nil, fmt.Errorf("invalid writable_schema: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 				}
 			}
 		}

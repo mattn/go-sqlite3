@@ -51,17 +51,17 @@ func TestEncoders(t *testing.T) {
 
 		if _, ok := enc.(CryptSaltedEncoder); ok {
 			if strings.Compare(enc.(CryptSaltedEncoder).Salt(), e.salt) != 0 {
-				t.Fatal("Salt Mismatch")
+				t.Fatal("salt mismatch")
 			}
 		}
 
 		h := enc.Encode([]byte("admin"), nil)
 		if strings.Compare(fmt.Sprintf("%x", h), e.expected) != 0 {
-			t.Fatalf("Invalid %s hash: expected: %s; got: %x", strings.ToUpper(e.enc), e.expected, h)
+			t.Fatalf("invalid %s hash: expected: %s; got: %x", strings.ToUpper(e.enc), e.expected, h)
 		}
 
 		if e.enc != enc.String() {
-			t.Fatalf("Invalid encoder; expected: %s, got: %s", e.enc, enc.String())
+			t.Fatalf("invalid encoder; expected: %s, got: %s", e.enc, enc.String())
 		}
 	}
 }

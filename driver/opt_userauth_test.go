@@ -161,11 +161,11 @@ func TestUserAuthCreateDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !a {
-		t.Fatal("UserAuth: User is not administrator")
+		t.Fatal("UserAuth: user is not administrator")
 	}
 
 	if enabled := c.AuthEnabled(); !enabled {
-		t.Fatal("UserAuth Not Enabled")
+		t.Fatal("UserAuth not enabled")
 	}
 }
 
@@ -182,26 +182,26 @@ func TestUserAuthLogin(t *testing.T) {
 	}
 	defer db2.Close()
 	if f1 != f2 {
-		t.Fatal("UserAuth: Database file mismatch")
+		t.Fatal("UserAuth: database file mismatch")
 	}
 
 	// Test lower level authentication
 	err = c2.Authenticate("admin", "admin")
 	if err != nil {
-		t.Fatalf("UserAuth: *SQLiteConn.Authenticate() Failed: %s", err)
+		t.Fatalf("UserAuth: *SQLiteConn.Authenticate() failed: %s", err)
 	}
 
 	// Test Login Failed
 	_, _, _, err = connect(t, f1, "admin", "invalid")
 	if err == nil {
-		t.Fatal("Login successful while expecting to fail")
+		t.Fatal("login successful while expecting to fail")
 	}
 	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal(err)
 	}
 	err = c2.Authenticate("admin", "invalid")
 	if err == nil {
-		t.Fatal("Login successful while expecting to fail")
+		t.Fatal("login successful while expecting to fail")
 	}
 	if err.(Error).Code != SQLITE_AUTH {
 		t.Fatal(err)
@@ -222,7 +222,7 @@ func TestUserAuthAddAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	// Check if user was created
@@ -281,7 +281,7 @@ func TestUserAuthAddUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	// Check if user was created
@@ -340,12 +340,12 @@ func TestUserAuthAddUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != SQLITE_AUTH {
-		t.Fatal("Created admin user while not allowed")
+		t.Fatal("created admin user while not allowed")
 	}
 
 	err = c2.AuthUserAdd("admin3", "admin3", true)
 	if err.(Error).Code != SQLITE_AUTH {
-		t.Fatal("Created admin user while not allowed")
+		t.Fatal("created admin user while not allowed")
 	}
 
 	// Try to create normal user while logged in as normal user
@@ -354,12 +354,12 @@ func TestUserAuthAddUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != SQLITE_AUTH {
-		t.Fatal("Created user while not allowed")
+		t.Fatal("created user while not allowed")
 	}
 
 	err = c2.AuthUserAdd("user4", "user4", false)
 	if err.(Error).Code != SQLITE_AUTH {
-		t.Fatal("Created user while not allowed")
+		t.Fatal("created user while not allowed")
 	}
 }
 
@@ -377,7 +377,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to modify password for admin")
+		t.Fatal("failed to modify password for admin")
 	}
 
 	// Modify password for current logged in admin
@@ -395,7 +395,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != SQLITE_AUTH {
-		t.Fatal("Successfully changed admin flag while not allowed")
+		t.Fatal("successfully changed admin flag while not allowed")
 	}
 
 	// Modify admin flag through (*SQLiteConn)
@@ -403,7 +403,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 	// Changing our own admin flag should fail.
 	err = c1.AuthUserChange("admin", "admin3", false)
 	if err.(Error).Code != SQLITE_AUTH {
-		t.Fatal("Successfully changed admin flag while not allowed")
+		t.Fatal("successfully changed admin flag while not allowed")
 	}
 
 	// Add normal user
@@ -412,7 +412,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	rv, err = addUser(db1, "user2", "user2", 0)
@@ -420,7 +420,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	// Modify other user password and flag through SQL
@@ -429,7 +429,7 @@ func TestUserAuthModifyUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to modify password for user")
+		t.Fatal("failed to modify password for user")
 	}
 
 	// Modify other user password and flag through *SQLiteConn
@@ -452,13 +452,13 @@ func TestUserAuthModifyUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != SQLITE_AUTH {
-		t.Fatal("Password change succesful while not allowed")
+		t.Fatal("password change succesful while not allowed")
 	}
 
 	// Modify other user password and flag through *SQLiteConn
 	err = c2.AuthUserChange("user2", "invalid", false)
 	if err.(Error).Code != SQLITE_AUTH {
-		t.Fatal("Password change succesful while not allowed")
+		t.Fatal("password change succesful while not allowed")
 	}
 }
 
@@ -475,7 +475,7 @@ func TestUserAuthDeleteUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	rv, err = addUser(db1, "admin3", "admin3", 1)
@@ -483,7 +483,7 @@ func TestUserAuthDeleteUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	// Check if user was created
@@ -509,7 +509,7 @@ func TestUserAuthDeleteUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to delete admin2")
+		t.Fatal("failed to delete admin2")
 	}
 
 	// Verify user admin2 deleted
@@ -542,7 +542,7 @@ func TestUserAuthDeleteUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	// Add normal user for deletion through SQL
@@ -551,7 +551,7 @@ func TestUserAuthDeleteUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	rv, err = addUser(db1, "user2", "user2", 0)
@@ -559,7 +559,7 @@ func TestUserAuthDeleteUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != 0 {
-		t.Fatal("Failed to add user")
+		t.Fatal("failed to add user")
 	}
 
 	// Close database for reconnect
@@ -579,14 +579,14 @@ func TestUserAuthDeleteUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != SQLITE_AUTH {
-		t.Fatal("Successfully deleted user wthout proper privileges")
+		t.Fatal("successfully deleted user wthout proper privileges")
 	}
 
 	// Delete user while logged in as normal user
 	// through *SQLiteConn
 	err = c2.AuthUserDelete("user2")
 	if err.(Error).Code != SQLITE_AUTH {
-		t.Fatal("Successfully deleted user wthout proper privileges")
+		t.Fatal("successfully deleted user wthout proper privileges")
 	}
 }
 

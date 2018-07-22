@@ -38,16 +38,16 @@ func TestCallbackArgCast(t *testing.T) {
 		conv := callbackArgCast{test.f, test.o.Type()}
 		val, err := conv.Run(nil)
 		if err != nil {
-			t.Errorf("Couldn't convert to %s: %s", test.o.Type(), err)
+			t.Errorf("couldn't convert to %s: %s", test.o.Type(), err)
 		} else if !reflect.DeepEqual(val.Interface(), test.o.Interface()) {
-			t.Errorf("Unexpected result from converting to %s: got %v, want %v", test.o.Type(), val.Interface(), test.o.Interface())
+			t.Errorf("unexpected result from converting to %s: got %v, want %v", test.o.Type(), val.Interface(), test.o.Interface())
 		}
 	}
 
 	conv := callbackArgCast{errConv, reflect.TypeOf(int8(0))}
 	_, err := conv.Run(nil)
 	if err == nil {
-		t.Errorf("Expected error during callbackArgCast, but got none")
+		t.Errorf("expected error during callbackArgCast, but got none")
 	}
 }
 
@@ -90,18 +90,18 @@ func TestCallbackConverters(t *testing.T) {
 	for _, test := range tests {
 		_, err := callbackArg(reflect.TypeOf(test.v))
 		if test.err && err == nil {
-			t.Errorf("Expected an error when converting %s, got no error", reflect.TypeOf(test.v))
+			t.Errorf("expected an error when converting %s, got no error", reflect.TypeOf(test.v))
 		} else if !test.err && err != nil {
-			t.Errorf("Expected converter when converting %s, got error: %s", reflect.TypeOf(test.v), err)
+			t.Errorf("expected converter when converting %s, got error: %s", reflect.TypeOf(test.v), err)
 		}
 	}
 
 	for _, test := range tests {
 		_, err := callbackRet(reflect.TypeOf(test.v))
 		if test.err && err == nil {
-			t.Errorf("Expected an error when converting %s, got no error", reflect.TypeOf(test.v))
+			t.Errorf("expected an error when converting %s, got no error", reflect.TypeOf(test.v))
 		} else if !test.err && err != nil {
-			t.Errorf("Expected converter when converting %s, got error: %s", reflect.TypeOf(test.v), err)
+			t.Errorf("expected converter when converting %s, got error: %s", reflect.TypeOf(test.v), err)
 		}
 	}
 }

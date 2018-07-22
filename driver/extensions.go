@@ -38,20 +38,20 @@ func (c *SQLiteConn) loadExtensions(extensions []string) error {
 			// Disable extension loading on return
 			rv = C.sqlite3_enable_load_extension(c.db, 0)
 			if rv != C.SQLITE_OK {
-				return fmt.Errorf("Failed to disable extension loading: %s", C.GoString(C.sqlite3_errmsg(c.db)))
+				return fmt.Errorf("failed to disable extension loading: %s", C.GoString(C.sqlite3_errmsg(c.db)))
 			}
 
 			// Store last error
 			// Required because other wise next statement to disable extension loading
 			// will override the error
-			return fmt.Errorf("Failed to load extension: '%s'", extension)
+			return fmt.Errorf("failed to load extension: '%s'", extension)
 		}
 	}
 
 	// Disable extension loading on return
 	rv = C.sqlite3_enable_load_extension(c.db, 0)
 	if rv != C.SQLITE_OK {
-		return fmt.Errorf("Failed to disable extension loading: %s", C.GoString(C.sqlite3_errmsg(c.db)))
+		return fmt.Errorf("failed to disable extension loading: %s", C.GoString(C.sqlite3_errmsg(c.db)))
 	}
 
 	return nil

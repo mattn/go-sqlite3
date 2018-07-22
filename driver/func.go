@@ -96,13 +96,13 @@ func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) erro
 	fi.f = reflect.ValueOf(impl)
 	t := fi.f.Type()
 	if t.Kind() != reflect.Func {
-		return errors.New("Non-function passed to RegisterFunc")
+		return errors.New("non-function passed to RegisterFunc")
 	}
 	if t.NumOut() != 1 && t.NumOut() != 2 {
 		return errors.New("SQLite functions must return 1 or 2 values")
 	}
 	if t.NumOut() == 2 && !t.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		return errors.New("Second return value of SQLite function must be error")
+		return errors.New("second return value of SQLite function must be error")
 	}
 
 	numArgs := t.NumIn()
@@ -180,7 +180,7 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl interface{}, pure bool
 		return errors.New("SQLite aggregator constructors must return 1 or 2 values")
 	}
 	if t.NumOut() == 2 && !t.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		return errors.New("Second return value of SQLite function must be error")
+		return errors.New("second return value of SQLite function must be error")
 	}
 	if t.NumIn() != 0 {
 		return errors.New("SQLite aggregator constructors must not have arguments")
@@ -244,7 +244,7 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl interface{}, pure bool
 		doneNArgs--
 	}
 	if doneNArgs != 0 {
-		return errors.New("SQlite aggregator Done() function must have no arguments")
+		return errors.New("SQLite aggregator Done() function must have no arguments")
 	}
 	if done.NumOut() != 1 && done.NumOut() != 2 {
 		return errors.New("SQLite aggregator Done() function must return 1 or 2 values")

@@ -36,17 +36,17 @@ func TestOpen(t *testing.T) {
 
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatalf("Failed to open database: %s", err)
+		t.Fatalf("failed to open database: %s", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("create table if not exists foo (id integer)")
 	if err != nil {
-		t.Fatalf("Failed to create table: %s", err)
+		t.Fatalf("failed to create table: %s", err)
 	}
 
 	if stat, err := os.Stat(tempFilename); err != nil || stat.IsDir() {
-		t.Fatalf("Failed to create database: '%s'; %s", tempFilename, err)
+		t.Fatalf("failed to create database: '%s'; %s", tempFilename, err)
 	}
 
 	tempFilename = TempFilename(t)
@@ -59,22 +59,22 @@ func TestOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	if conn == nil {
-		t.Fatal("Failed to create connection to database")
+		t.Fatal("failed to create connection to database")
 	}
 	defer conn.Close()
 
 	stmt, err := conn.Prepare("create table if not exists foo (id integer)")
 	if err != nil {
-		t.Fatalf("Failed to create statement: %s", err)
+		t.Fatalf("failed to create statement: %s", err)
 	}
 	defer stmt.Close()
 	if _, err := stmt.Exec([]driver.Value{}); err != nil {
-		t.Fatalf("Failed to exec statement: %s", err)
+		t.Fatalf("failed to exec statement: %s", err)
 	}
 
 	// Verify database has been created
 	if _, err := os.Stat(tempFilename); os.IsNotExist(err) {
-		t.Fatalf("Failed to create database: '%s'; %s", tempFilename, err)
+		t.Fatalf("failed to create database: '%s'; %s", tempFilename, err)
 	}
 }
 
@@ -86,10 +86,10 @@ func TestOpenInvalidDSN(t *testing.T) {
 	drv := &SQLiteDriver{}
 	conn, err := drv.Open(fmt.Sprintf("%s?%35%2%%43?test=false", tempFilename))
 	if err == nil {
-		t.Fatal("Connection created while error was expected")
+		t.Fatal("connection created while error was expected")
 	}
 	if conn != nil {
-		t.Fatal("Conection created while error was expected")
+		t.Fatal("conection created while error was expected")
 	}
 }
 
@@ -102,17 +102,17 @@ func TestOpenConfigDSN(t *testing.T) {
 
 	db, err := sql.Open("sqlite3", cfg.FormatDSN())
 	if err != nil {
-		t.Fatalf("Failed to open database: %s", err)
+		t.Fatalf("failed to open database: %s", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("create table if not exists foo (id integer)")
 	if err != nil {
-		t.Fatalf("Failed to create table: %s", err)
+		t.Fatalf("failed to create table: %s", err)
 	}
 
 	if _, err := os.Stat(tempFilename); os.IsNotExist(err) {
-		t.Fatalf("Failed to create database: '%s'; %s", tempFilename, err)
+		t.Fatalf("failed to create database: '%s'; %s", tempFilename, err)
 	}
 
 	// Test Open Empry Database location
@@ -126,7 +126,7 @@ func TestOpenConfigDSN(t *testing.T) {
 
 	_, err = db.Exec("create table if not exists foo (id integer)")
 	if err == nil {
-		t.Fatalf("Table created while error was expected")
+		t.Fatalf("table created while error was expected")
 	}
 }
 
@@ -148,7 +148,7 @@ func TestInvalidConnectHook(t *testing.T) {
 
 	_, err = db.Exec("create table if not exists foo (id integer)")
 	if err == nil {
-		t.Fatalf("Table created while error was expected")
+		t.Fatalf("table created while error was expected")
 	}
 }
 
@@ -170,7 +170,7 @@ func TestInvalidExtension(t *testing.T) {
 
 	_, err = db.Exec("create table if not exists foo (id integer)")
 	if err == nil {
-		t.Fatalf("Table created while error was expected")
+		t.Fatalf("table created while error was expected")
 	}
 
 	tempFilename = TempFilename(t)
@@ -193,7 +193,7 @@ func TestInvalidExtension(t *testing.T) {
 
 	_, err = db.Exec("SELECT 1;")
 	if err != nil {
-		t.Fatalf("Failed to exec ping statement")
+		t.Fatalf("failed to exec ping statement")
 	}
 
 	if err := driverConn.LoadExtension("invalid.extension", ""); err == nil {
@@ -257,24 +257,24 @@ func TestClose(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	stmt, err := db.Prepare("select id from foo where id = ?")
 	if err != nil {
-		t.Fatal("Failed to select records:", err)
+		t.Fatal("failed to select records:", err)
 	}
 
 	db.Close()
 	_, err = stmt.Exec(1)
 	if err == nil {
-		t.Fatal("Failed to operate closed statement")
+		t.Fatal("failed to operate closed statement")
 	}
 }
 
@@ -283,28 +283,28 @@ func TestInsert(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	res, err := db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Fatal("Failed to insert record:", err)
+		t.Fatal("failed to insert record:", err)
 	}
 	affected, _ := res.RowsAffected()
 	if affected != 1 {
-		t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
+		t.Fatalf("expected %d for affected rows, but %d:", 1, affected)
 	}
 
 	rows, err := db.Query("select id from foo")
 	if err != nil {
-		t.Fatal("Failed to select records:", err)
+		t.Fatal("failed to select records:", err)
 	}
 	defer rows.Close()
 
@@ -313,7 +313,7 @@ func TestInsert(t *testing.T) {
 	var result int
 	rows.Scan(&result)
 	if result != 123 {
-		t.Errorf("Expected %d for fetched result, but %d:", 123, result)
+		t.Errorf("expected %d for fetched result, but %d:", 123, result)
 	}
 }
 
@@ -326,29 +326,29 @@ func TestUpsert(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (name string primary key, counter integer)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	for i := 0; i < 10; i++ {
 		res, err := db.Exec("insert into foo(name, counter) values('key', 1) on conflict (name) do update set counter=counter+1")
 		if err != nil {
-			t.Fatal("Failed to upsert record:", err)
+			t.Fatal("failed to upsert record:", err)
 		}
 		affected, _ := res.RowsAffected()
 		if affected != 1 {
-			t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
+			t.Fatalf("expected %d for affected rows, but %d:", 1, affected)
 		}
 	}
 	rows, err := db.Query("select name, counter from foo")
 	if err != nil {
-		t.Fatal("Failed to select records:", err)
+		t.Fatal("failed to select records:", err)
 	}
 	defer rows.Close()
 
@@ -358,10 +358,10 @@ func TestUpsert(t *testing.T) {
 	var resultCounter int
 	rows.Scan(&resultName, &resultCounter)
 	if resultName != "key" {
-		t.Errorf("Expected %s for fetched result, but %s:", "key", resultName)
+		t.Errorf("expected %s for fetched result, but %s:", "key", resultName)
 	}
 	if resultCounter != 10 {
-		t.Errorf("Expected %d for fetched result, but %d:", 10, resultCounter)
+		t.Errorf("expected %d for fetched result, but %d:", 10, resultCounter)
 	}
 
 }
@@ -371,54 +371,54 @@ func TestUpdate(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	res, err := db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Fatal("Failed to insert record:", err)
+		t.Fatal("failed to insert record:", err)
 	}
 	expected, err := res.LastInsertId()
 	if err != nil {
-		t.Fatal("Failed to get LastInsertId:", err)
+		t.Fatal("failed to get LastInsertId:", err)
 	}
 	affected, _ := res.RowsAffected()
 	if err != nil {
-		t.Fatal("Failed to get RowsAffected:", err)
+		t.Fatal("failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
-		t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
+		t.Fatalf("expected %d for affected rows, but %d:", 1, affected)
 	}
 
 	res, err = db.Exec("update foo set id = 234")
 	if err != nil {
-		t.Fatal("Failed to update record:", err)
+		t.Fatal("failed to update record:", err)
 	}
 	lastID, err := res.LastInsertId()
 	if err != nil {
-		t.Fatal("Failed to get LastInsertId:", err)
+		t.Fatal("failed to get LastInsertId:", err)
 	}
 	if expected != lastID {
-		t.Errorf("Expected %q for last Id, but %q:", expected, lastID)
+		t.Errorf("expected %q for last Id, but %q:", expected, lastID)
 	}
 	affected, _ = res.RowsAffected()
 	if err != nil {
-		t.Fatal("Failed to get RowsAffected:", err)
+		t.Fatal("failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
-		t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
+		t.Fatalf("expected %d for affected rows, but %d:", 1, affected)
 	}
 
 	rows, err := db.Query("select id from foo")
 	if err != nil {
-		t.Fatal("Failed to select records:", err)
+		t.Fatal("failed to select records:", err)
 	}
 	defer rows.Close()
 
@@ -427,7 +427,7 @@ func TestUpdate(t *testing.T) {
 	var result int
 	rows.Scan(&result)
 	if result != 234 {
-		t.Errorf("Expected %d for fetched result, but %d:", 234, result)
+		t.Errorf("expected %d for fetched result, but %d:", 234, result)
 	}
 }
 
@@ -436,59 +436,59 @@ func TestDelete(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	res, err := db.Exec("insert into foo(id) values(123)")
 	if err != nil {
-		t.Fatal("Failed to insert record:", err)
+		t.Fatal("failed to insert record:", err)
 	}
 	expected, err := res.LastInsertId()
 	if err != nil {
-		t.Fatal("Failed to get LastInsertId:", err)
+		t.Fatal("failed to get LastInsertId:", err)
 	}
 	affected, err := res.RowsAffected()
 	if err != nil {
-		t.Fatal("Failed to get RowsAffected:", err)
+		t.Fatal("failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
-		t.Errorf("Expected %d for cout of affected rows, but %q:", 1, affected)
+		t.Errorf("expected %d for cout of affected rows, but %q:", 1, affected)
 	}
 
 	res, err = db.Exec("delete from foo where id = 123")
 	if err != nil {
-		t.Fatal("Failed to delete record:", err)
+		t.Fatal("failed to delete record:", err)
 	}
 	lastID, err := res.LastInsertId()
 	if err != nil {
-		t.Fatal("Failed to get LastInsertId:", err)
+		t.Fatal("failed to get LastInsertId:", err)
 	}
 	if expected != lastID {
-		t.Errorf("Expected %q for last Id, but %q:", expected, lastID)
+		t.Errorf("expected %q for last Id, but %q:", expected, lastID)
 	}
 	affected, err = res.RowsAffected()
 	if err != nil {
-		t.Fatal("Failed to get RowsAffected:", err)
+		t.Fatal("failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
-		t.Errorf("Expected %d for cout of affected rows, but %q:", 1, affected)
+		t.Errorf("expected %d for cout of affected rows, but %q:", 1, affected)
 	}
 
 	rows, err := db.Query("select id from foo")
 	if err != nil {
-		t.Fatal("Failed to select records:", err)
+		t.Fatal("failed to select records:", err)
 	}
 	defer rows.Close()
 
 	if rows.Next() {
-		t.Error("Fetched row but expected not rows")
+		t.Error("fetched row but expected not rows")
 	}
 }
 
@@ -497,44 +497,44 @@ func TestWAL(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	if _, err = db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		t.Fatal("Failed to Exec PRAGMA journal_mode:", err)
+		t.Fatal("failed to Exec PRAGMA journal_mode:", err)
 	}
 	if _, err = db.Exec("PRAGMA locking_mode=EXCLUSIVE;"); err != nil {
-		t.Fatal("Failed to Exec PRAGMA locking_mode:", err)
+		t.Fatal("failed to Exec PRAGMA locking_mode:", err)
 	}
 	if _, err = db.Exec("CREATE TABLE test (id SERIAL, user TEXT NOT NULL, name TEXT NOT NULL);"); err != nil {
-		t.Fatal("Failed to Exec CREATE TABLE:", err)
+		t.Fatal("failed to Exec CREATE TABLE:", err)
 	}
 	if _, err = db.Exec("INSERT INTO test (user, name) VALUES ('user','name');"); err != nil {
-		t.Fatal("Failed to Exec INSERT:", err)
+		t.Fatal("failed to Exec INSERT:", err)
 	}
 
 	trans, err := db.Begin()
 	if err != nil {
-		t.Fatal("Failed to Begin:", err)
+		t.Fatal("failed to Begin:", err)
 	}
 	s, err := trans.Prepare("INSERT INTO test (user, name) VALUES (?, ?);")
 	if err != nil {
-		t.Fatal("Failed to Prepare:", err)
+		t.Fatal("failed to Prepare:", err)
 	}
 
 	var count int
 	if err = trans.QueryRow("SELECT count(user) FROM test;").Scan(&count); err != nil {
-		t.Fatal("Failed to QueryRow:", err)
+		t.Fatal("failed to QueryRow:", err)
 	}
 	if _, err = s.Exec("bbbb", "aaaa"); err != nil {
-		t.Fatal("Failed to Exec prepared statement:", err)
+		t.Fatal("failed to Exec prepared statement:", err)
 	}
 	if err = s.Close(); err != nil {
-		t.Fatal("Failed to Close prepared statement:", err)
+		t.Fatal("failed to Close prepared statement:", err)
 	}
 	if err = trans.Commit(); err != nil {
-		t.Fatal("Failed to Commit:", err)
+		t.Fatal("failed to Commit:", err)
 	}
 }
 func TestExecer(t *testing.T) {
@@ -542,7 +542,7 @@ func TestExecer(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -553,7 +553,7 @@ func TestExecer(t *testing.T) {
        insert into foo(id) values(?); -- another comment
        `, 1, 2, 3)
 	if err != nil {
-		t.Error("Failed to call db.Exec:", err)
+		t.Error("failed to call db.Exec:", err)
 	}
 }
 
@@ -562,7 +562,7 @@ func TestQueryer(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -570,7 +570,7 @@ func TestQueryer(t *testing.T) {
 	create table foo (id integer);
 	`)
 	if err != nil {
-		t.Error("Failed to call db.Query:", err)
+		t.Error("failed to call db.Query:", err)
 	}
 
 	rows, err := db.Query(`
@@ -580,7 +580,7 @@ func TestQueryer(t *testing.T) {
 	select id from foo order by id;
 	`, 3, 2, 1)
 	if err != nil {
-		t.Error("Failed to call db.Query:", err)
+		t.Error("failed to call db.Query:", err)
 	}
 	defer rows.Close()
 	n := 1
@@ -589,10 +589,10 @@ func TestQueryer(t *testing.T) {
 			var id int
 			err = rows.Scan(&id)
 			if err != nil {
-				t.Error("Failed to db.Query:", err)
+				t.Error("failed to db.Query:", err)
 			}
 			if id != n {
-				t.Error("Failed to db.Query: not matched results")
+				t.Error("failed to db.Query: not matched results")
 			}
 		}
 	}
@@ -603,7 +603,7 @@ func TestStress(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	db.Exec("CREATE TABLE foo (id int);")
 	db.Exec("INSERT INTO foo VALUES(1);")
@@ -613,13 +613,13 @@ func TestStress(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		db, err := sql.Open("sqlite3", tempFilename)
 		if err != nil {
-			t.Fatal("Failed to open database:", err)
+			t.Fatal("failed to open database:", err)
 		}
 
 		for j := 0; j < 3; j++ {
 			rows, err := db.Query("select * from foo where id=1;")
 			if err != nil {
-				t.Error("Failed to call db.Query:", err)
+				t.Error("failed to call db.Query:", err)
 			}
 			for rows.Next() {
 				var i int
@@ -654,7 +654,7 @@ func BenchmarkCustomFunctions(b *testing.B) {
 
 	db, err := sql.Open("sqlite3_BenchmarkCustomFunctions", ":memory:")
 	if err != nil {
-		b.Fatal("Failed to open database:", err)
+		b.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -663,7 +663,7 @@ func BenchmarkCustomFunctions(b *testing.B) {
 		var i int64
 		err = db.QueryRow("SELECT custom_add(1,2)").Scan(&i)
 		if err != nil {
-			b.Fatal("Failed to run custom add:", err)
+			b.Fatal("failed to run custom add:", err)
 		}
 	}
 }

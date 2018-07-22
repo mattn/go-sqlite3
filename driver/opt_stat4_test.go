@@ -28,7 +28,7 @@ func TestStat4(t *testing.T) {
 	_, err = db.Exec("create table foo (id integer)")
 	_, err = db.Exec("create index idx_id on foo(id)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	tx, err := db.Begin()
@@ -47,6 +47,6 @@ func TestStat4(t *testing.T) {
 	}
 
 	if exists != 1 {
-		t.Fatal("Failed to enable STAT4")
+		t.Fatal("failed to enable STAT4")
 	}
 }

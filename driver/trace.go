@@ -85,7 +85,7 @@ func fillDBError(dbErr *Error, db *C.sqlite3) {
 
 func fillExpandedSQL(info *TraceInfo, db *C.sqlite3, pStmt unsafe.Pointer) {
 	if pStmt == nil {
-		panic("No SQLite statement pointer in P arg of trace_v2 callback")
+		panic("no SQLite statement pointer in P arg of trace_v2 callback")
 	}
 
 	expSQLiteCStr := C.sqlite3_expanded_sql((*C.sqlite3_stmt)(pStmt))
@@ -109,7 +109,7 @@ func traceCallbackTrampoline(
 	eventCode := uint32(traceEventCode)
 
 	if ctx == nil {
-		panic(fmt.Sprintf("No context (ev 0x%x)", traceEventCode))
+		panic(fmt.Sprintf("no context (ev 0x%x)", traceEventCode))
 	}
 
 	contextDB := (*C.sqlite3)(ctx)
@@ -125,7 +125,7 @@ func traceCallbackTrampoline(
 	}
 
 	if !found {
-		panic(fmt.Sprintf("Mapping not found for handle 0x%x (ev 0x%x)",
+		panic(fmt.Sprintf("mapping not found for handle 0x%x (ev 0x%x)",
 			connHandle, eventCode))
 	}
 
@@ -172,7 +172,7 @@ func traceCallbackTrampoline(
 	case TraceClose:
 		handle := uintptr(p)
 		if handle != info.ConnHandle {
-			panic(fmt.Sprintf("Different conn handle 0x%x (expected 0x%x) in SQLITE_TRACE_CLOSE event.",
+			panic(fmt.Sprintf("different conn handle 0x%x (expected 0x%x) in SQLITE_TRACE_CLOSE event.",
 				handle, info.ConnHandle))
 		}
 
@@ -210,11 +210,11 @@ func addTraceMapping(connHandle uintptr, traceConf TraceConfig) {
 
 	oldEntryCopy, found := traceMap[connHandle]
 	if found {
-		panic(fmt.Sprintf("Adding trace config %v: handle 0x%x already registered (%v).",
+		panic(fmt.Sprintf("adding trace config %v: handle 0x%x already registered (%v).",
 			traceConf, connHandle, oldEntryCopy.config))
 	}
 	traceMap[connHandle] = traceMapEntry{config: traceConf}
-	fmt.Printf("Added trace config %v: handle 0x%x.\n", traceConf, connHandle)
+	fmt.Printf("added trace config %v: handle 0x%x.\n", traceConf, connHandle)
 }
 
 func lookupTraceMapping(connHandle uintptr) (TraceConfig, bool) {
@@ -233,7 +233,7 @@ func popTraceMapping(connHandle uintptr) (TraceConfig, bool) {
 	entryCopy, found := traceMap[connHandle]
 	if found {
 		delete(traceMap, connHandle)
-		fmt.Printf("Pop handle 0x%x: deleted trace config %v.\n", connHandle, entryCopy.config)
+		fmt.Printf("pop handle 0x%x: deleted trace config %v.\n", connHandle, entryCopy.config)
 	}
 	return entryCopy.config, found
 }

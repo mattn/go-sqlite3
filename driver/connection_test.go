@@ -70,6 +70,6 @@ func TestConnAutoCommit(t *testing.T) {
 	}
 
 	if !driverConn.AutoCommit() {
-		t.Fatal("Autocommit was expected to be true")
+		t.Fatal("autocommit was expected to be true")
 	}
 }

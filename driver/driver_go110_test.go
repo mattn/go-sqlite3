@@ -32,22 +32,22 @@ func TestOpenConnector(t *testing.T) {
 		t.Fatal(err)
 	}
 	if conn == nil {
-		t.Fatal("Failed to create connection to database")
+		t.Fatal("failed to create connection to database")
 	}
 	defer conn.Close()
 
 	stmt, err := conn.Prepare("create table if not exists foo (id integer)")
 	if err != nil {
-		t.Fatalf("Failed to create statement: %s", err)
+		t.Fatalf("failed to create statement: %s", err)
 	}
 	defer stmt.Close()
 	if _, err := stmt.Exec([]driver.Value{}); err != nil {
-		t.Fatalf("Failed to exec statement: %s", err)
+		t.Fatalf("failed to exec statement: %s", err)
 	}
 
 	// Verify database has been created
 	if _, err := os.Stat(tempFilename); os.IsNotExist(err) {
-		t.Fatalf("Failed to create database: '%s'; %s", tempFilename, err)
+		t.Fatalf("failed to create database: '%s'; %s", tempFilename, err)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestOpenConnectorInvalidDSN(t *testing.T) {
 
 	_, err := drv.OpenConnector(fmt.Sprintf("file:%s?%35%2%%43?test=false", tempFilename))
 	if err == nil {
-		t.Fatal("Opened connector while error was expected")
+		t.Fatal("opened connector while error was expected")
 	}
 }
 
@@ -76,11 +76,11 @@ func TestOpenDB(t *testing.T) {
 
 	_, err := db.Exec("create table if not exists foo (id integer)")
 	if err != nil {
-		t.Fatalf("Failed to create table: %s", err)
+		t.Fatalf("failed to create table: %s", err)
 	}
 
 	if _, err := os.Stat(tempFilename); os.IsNotExist(err) {
-		t.Fatalf("Failed to create database: '%s'; %s", tempFilename, err)
+		t.Fatalf("failed to create database: '%s'; %s", tempFilename, err)
 	}
 }
 

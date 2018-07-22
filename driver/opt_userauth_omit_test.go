@@ -32,44 +32,44 @@ func TestUserAuthOmit(t *testing.T) {
 
 	db, err := sql.Open("sqlite3_with_conn", "file:"+file+"?_auth&_auth_user=admin&_auth_pass=admin")
 	if err != nil {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 	defer db.Close()
 
 	// Dummy query to force connection and database creation
 	// Will return ErrUnauthorized (SQLITE_AUTH) if user authentication fails
 	if _, err := db.Exec("SELECT 1;"); err != nil {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 
 	if conn.Authenticate("", ""); err != nil {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 	if ok := conn.authenticate("", ""); ok != 0 {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 
 	if conn.AuthUserAdd("", "", true); err != nil {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 	if ok := conn.authUserAdd("", "", 1); ok != 0 {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 
 	if conn.AuthUserChange("", "", true); err != nil {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 	if ok := conn.authUserChange("", "", 1); ok != 0 {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 
 	if conn.AuthUserDelete(""); err != nil {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 	if ok := conn.authUserDelete(""); ok != 0 {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 	if enabled := conn.AuthEnabled(); enabled {
-		t.Fatal("UserAuthOmit Failure")
+		t.Fatal("UserAuthOmit failure")
 	}
 }

@@ -45,12 +45,12 @@ func testBackup(t *testing.T, testRowCount int, usePerPageSteps bool) {
 	defer os.Remove(srcTempFilename)
 	srcDb, err := sql.Open(driverName, srcTempFilename)
 	if err != nil {
-		t.Fatal("Failed to open the source database:", err)
+		t.Fatal("failed to open the source database:", err)
 	}
 	defer srcDb.Close()
 	err = srcDb.Ping()
 	if err != nil {
-		t.Fatal("Failed to connect to the source database:", err)
+		t.Fatal("failed to connect to the source database:", err)
 	}
 
 	// Connect to the destination database.
@@ -58,25 +58,25 @@ func testBackup(t *testing.T, testRowCount int, usePerPageSteps bool) {
 	defer os.Remove(destTempFilename)
 	destDb, err := sql.Open(driverName, destTempFilename)
 	if err != nil {
-		t.Fatal("Failed to open the destination database:", err)
+		t.Fatal("failed to open the destination database:", err)
 	}
 	defer destDb.Close()
 	err = destDb.Ping()
 	if err != nil {
-		t.Fatal("Failed to connect to the destination database:", err)
+		t.Fatal("failed to connect to the destination database:", err)
 	}
 
 	// Check the driver connections.
 	if len(driverConns) != 2 {
-		t.Fatalf("Expected 2 driver connections, but found %v.", len(driverConns))
+		t.Fatalf("expected 2 driver connections, but found %v.", len(driverConns))
 	}
 	srcDbDriverConn := driverConns[0]
 	if srcDbDriverConn == nil {
-		t.Fatal("The source database driver connection is nil.")
+		t.Fatal("the source database driver connection is nil.")
 	}
 	destDbDriverConn := driverConns[1]
 	if destDbDriverConn == nil {
-		t.Fatal("The destination database driver connection is nil.")
+		t.Fatal("the destination database driver connection is nil.")
 	}
 
 	// Generate some test data for the given ID.
@@ -87,39 +87,39 @@ func testBackup(t *testing.T, testRowCount int, usePerPageSteps bool) {
 	// Populate the source database with a test table containing some test data.
 	tx, err := srcDb.Begin()
 	if err != nil {
-		t.Fatal("Failed to begin a transaction when populating the source database:", err)
+		t.Fatal("failed to begin a transaction when populating the source database:", err)
 	}
 	_, err = srcDb.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
 	if err != nil {
 		tx.Rollback()
-		t.Fatal("Failed to create the source database \"test\" table:", err)
+		t.Fatal("failed to create the source database \"test\" table:", err)
 	}
 	for id := 0; id < testRowCount; id++ {
 		_, err = srcDb.Exec("INSERT INTO test (id, value) VALUES (?, ?)", id, generateTestData(id))
 		if err != nil {
 			tx.Rollback()
-			t.Fatal("Failed to insert a row into the source database \"test\" table:", err)
+			t.Fatal("failed to insert a row into the source database \"test\" table:", err)
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
-		t.Fatal("Failed to populate the source database:", err)
+		t.Fatal("failed to populate the source database:", err)
 	}
 
 	// Confirm that the destination database is initially empty.
 	var destTableCount int
 	err = destDb.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'").Scan(&destTableCount)
 	if err != nil {
-		t.Fatal("Failed to check the destination table count:", err)
+		t.Fatal("failed to check the destination table count:", err)
 	}
 	if destTableCount != 0 {
-		t.Fatalf("The destination database is not empty; %v table(s) found.", destTableCount)
+		t.Fatalf("the destination database is not empty; %v table(s) found.", destTableCount)
 	}
 
 	// Prepare to perform the backup.
 	backup, err := destDbDriverConn.Backup("main", srcDbDriverConn, "main")
 	if err != nil {
-		t.Fatal("Failed to initialize the backup:", err)
+		t.Fatal("failed to initialize the backup:", err)
 	}
 
 	// Allow the initial page count and remaining values to be retrieved.
@@ -129,20 +129,20 @@ func testBackup(t *testing.T, testRowCount int, usePerPageSteps bool) {
 		t.Fatal("Unable to perform an initial 0-page backup step:", err)
 	}
 	if isDone {
-		t.Fatal("Backup is unexpectedly done.")
+		t.Fatal("backup is unexpectedly done.")
 	}
 
 	// Check that the page count and remaining values are reasonable.
 	initialPageCount := backup.PageCount()
 	if initialPageCount <= 0 {
-		t.Fatalf("Unexpected initial page count value: %v", initialPageCount)
+		t.Fatalf("unexpected initial page count value: %v", initialPageCount)
 	}
 	initialRemaining := backup.Remaining()
 	if initialRemaining <= 0 {
-		t.Fatalf("Unexpected initial remaining value: %v", initialRemaining)
+		t.Fatalf("unexpected initial remaining value: %v", initialRemaining)
 	}
 	if initialRemaining != initialPageCount {
-		t.Fatalf("Initial remaining value differs from the initial page count value; remaining: %v; page count: %v", initialRemaining, initialPageCount)
+		t.Fatalf("initial remaining value differs from the initial page count value; remaining: %v; page count: %v", initialRemaining, initialPageCount)
 	}
 
 	// Perform the backup.
@@ -155,20 +155,20 @@ func testBackup(t *testing.T, testRowCount int, usePerPageSteps bool) {
 			// Perform the backup step.
 			isDone, err = backup.Step(1)
 			if err != nil {
-				t.Fatal("Failed to perform a backup step:", err)
+				t.Fatal("failed to perform a backup step:", err)
 			}
 
 			// The page count should remain unchanged from its initial value.
 			currentPageCount := backup.PageCount()
 			if currentPageCount != initialPageCount {
-				t.Fatalf("Current page count differs from the initial page count; initial page count: %v; current page count: %v", initialPageCount, currentPageCount)
+				t.Fatalf("current page count differs from the initial page count; initial page count: %v; current page count: %v", initialPageCount, currentPageCount)
 			}
 
 			// There should now be one less page remaining.
 			currentRemaining := backup.Remaining()
 			expectedRemaining := latestRemaining - 1
 			if currentRemaining != expectedRemaining {
-				t.Fatalf("Unexpected remaining value; expected remaining value: %v; actual remaining value: %v", expectedRemaining, currentRemaining)
+				t.Fatalf("unexpected remaining value; expected remaining value: %v; actual remaining value: %v", expectedRemaining, currentRemaining)
 			}
 			latestRemaining = currentRemaining
 
@@ -178,54 +178,54 @@ func testBackup(t *testing.T, testRowCount int, usePerPageSteps bool) {
 
 			// Limit the runtime of the backup attempt.
 			if (time.Now().Unix() - startTime) > usePagePerStepsTimeoutSeconds {
-				t.Fatal("Backup is taking longer than expected.")
+				t.Fatal("backup is taking longer than expected.")
 			}
 		}
 	} else {
 		// Test the copying of all remaining pages.
 		isDone, err = backup.Step(-1)
 		if err != nil {
-			t.Fatal("Failed to perform a backup step:", err)
+			t.Fatal("failed to perform a backup step:", err)
 		}
 		if !isDone {
-			t.Fatal("Backup is unexpectedly not done.")
+			t.Fatal("backup is unexpectedly not done.")
 		}
 	}
 
 	// Check that the page count and remaining values are reasonable.
 	finalPageCount := backup.PageCount()
 	if finalPageCount != initialPageCount {
-		t.Fatalf("Final page count differs from the initial page count; initial page count: %v; final page count: %v", initialPageCount, finalPageCount)
+		t.Fatalf("final page count differs from the initial page count; initial page count: %v; final page count: %v", initialPageCount, finalPageCount)
 	}
 	finalRemaining := backup.Remaining()
 	if finalRemaining != 0 {
-		t.Fatalf("Unexpected remaining value: %v", finalRemaining)
+		t.Fatalf("unexpected remaining value: %v", finalRemaining)
 	}
 
 	// Finish the backup.
 	err = backup.Finish()
 	if err != nil {
-		t.Fatal("Failed to finish backup:", err)
+		t.Fatal("failed to finish backup:", err)
 	}
 
 	// Confirm that the "test" table now exists in the destination database.
 	var doesTestTableExist bool
 	err = destDb.QueryRow("SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'test' LIMIT 1) AS test_table_exists").Scan(&doesTestTableExist)
 	if err != nil {
-		t.Fatal("Failed to check if the \"test\" table exists in the destination database:", err)
+		t.Fatal("failed to check if the \"test\" table exists in the destination database:", err)
 	}
 	if !doesTestTableExist {
-		t.Fatal("The \"test\" table could not be found in the destination database.")
+		t.Fatal("the \"test\" table could not be found in the destination database.")
 	}
 
 	// Confirm that the number of rows in the destination database's "test" table matches that of the source table.
 	var actualTestTableRowCount int
 	err = destDb.QueryRow("SELECT COUNT(*) FROM test").Scan(&actualTestTableRowCount)
 	if err != nil {
-		t.Fatal("Failed to determine the rowcount of the \"test\" table in the destination database:", err)
+		t.Fatal("failed to determine the rowcount of the \"test\" table in the destination database:", err)
 	}
 	if testRowCount != actualTestTableRowCount {
-		t.Fatalf("Unexpected destination \"test\" table row count; expected: %v; found: %v", testRowCount, actualTestTableRowCount)
+		t.Fatalf("unexpected destination \"test\" table row count; expected: %v; found: %v", testRowCount, actualTestTableRowCount)
 	}
 
 	// Check each of the rows in the destination database.
@@ -233,12 +233,12 @@ func testBackup(t *testing.T, testRowCount int, usePerPageSteps bool) {
 		var checkedValue string
 		err = destDb.QueryRow("SELECT value FROM test WHERE id = ?", id).Scan(&checkedValue)
 		if err != nil {
-			t.Fatal("Failed to query the \"test\" table in the destination database:", err)
+			t.Fatal("failed to query the \"test\" table in the destination database:", err)
 		}
 
 		var expectedValue = generateTestData(id)
 		if checkedValue != expectedValue {
-			t.Fatalf("Unexpected value in the \"test\" table in the destination database; expected value: %v; actual value: %v", expectedValue, checkedValue)
+			t.Fatalf("unexpected value in the \"test\" table in the destination database; expected value: %v; actual value: %v", expectedValue, checkedValue)
 		}
 	}
 }
@@ -269,7 +269,7 @@ func TestBackupError(t *testing.T) {
 	defer os.Remove(dbTempFilename)
 	srcDb, err := sql.Open(driverName, dbTempFilename)
 	if err != nil {
-		t.Fatal("Failed to open the database:", err)
+		t.Fatal("failed to open the database:", err)
 	}
 	defer srcDb.Close()
 	srcDb.Ping()
@@ -278,18 +278,18 @@ func TestBackupError(t *testing.T) {
 
 	// Need the driver connection in order to perform the backup.
 	if srcDriverConn == nil {
-		t.Fatal("Failed to get the driver connection.")
+		t.Fatal("failed to get the driver connection.")
 	}
 
 	// Prepare to perform the backup.
 	// Intentionally using the same connection for both the source and destination databases, to trigger an error result.
 	backup, err := srcDriverConn.Backup("main", srcDriverConn, "main")
 	if err == nil {
-		t.Fatal("Failed to get the expected error result.")
+		t.Fatal("failed to get the expected error result.")
 	}
 	const expectedError = "source and destination must be distinct"
 	if err.Error() != expectedError {
-		t.Fatalf("Unexpected error message; expected value: \"%v\"; actual value: \"%v\"", expectedError, err.Error())
+		t.Fatalf("unexpected error message; expected value: \"%v\"; actual value: \"%v\"", expectedError, err.Error())
 	}
 	if backup != nil {
 		t.Fatal("Failed to get the expected nil backup result.")
@@ -303,23 +303,23 @@ func TestBackupError(t *testing.T) {
 	// Populate the source database with a test table containing some test data.
 	tx, err := srcDb.Begin()
 	if err != nil {
-		t.Fatal("Failed to begin a transaction when populating the source database:", err)
+		t.Fatal("failed to begin a transaction when populating the source database:", err)
 	}
 	_, err = srcDb.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
 	if err != nil {
 		tx.Rollback()
-		t.Fatal("Failed to create the source database \"test\" table:", err)
+		t.Fatal("failed to create the source database \"test\" table:", err)
 	}
 	for id := 0; id < testRowCount; id++ {
 		_, err = srcDb.Exec("INSERT INTO test (id, value) VALUES (?, ?)", id, generateTestData(id))
 		if err != nil {
 			tx.Rollback()
-			t.Fatal("Failed to insert a row into the source database \"test\" table:", err)
+			t.Fatal("failed to insert a row into the source database \"test\" table:", err)
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
-		t.Fatal("Failed to populate the source database:", err)
+		t.Fatal("failed to populate the source database:", err)
 	}
 
 	destTempFilename := TempFilename(t)
@@ -328,7 +328,7 @@ func TestBackupError(t *testing.T) {
 	// Create Database
 	destDb, err := sql.Open(driverName, fmt.Sprintf("file:%s", destTempFilename))
 	if err != nil {
-		t.Fatal("Failed to open the database:", err)
+		t.Fatal("failed to open the database:", err)
 	}
 	destDb.Ping()
 	_, err = destDb.Exec("SELECT 1;") // Create Database
@@ -349,24 +349,24 @@ func TestBackupError(t *testing.T) {
 	// Re-Open as ReadOnly
 	destDb, err = sql.Open(driverName, fmt.Sprintf("file:%s?mode=ro", destTempFilename))
 	if err != nil {
-		t.Fatal("Failed to open the database:", err)
+		t.Fatal("failed to open the database:", err)
 	}
 	destDb.Ping()
 	defer destDb.Close()
 
 	// Need the driver connection in order to perform the backup.
 	if destDriverConn == nil {
-		t.Fatal("Failed to get the driver connection.")
+		t.Fatal("failed to get the driver connection.")
 	}
 
 	backup, err = destDriverConn.Backup("main", srcDriverConn, "main")
 	_, err = backup.Step(0)
 	if err == nil || err.(Error).Code != ErrReadonly {
-		t.Fatalf("Expected read-only error; received: (%d) %s", err.(Error).Code, err.(Error).Error())
+		t.Fatalf("expected read-only error; received: (%d) %s", err.(Error).Code, err.(Error).Error())
 	}
 
 	err = backup.Close()
 	if err == nil || err.(Error).Code != ErrReadonly {
-		t.Fatalf("Expected read-only error; received: (%d) %s", err.(Error).Code, err.(Error).Error())
+		t.Fatalf("expected read-only error; received: (%d) %s", err.(Error).Code, err.(Error).Error())
 	}
 }

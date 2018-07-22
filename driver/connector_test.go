@@ -23,7 +23,7 @@ func TestConnectorDriver(t *testing.T) {
 	// Create Driver from Config
 	drv := cfg.Driver()
 	if drv.(*SQLiteDriver).ConnectHook == nil {
-		t.Fatal("Failed to created Driver from Config")
+		t.Fatal("failed to created Driver from Config")
 	}
 }
 
@@ -34,6 +34,6 @@ func TestConnectorConnect(t *testing.T) {
 	// Create Connection to database from Config
 	conn, err := cfg.Connect(context.Background())
 	if err != nil || conn == nil {
-		t.Fatal("Failed to create connection from Config")
+		t.Fatal("failed to create connection from Config")
 	}
 }

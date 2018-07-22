@@ -22,7 +22,7 @@ func TestNamedParams(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -30,26 +30,26 @@ func TestNamedParams(t *testing.T) {
 	create table foo (id integer, name text, extra text);
 	`)
 	if err != nil {
-		t.Error("Failed to call db.Query:", err)
+		t.Error("failed to call db.Query:", err)
 	}
 
 	_, err = db.Exec(`insert into foo(id, name, extra) values(:id, :name, :name)`, sql.Named("name", "foo"), sql.Named("id", 1))
 	if err != nil {
-		t.Error("Failed to call db.Exec:", err)
+		t.Error("failed to call db.Exec:", err)
 	}
 
 	row := db.QueryRow(`select id, extra from foo where id = :id and extra = :extra`, sql.Named("id", 1), sql.Named("extra", "foo"))
 	if row == nil {
-		t.Error("Failed to call db.QueryRow")
+		t.Error("failed to call db.QueryRow")
 	}
 	var id int
 	var extra string
 	err = row.Scan(&id, &extra)
 	if err != nil {
-		t.Error("Failed to db.Scan:", err)
+		t.Error("failed to db.Scan:", err)
 	}
 	if id != 1 || extra != "foo" {
-		t.Error("Failed to db.QueryRow: not matched results")
+		t.Error("failed to db.QueryRow: not matched results")
 	}
 }
 
@@ -182,12 +182,12 @@ func TestPinger(t *testing.T) {
 	// response should be: database closed
 	err = db.Ping()
 	if err == nil {
-		t.Fatal("Should be closed")
+		t.Fatal("should be closed")
 	}
 
 	// Ping Database through connection
 	err = dbDriverConn[0].Ping(context.Background())
 	if err == nil {
-		t.Fatal("Should be closed")
+		t.Fatal("should be closed")
 	}
 }

@@ -21,29 +21,29 @@ func TestBooleanRoundtrip(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, value BOOL)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	_, err = db.Exec("INSERT INTO foo(id, value) VALUES(1, ?)", true)
 	if err != nil {
-		t.Fatal("Failed to insert true value:", err)
+		t.Fatal("failed to insert true value:", err)
 	}
 
 	_, err = db.Exec("INSERT INTO foo(id, value) VALUES(2, ?)", false)
 	if err != nil {
-		t.Fatal("Failed to insert false value:", err)
+		t.Fatal("failed to insert false value:", err)
 	}
 
 	rows, err := db.Query("SELECT id, value FROM foo")
 	if err != nil {
-		t.Fatal("Unable to query foo table:", err)
+		t.Fatal("unable to query foo table:", err)
 	}
 	defer rows.Close()
 
@@ -52,15 +52,15 @@ func TestBooleanRoundtrip(t *testing.T) {
 		var value bool
 
 		if err := rows.Scan(&id, &value); err != nil {
-			t.Error("Unable to scan results:", err)
+			t.Error("unable to scan results:", err)
 			continue
 		}
 
 		if id == 1 && !value {
-			t.Error("Value for id 1 should be true, not false")
+			t.Error("value for id 1 should be true, not false")
 
 		} else if id == 2 && value {
-			t.Error("Value for id 2 should be false, not true")
+			t.Error("value for id 2 should be false, not true")
 		}
 	}
 }
@@ -70,37 +70,37 @@ func TestBoolean(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 
 	defer db.Close()
 
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER, fbool BOOLEAN)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	bool1 := true
 	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(1, ?)", bool1)
 	if err != nil {
-		t.Fatal("Failed to insert boolean:", err)
+		t.Fatal("failed to insert boolean:", err)
 	}
 
 	bool2 := false
 	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(2, ?)", bool2)
 	if err != nil {
-		t.Fatal("Failed to insert boolean:", err)
+		t.Fatal("failed to insert boolean:", err)
 	}
 
 	bool3 := "nonsense"
 	_, err = db.Exec("INSERT INTO foo(id, fbool) VALUES(3, ?)", bool3)
 	if err != nil {
-		t.Fatal("Failed to insert nonsense:", err)
+		t.Fatal("failed to insert nonsense:", err)
 	}
 
 	rows, err := db.Query("SELECT id, fbool FROM foo where fbool = ?", bool1)
 	if err != nil {
-		t.Fatal("Unable to query foo table:", err)
+		t.Fatal("unable to query foo table:", err)
 	}
 	counter := 0
 
@@ -109,51 +109,51 @@ func TestBoolean(t *testing.T) {
 
 	for rows.Next() {
 		if err := rows.Scan(&id, &fbool); err != nil {
-			t.Fatal("Unable to scan results:", err)
+			t.Fatal("unable to scan results:", err)
 		}
 		counter++
 	}
 
 	if counter != 1 {
-		t.Fatalf("Expected 1 row but %v", counter)
+		t.Fatalf("expected 1 row but %v", counter)
 	}
 
 	if id != 1 && !fbool {
-		t.Fatalf("Value for id 1 should be %v, not %v", bool1, fbool)
+		t.Fatalf("value for id 1 should be %v, not %v", bool1, fbool)
 	}
 
 	rows, err = db.Query("SELECT id, fbool FROM foo where fbool = ?", bool2)
 	if err != nil {
-		t.Fatal("Unable to query foo table:", err)
+		t.Fatal("unable to query foo table:", err)
 	}
 
 	counter = 0
 
 	for rows.Next() {
 		if err := rows.Scan(&id, &fbool); err != nil {
-			t.Fatal("Unable to scan results:", err)
+			t.Fatal("unable to scan results:", err)
 		}
 		counter++
 	}
 
 	if counter != 1 {
-		t.Fatalf("Expected 1 row but %v", counter)
+		t.Fatalf("expected 1 row but %v", counter)
 	}
 
 	if id != 2 && fbool {
-		t.Fatalf("Value for id 2 should be %v, not %v", bool2, fbool)
+		t.Fatalf("value for id 2 should be %v, not %v", bool2, fbool)
 	}
 
 	// make sure "nonsense" triggered an error
 	rows, err = db.Query("SELECT id, fbool FROM foo where id=?;", 3)
 	if err != nil {
-		t.Fatal("Unable to query foo table:", err)
+		t.Fatal("unable to query foo table:", err)
 	}
 
 	rows.Next()
 	err = rows.Scan(&id, &fbool)
 	if err == nil {
-		t.Error("Expected error from \"nonsense\" bool")
+		t.Error("expected error from \"nonsense\" bool")
 	}
 }
 
@@ -162,35 +162,35 @@ func TestFloat32(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	_, err = db.Exec("CREATE TABLE foo(id INTEGER)")
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	_, err = db.Exec("INSERT INTO foo(id) VALUES(null)")
 	if err != nil {
-		t.Fatal("Failed to insert null:", err)
+		t.Fatal("failed to insert null:", err)
 	}
 
 	rows, err := db.Query("SELECT id FROM foo")
 	if err != nil {
-		t.Fatal("Unable to query foo table:", err)
+		t.Fatal("unable to query foo table:", err)
 	}
 
 	if !rows.Next() {
-		t.Fatal("Unable to query results:", err)
+		t.Fatal("unable to query results:", err)
 	}
 
 	var id interface{}
 	if err := rows.Scan(&id); err != nil {
-		t.Fatal("Unable to scan results:", err)
+		t.Fatal("unable to scan results:", err)
 	}
 	if id != nil {
-		t.Error("Expected nil but not")
+		t.Error("expected nil but not")
 	}
 }
 
@@ -199,29 +199,29 @@ func TestNull(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
 	rows, err := db.Query("SELECT 3.141592")
 	if err != nil {
-		t.Fatal("Unable to query foo table:", err)
+		t.Fatal("unable to query foo table:", err)
 	}
 
 	if !rows.Next() {
-		t.Fatal("Unable to query results:", err)
+		t.Fatal("unable to query results:", err)
 	}
 
 	var v interface{}
 	if err := rows.Scan(&v); err != nil {
-		t.Fatal("Unable to scan results:", err)
+		t.Fatal("unable to scan results:", err)
 	}
 	f, ok := v.(float64)
 	if !ok {
-		t.Error("Expected float but not")
+		t.Error("expected float but not")
 	}
 	if f != 3.141592 {
-		t.Error("Expected 3.141592 but not")
+		t.Error("expected 3.141592 but not")
 	}
 }
 
@@ -230,7 +230,7 @@ func TestStringContainingZero(t *testing.T) {
 	defer os.Remove(tempFilename)
 	db, err := sql.Open("sqlite3", tempFilename)
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -238,29 +238,29 @@ func TestStringContainingZero(t *testing.T) {
 	create table foo (id integer, name, extra text);
 	`)
 	if err != nil {
-		t.Error("Failed to call db.Query:", err)
+		t.Error("failed to call db.Query:", err)
 	}
 
 	const text = "foo\x00bar"
 
 	_, err = db.Exec(`insert into foo(id, name, extra) values($1, $2, $2)`, 1, text)
 	if err != nil {
-		t.Error("Failed to call db.Exec:", err)
+		t.Error("failed to call db.Exec:", err)
 	}
 
 	row := db.QueryRow(`select id, extra from foo where id = $1 and extra = $2`, 1, text)
 	if row == nil {
-		t.Error("Failed to call db.QueryRow")
+		t.Error("failed to call db.QueryRow")
 	}
 
 	var id int
 	var extra string
 	err = row.Scan(&id, &extra)
 	if err != nil {
-		t.Error("Failed to db.Scan:", err)
+		t.Error("failed to db.Scan:", err)
 	}
 	if id != 1 || extra != text {
-		t.Error("Failed to db.QueryRow: not matched results")
+		t.Error("failed to db.QueryRow: not matched results")
 	}
 }
 
@@ -270,7 +270,7 @@ func TestDeclTypes(t *testing.T) {
 
 	conn, err := d.Open(":memory:")
 	if err != nil {
-		t.Fatal("Failed to begin transaction:", err)
+		t.Fatal("failed to begin transaction:", err)
 	}
 	defer conn.Close()
 
@@ -278,24 +278,24 @@ func TestDeclTypes(t *testing.T) {
 
 	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text)", nil)
 	if err != nil {
-		t.Fatal("Failed to create table:", err)
+		t.Fatal("failed to create table:", err)
 	}
 
 	_, err = sqlite3conn.Exec("insert into foo(name) values(\"bar\")", nil)
 	if err != nil {
-		t.Fatal("Failed to insert:", err)
+		t.Fatal("failed to insert:", err)
 	}
 
 	rs, err := sqlite3conn.Query("select * from foo", nil)
 	if err != nil {
-		t.Fatal("Failed to select:", err)
+		t.Fatal("failed to select:", err)
 	}
 	defer rs.Close()
 
 	declTypes := rs.(*SQLiteRows).DeclTypes()
 
 	if !reflect.DeepEqual(declTypes, []string{"integer", "text"}) {
-		t.Fatal("Unexpected declTypes:", declTypes)
+		t.Fatal("unexpected declTypes:", declTypes)
 	}
 }
 

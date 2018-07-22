@@ -112,11 +112,11 @@ func TestExtendedErrorCodes_ForeignKey(t *testing.T) {
 	} else {
 		sqliteErr := err.(Error)
 		if sqliteErr.Code != ErrConstraint {
-			t.Errorf("Wrong basic error code: %d != %d",
+			t.Errorf("wrong basic error code: %d != %d",
 				sqliteErr.Code, ErrConstraint)
 		}
 		if sqliteErr.ExtendedCode != ErrConstraintForeignKey {
-			t.Errorf("Wrong extended error code: %d != %d",
+			t.Errorf("wrong extended error code: %d != %d",
 				sqliteErr.ExtendedCode, ErrConstraintForeignKey)
 		}
 	}
@@ -154,12 +154,12 @@ func TestExtendedErrorCodes_NotNull(t *testing.T) {
 
 	res, err := db.Exec("INSERT INTO Foo (value) VALUES (100);")
 	if err != nil {
-		t.Fatalf("Creating first row: %v", err)
+		t.Fatalf("creating first row: %v", err)
 	}
 
 	id, err := res.LastInsertId()
 	if err != nil {
-		t.Fatalf("Retrieving last insert id: %v", err)
+		t.Fatalf("retrieving last insert id: %v", err)
 	}
 
 	_, err = db.Exec("INSERT INTO Foo (ref) VALUES (?);", id)
@@ -168,11 +168,11 @@ func TestExtendedErrorCodes_NotNull(t *testing.T) {
 	} else {
 		sqliteErr := err.(Error)
 		if sqliteErr.Code != ErrConstraint {
-			t.Errorf("Wrong basic error code: %d != %d",
+			t.Errorf("wrong basic error code: %d != %d",
 				sqliteErr.Code, ErrConstraint)
 		}
 		if sqliteErr.ExtendedCode != ErrConstraintNotNull {
-			t.Errorf("Wrong extended error code: %d != %d",
+			t.Errorf("wrong extended error code: %d != %d",
 				sqliteErr.ExtendedCode, ErrConstraintNotNull)
 		}
 	}
@@ -210,12 +210,12 @@ func TestExtendedErrorCodes_Unique(t *testing.T) {
 
 	res, err := db.Exec("INSERT INTO Foo (value) VALUES (100);")
 	if err != nil {
-		t.Fatalf("Creating first row: %v", err)
+		t.Fatalf("creating first row: %v", err)
 	}
 
 	id, err := res.LastInsertId()
 	if err != nil {
-		t.Fatalf("Retrieving last insert id: %v", err)
+		t.Fatalf("retrieving last insert id: %v", err)
 	}
 
 	_, err = db.Exec("INSERT INTO Foo (ref, value) VALUES (?, 100);", id)
@@ -224,17 +224,17 @@ func TestExtendedErrorCodes_Unique(t *testing.T) {
 	} else {
 		sqliteErr := err.(Error)
 		if sqliteErr.Code != ErrConstraint {
-			t.Errorf("Wrong basic error code: %d != %d",
+			t.Errorf("wrong basic error code: %d != %d",
 				sqliteErr.Code, ErrConstraint)
 		}
 		if sqliteErr.ExtendedCode != ErrConstraintUnique {
-			t.Errorf("Wrong extended error code: %d != %d",
+			t.Errorf("wrong extended error code: %d != %d",
 				sqliteErr.ExtendedCode, ErrConstraintUnique)
 		}
 		extended := sqliteErr.Code.Extend(3).Error()
 		expected := "constraint failed"
 		if extended != expected {
-			t.Errorf("Wrong basic error code: %q != %q",
+			t.Errorf("wrong basic error code: %q != %q",
 				extended, expected)
 		}
 	}

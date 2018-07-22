@@ -40,7 +40,7 @@ func download(prefix string) (url string, content []byte, err error) {
 	})
 
 	if url == "" {
-		return "", nil, fmt.Errorf("Unable to find prefix '%s' on sqlite.org", prefix)
+		return "", nil, fmt.Errorf("unable to find prefix '%s' on sqlite.org", prefix)
 	}
 
 	fmt.Printf("Downloading %v\n", url)
@@ -61,7 +61,7 @@ func download(prefix string) (url string, content []byte, err error) {
 
 func mergeFile(src string, dst string) error {
 	defer func() error {
-		fmt.Printf("Removing: %s\n", src)
+		fmt.Printf("removing: %s\n", src)
 		err := os.Remove(src)
 
 		if err != nil {
@@ -89,7 +89,7 @@ func mergeFile(src string, dst string) error {
 		return err
 	}
 
-	fmt.Printf("Merging: %s into %s\n", src, dst)
+	fmt.Printf("merging: %s into %s\n", src, dst)
 	if _, err = fdst.Write(content); err != nil {
 		return err
 	}
@@ -98,18 +98,18 @@ func mergeFile(src string, dst string) error {
 }
 
 func main() {
-	fmt.Println("Go-SQLite3 Upgrade Tool")
+	fmt.Println("Go-SQLite3 upgrade tool")
 
 	// Download Amalgamation
 	_, amalgamation, err := download("sqlite-amalgamation-")
 	if err != nil {
-		fmt.Printf("Failed to download: sqlite-amalgamation; %s\n", err)
+		fmt.Printf("failed to download: sqlite-amalgamation; %s\n", err)
 	}
 
 	// Download Source
 	_, source, err := download("sqlite-src-")
 	if err != nil {
-		fmt.Printf("Failed to download: sqlite-src; %s\n", err)
+		fmt.Printf("failed to download: sqlite-src; %s\n", err)
 	}
 
 	// Create Amalgamation Zip Reader

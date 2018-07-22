@@ -34,7 +34,7 @@ func TestPreUpdateHook(t *testing.T) {
 				if data.Op != SQLITE_INSERT {
 					err := data.Old(oldRow...)
 					if err != nil {
-						t.Fatalf("Unexpected error calling SQLitePreUpdateData.Old: %v", err)
+						t.Fatalf("unexpected error calling SQLitePreUpdateData.Old: %v", err)
 					}
 				}
 
@@ -43,7 +43,7 @@ func TestPreUpdateHook(t *testing.T) {
 				if data.Op != SQLITE_DELETE {
 					err := data.New(newRow...)
 					if err != nil {
-						t.Fatalf("Unexpected error calling SQLitePreUpdateData.New: %v", err)
+						t.Fatalf("unexpected error calling SQLitePreUpdateData.New: %v", err)
 					}
 				}
 
@@ -52,10 +52,10 @@ func TestPreUpdateHook(t *testing.T) {
 				if data.Op != SQLITE_INSERT {
 					err := data.Old(tooSmallRow...)
 					if err != nil {
-						t.Fatalf("Unexpected error calling SQLitePreUpdateData.Old: %v", err)
+						t.Fatalf("unexpected error calling SQLitePreUpdateData.Old: %v", err)
 					}
 					if len(tooSmallRow) != 0 {
-						t.Errorf("Expected tooSmallRow to be empty, got: %v", tooSmallRow)
+						t.Errorf("expected tooSmallRow to be empty, got: %v", tooSmallRow)
 					}
 				}
 
@@ -74,7 +74,7 @@ func TestPreUpdateHook(t *testing.T) {
 
 	db, err := sql.Open("sqlite3_PreUpdateHook", ":memory:")
 	if err != nil {
-		t.Fatal("Failed to open database:", err)
+		t.Fatal("failed to open database:", err)
 	}
 	defer db.Close()
 
@@ -87,43 +87,43 @@ func TestPreUpdateHook(t *testing.T) {
 	for _, statement := range statements {
 		_, err = db.Exec(statement)
 		if err != nil {
-			t.Fatalf("Unable to prepare test data [%v]: %v", statement, err)
+			t.Fatalf("unable to prepare test data [%v]: %v", statement, err)
 		}
 	}
 
 	if len(events) != 3 {
-		t.Errorf("Events should be 3 entries, got: %d", len(events))
+		t.Errorf("events should be 3 entries, got: %d", len(events))
 	}
 
 	if events[0].op != SQLITE_INSERT {
-		t.Errorf("Op isn't as expected: %v", events[0].op)
+		t.Errorf("OP isn't as expected: %v", events[0].op)
 	}
 
 	if events[1].op != SQLITE_UPDATE {
-		t.Errorf("Op isn't as expected: %v", events[1].op)
+		t.Errorf("OP isn't as expected: %v", events[1].op)
 	}
 
 	if events[1].count != 1 {
-		t.Errorf("Expected event row 1 to have 1 column, had: %v", events[1].count)
+		t.Errorf("expected event row 1 to have 1 column, had: %v", events[1].count)
 	}
 
 	newRow_0_0 := events[0].newRow[0].(int64)
 	if newRow_0_0 != 9 {
-		t.Errorf("Expected event row 0 new column 0 to be == 9, got: %v", newRow_0_0)
+		t.Errorf("expected event row 0 new column 0 to be == 9, got: %v", newRow_0_0)
 	}
 
 	oldRow_1_0 := events[1].oldRow[0].(int64)
 	if oldRow_1_0 != 9 {
-		t.Errorf("Expected event row 1 old column 0 to be == 9, got: %v", oldRow_1_0)
+		t.Errorf("expected event row 1 old column 0 to be == 9, got: %v", oldRow_1_0)
 	}
 
 	newRow_1_0 := events[1].newRow[0].(int64)
 	if newRow_1_0 != 99 {
-		t.Errorf("Expected event row 1 new column 0 to be == 99, got: %v", newRow_1_0)
+		t.Errorf("expected event row 1 new column 0 to be == 99, got: %v", newRow_1_0)
 	}
 
 	oldRow_2_0 := events[2].oldRow[0].(int64)
 	if oldRow_2_0 != 99 {
-		t.Errorf("Expected event row 1 new column 0 to be == 99, got: %v", oldRow_2_0)
+		t.Errorf("expected event row 1 new column 0 to be == 99, got: %v", oldRow_2_0)
 	}
 }
