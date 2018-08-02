@@ -334,7 +334,12 @@ func (j JournalMode) String() string {
 }
 
 const (
-	// JournalModeDelete  is the normal behavior.
+	// JournalModeAuto is the journal mode in which the Journal is not explicitly set.
+	// This means that if any other program or connection already has set the journal mode
+	// the journal mode is automatically read from the database and not forcibly set.
+	JournalModeAuto = JournalMode("AUTO")
+
+	// JournalModeDelete is the normal behavior.
 	// In the DELETE mode, the rollback journal is deleted at the conclusion
 	// of each transaction.
 	// Indeed, the delete operation is the action that causes the transaction to commit.
@@ -585,7 +590,7 @@ func NewConfig() *Config {
 		DeferForeignKeys:       false,
 		ForeignKeyConstraints:  false,
 		IgnoreCheckConstraints: false,
-		JournalMode:            JournalModeDelete,
+		JournalMode:            JournalModeAuto,
 		QueryOnly:              false,
 		RecursiveTriggers:      false,
 		SecureDelete:           SecureDeleteOff,
@@ -595,121 +600,6 @@ func NewConfig() *Config {
 			Encoder: NewSHA1Encoder(),
 		},
 	}
-}
-
-// FormatDSN formats the given Config into a DSN string which can be passed to
-// the driver.
-func (cfg *Config) FormatDSN() string {
-	var buf bytes.Buffer
-
-	params := url.Values{}
-	if len(cfg.Cache.String()) > 0 {
-		params.Set("cache", cfg.Cache.String())
-	}
-
-	if len(cfg.Mode.String()) > 0 {
-		params.Set("mode", cfg.Mode.String())
-	}
-
-	if len(cfg.Mutex.String()) > 0 {
-		params.Set("mutex", cfg.Mutex.String())
-	}
-
-	if cfg.Immutable {
-		params.Set("immutable", "true")
-	}
-
-	if cfg.TimeZone != nil {
-		if cfg.TimeZone == time.Local {
-			params.Set("tz", "auto")
-		} else {
-			params.Set("tz", cfg.TimeZone.String())
-		}
-	}
-
-	if cfg.BusyTimeout > 0 {
-		params.Set("timeout", cfg.BusyTimeout.String())
-	}
-
-	if len(cfg.TransactionLock.String()) > 0 && cfg.TransactionLock != TxLockDeferred {
-		params.Set("txlock", cfg.TransactionLock.String())
-	}
-
-	if len(cfg.LockingMode) > 0 && cfg.LockingMode != LockingModeNormal {
-		params.Set("lock", cfg.LockingMode.String())
-	}
-
-	if len(cfg.AutoVacuum) > 0 && cfg.AutoVacuum != AutoVacuumNone {
-		params.Set("vacuum", cfg.AutoVacuum.String())
-	}
-
-	if cfg.CaseSensitiveLike {
-		params.Set("cslike", "true")
-	}
-
-	if cfg.DeferForeignKeys {
-		params.Set("defer_fk", "true")
-	}
-
-	if cfg.ForeignKeyConstraints {
-		params.Set("fk", "true")
-	}
-
-	if cfg.IgnoreCheckConstraints {
-		params.Set("ignore_check_contraints", "true")
-	}
-
-	if len(cfg.JournalMode) > 0 && cfg.JournalMode != JournalModeDelete {
-		params.Set("journal", cfg.JournalMode.String())
-	}
-
-	if cfg.QueryOnly {
-		params.Set("query_only", "true")
-	}
-
-	if cfg.RecursiveTriggers {
-		params.Set("recursive_triggers", "true")
-	}
-
-	if len(cfg.SecureDelete) > 0 && cfg.SecureDelete != SecureDeleteOff {
-		params.Set("secure_delete", cfg.SecureDelete.String())
-	}
-
-	if len(cfg.Synchronous) > 0 && cfg.Synchronous != SynchronousNormal {
-		params.Set("sync", cfg.Synchronous.String())
-	}
-
-	if cfg.WriteableSchema {
-		params.Set("writable_schema", "true")
-	}
-
-	if cfg.Authentication != nil {
-		if len(cfg.Authentication.Username) > 0 && len(cfg.Authentication.Password) > 0 {
-			params.Set("user", cfg.Authentication.Username)
-			params.Set("pass", cfg.Authentication.Password)
-
-			if len(cfg.Authentication.Salt) > 0 {
-				params.Set("salt", cfg.Authentication.Salt)
-			}
-
-			if cfg.Authentication.Encoder != nil {
-				params.Set("crypt", cfg.Authentication.Encoder.String())
-			}
-		}
-	}
-
-	if !strings.HasPrefix(cfg.Database, "file:") {
-		buf.WriteString("file:")
-	}
-	buf.WriteString(cfg.Database)
-
-	// Append Options
-	if len(params) > 0 {
-		buf.WriteRune('?')
-		buf.WriteString(params.Encode())
-	}
-
-	return buf.String()
 }
 
 // Create connection from Configuration
@@ -933,9 +823,11 @@ func (cfg *Config) createConnection() (driver.Conn, error) {
 	}
 
 	// Journal Mode
-	if err := conn.PRAGMA(PRAGMA_JOURNAL_MODE, cfg.JournalMode.String()); err != nil {
-		C.sqlite3_close_v2(db)
-		return nil, err
+	if cfg.JournalMode != JournalModeAuto {
+		if err := conn.PRAGMA(PRAGMA_JOURNAL_MODE, cfg.JournalMode.String()); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// Locking Mode
@@ -1242,6 +1134,8 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 					// For WAL Mode set Synchronous Mode to 'NORMAL'
 					// See https://www.sqlite.org/pragma.html#pragma_synchronous
 					cfg.Synchronous = SynchronousNormal
+				case "AUTO":
+					cfg.JournalMode = JournalModeAuto
 				default:
 					return nil, fmt.Errorf("invalid journal: %v, expecting value of 'DELETE TRUNCATE PERSIST MEMORY WAL OFF'", val)
 				}
@@ -1316,6 +1210,125 @@ func ParseDSN(dsn string) (cfg *Config, err error) {
 	}
 
 	return cfg, nil
+}
+
+// FormatDSN formats the given Config into a DSN string which can be passed to
+// the driver.
+func (cfg *Config) FormatDSN() string {
+	var buf bytes.Buffer
+
+	params := url.Values{}
+	if len(cfg.Key) > 0 {
+		params.Set("key", cfg.Key)
+	}
+
+	if len(cfg.Cache.String()) > 0 {
+		params.Set("cache", cfg.Cache.String())
+	}
+
+	if len(cfg.Mode.String()) > 0 {
+		params.Set("mode", cfg.Mode.String())
+	}
+
+	if len(cfg.Mutex.String()) > 0 {
+		params.Set("mutex", cfg.Mutex.String())
+	}
+
+	if cfg.Immutable {
+		params.Set("immutable", "true")
+	}
+
+	if cfg.TimeZone != nil {
+		if cfg.TimeZone == time.Local {
+			params.Set("tz", "auto")
+		} else {
+			params.Set("tz", cfg.TimeZone.String())
+		}
+	}
+
+	if cfg.BusyTimeout > 0 {
+		params.Set("timeout", cfg.BusyTimeout.String())
+	}
+
+	if len(cfg.TransactionLock.String()) > 0 && cfg.TransactionLock != TxLockDeferred {
+		params.Set("txlock", cfg.TransactionLock.String())
+	}
+
+	if len(cfg.LockingMode) > 0 && cfg.LockingMode != LockingModeNormal {
+		params.Set("lock", cfg.LockingMode.String())
+	}
+
+	if len(cfg.AutoVacuum) > 0 && cfg.AutoVacuum != AutoVacuumNone {
+		params.Set("vacuum", cfg.AutoVacuum.String())
+	}
+
+	if cfg.CaseSensitiveLike {
+		params.Set("cslike", "true")
+	}
+
+	if cfg.DeferForeignKeys {
+		params.Set("defer_fk", "true")
+	}
+
+	if cfg.ForeignKeyConstraints {
+		params.Set("fk", "true")
+	}
+
+	if cfg.IgnoreCheckConstraints {
+		params.Set("ignore_check_contraints", "true")
+	}
+
+	if len(cfg.JournalMode) > 0 && cfg.JournalMode != JournalModeDelete {
+		params.Set("journal", cfg.JournalMode.String())
+	}
+
+	if cfg.QueryOnly {
+		params.Set("query_only", "true")
+	}
+
+	if cfg.RecursiveTriggers {
+		params.Set("recursive_triggers", "true")
+	}
+
+	if len(cfg.SecureDelete) > 0 && cfg.SecureDelete != SecureDeleteOff {
+		params.Set("secure_delete", cfg.SecureDelete.String())
+	}
+
+	if len(cfg.Synchronous) > 0 && cfg.Synchronous != SynchronousNormal {
+		params.Set("sync", cfg.Synchronous.String())
+	}
+
+	if cfg.WriteableSchema {
+		params.Set("writable_schema", "true")
+	}
+
+	if cfg.Authentication != nil {
+		if len(cfg.Authentication.Username) > 0 && len(cfg.Authentication.Password) > 0 {
+			params.Set("user", cfg.Authentication.Username)
+			params.Set("pass", cfg.Authentication.Password)
+
+			if len(cfg.Authentication.Salt) > 0 {
+				params.Set("salt", cfg.Authentication.Salt)
+			}
+
+			if cfg.Authentication.Encoder != nil {
+				params.Set("crypt", cfg.Authentication.Encoder.String())
+			}
+		}
+	}
+
+	if !strings.HasPrefix(cfg.Database, "file:") {
+		buf.WriteString("file:")
+	}
+	buf.WriteString(cfg.Database)
+
+	// Append Options
+	if len(params) > 0 {
+		buf.WriteRune('?')
+		buf.WriteString(params.Encode())
+	}
+
+	return buf.String()
 }
 
 func normalizeParams(params url.Values) {
