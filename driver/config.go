@@ -1218,9 +1218,6 @@ func (cfg *Config) FormatDSN() string {
 	var buf bytes.Buffer
 
 	params := url.Values{}
-	if len(cfg.Key) > 0 {
-		params.Set("key", cfg.Key)
-	}
 
 	if len(cfg.Cache.String()) > 0 {
 		params.Set("cache", cfg.Cache.String())
