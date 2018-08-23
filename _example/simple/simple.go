@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/CovenantSQL/go-sqlite3"
 	"log"
 	"os"
 )
@@ -18,6 +18,7 @@ func main() {
 	defer db.Close()
 
 	sqlStmt := `
+	PRAGMA key = auxten;
 	create table foo (id integer not null primary key, name text);
 	delete from foo;
 	`
