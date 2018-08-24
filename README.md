@@ -1,21 +1,14 @@
 go-sqlite3-encrypt
 ==========
 
-[![GoDoc Reference](https://godoc.org/github.com/mattn/go-sqlite3?status.svg)](http://godoc.org/github.com/mattn/go-sqlite3)
-[![Build Status](https://travis-ci.org/mattn/go-sqlite3.svg?branch=master)](https://travis-ci.org/mattn/go-sqlite3)
-[![Coverage Status](https://coveralls.io/repos/mattn/go-sqlite3/badge.svg?branch=master)](https://coveralls.io/r/mattn/go-sqlite3?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
+[![GoDoc Reference](https://godoc.org/github.com/CovenantSQL/go-sqlite3-encrypt?status.svg)](http://godoc.org/github.com/CovenantSQL/go-sqlite3-encrypt)
+[![Go Report Card](https://goreportcard.com/badge/github.com/CovenantSQL/go-sqlite3-encrypt)](https://goreportcard.com/report/github.com/CovenantSQL/go-sqlite3-encrypt)
 
 # Description
+
 go-sqlite3-encrypt is go-sqlite3 with sqlcipher. follow the instructions below, the cipher extension will be builtin by default.
 
-you have 2 ways to enable cipher:
-
-1. DSN    
-    1. You can try DSN like this, `sql.Open("sqlite3", "file:dbFileName?_crypto_key=auxten")`
-1. PRAGMA
-    1. After Open db, before execute any statement do `db.Exec("PRAGMA key = auxten;")`
-
+For easy building, I also put libTomCrypt related files in project.
 
 sqlite3 driver conforming to the built-in database/sql interface
 
@@ -28,6 +21,7 @@ Supported Golang version:
 ### Overview
 
 - [Installation](#installation)
+- [HowTo Encrypt](#howto-encrypt)
 - [API Reference](#api-reference)
 - [Connection String](#connection-string)
 - [Features](#features)
@@ -55,13 +49,31 @@ Supported Golang version:
 
 This package can be installed with the go get command:
 
-    go get github.com/mattn/go-sqlite3
+    go get github.com/CovenantSQL/go-sqlite3-encrypt
 
 _go-sqlite3_ is *cgo* package.
 If you want to build your app using go-sqlite3, you need gcc.
-However, after you have built and installed _go-sqlite3_ with `go install github.com/mattn/go-sqlite3` (which requires gcc), you can build your app without relying on gcc in future.
+However, after you have built and installed _go-sqlite3_ with `go install github.com/CovenantSQL/go-sqlite3-encrypt` (which requires gcc), you can build your app without relying on gcc in future.
 
 ***Important: because this is a `CGO` enabled package you are required to set the environment variable `CGO_ENABLED=1` and have a `gcc` compile present within your path.***
+
+# HowTo Encrypt
+
+You have 2 ways to enable encryption:
+
+### DSN
+
+    1. You can try DSN like this, `sql.Open("sqlite3", "file:dbFileName?_crypto_key=auxten")`
+### PRAGMA
+
+    1. After Open db, before execute any statement do `db.Exec("PRAGMA key = auxten;")`
+
+Thanks for the great works of [sqlcipher](https://github.com/sqlcipher/sqlcipher), [libtomcrypt](https://github.com/libtom/libtomcrypt) and [go-sqlite3](https://github.com/mattn/go-sqlite3)
+
+For more details:
+1. https://github.com/sqlcipher/sqlcipher
+1. https://github.com/libtom/libtomcrypt
+1. https://github.com/mattn/go-sqlite3
 
 # API Reference
 
