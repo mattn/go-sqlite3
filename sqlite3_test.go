@@ -1574,6 +1574,47 @@ func TestUpdateAndTransactionHooks(t *testing.T) {
 	}
 }
 
+func TestAuthorizer(t *testing.T) {
+	var authorizerReturn = 0
+
+	sql.Register("sqlite3_Authorizer", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			conn.RegisterAuthorizer(func(op int, arg1, arg2, arg3 string) int {
+				return authorizerReturn
+			})
+			return nil
+		},
+	})
+	db, err := sql.Open("sqlite3_Authorizer", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	statements := []string{
+		"create table foo (id integer primary key, name varchar)",
+		"insert into foo values (9, 'test9')",
+		"update foo set name = 'test99' where id = 9",
+		"select * from foo",
+	}
+
+	authorizerReturn = SQLITE_OK
+	for _, statement := range statements {
+		_, err = db.Exec(statement)
+		if err != nil {
+			t.Fatalf("No error expected [%v]: %v", statement, err)
+		}
+	}
+
+	authorizerReturn = SQLITE_DENY
+	for _, statement := range statements {
+		_, err = db.Exec(statement)
+		if err == nil {
+			t.Fatalf("Authorizer didn't worked - nil received, but error expected: [%v]", statement)
+		}
+	}
+}
+
 func TestNilAndEmptyBytes(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
