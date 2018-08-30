@@ -10,6 +10,8 @@ package sqlite3
 /*
 #cgo CFLAGS: -I.
 #cgo linux LDFLAGS: -ldl
-#cgo solaris LDFLAGS: -lc
+#cgo linux,ppc LDFLAGS: -lpthread
+#cgo linux,ppc64 LDFLAGS: -lpthread
+#cgo linux,ppc64le LDFLAGS: -lpthread
 */
 import "C"

@@ -231,6 +231,55 @@ func TestInsert(t *testing.T) {
 	}
 }
 
+func TestUpsert(t *testing.T) {
+	_, n, _ := Version()
+	if !(n >= 3024000) {
+		t.Skip("UPSERT requires sqlite3 => 3.24.0")
+	}
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("drop table foo")
+	_, err = db.Exec("create table foo (name string primary key, counter integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		res, err := db.Exec("insert into foo(name, counter) values('key', 1) on conflict (name) do update set counter=counter+1")
+		if err != nil {
+			t.Fatal("Failed to upsert record:", err)
+		}
+		affected, _ := res.RowsAffected()
+		if affected != 1 {
+			t.Fatalf("Expected %d for affected rows, but %d:", 1, affected)
+		}
+	}
+	rows, err := db.Query("select name, counter from foo")
+	if err != nil {
+		t.Fatal("Failed to select records:", err)
+	}
+	defer rows.Close()
+
+	rows.Next()
+
+	var resultName string
+	var resultCounter int
+	rows.Scan(&resultName, &resultCounter)
+	if resultName != "key" {
+		t.Errorf("Expected %s for fetched result, but %s:", "key", resultName)
+	}
+	if resultCounter != 10 {
+		t.Errorf("Expected %d for fetched result, but %d:", 10, resultCounter)
+	}
+
+}
+
 func TestUpdate(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
@@ -1580,6 +1629,25 @@ func TestNilAndEmptyBytes(t *testing.T) {
 	}
 }
 
+func TestInsertNilByteSlice(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("create table blob_not_null (b blob not null)"); err != nil {
+		t.Fatal(err)
+	}
+	var nilSlice []byte
+	if _, err := db.Exec("insert into blob_not_null (b) values (?)", nilSlice); err == nil {
+		t.Fatal("didn't expect INSERT to 'not null' column with a nil []byte slice to work")
+	}
+	zeroLenSlice := []byte{}
+	if _, err := db.Exec("insert into blob_not_null (b) values (?)", zeroLenSlice); err != nil {
+		t.Fatal("failed to insert zero-length slice")
+	}
+}
+
 var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
@@ -1660,6 +1728,7 @@ var testTables = []string{"foo", "bar", "t", "bench"}
 var tests = []testing.InternalTest{
 	{Name: "TestResult", F: testResult},
 	{Name: "TestBlobs", F: testBlobs},
+	{Name: "TestMultiBlobs", F: testMultiBlobs},
 	{Name: "TestManyQueryRow", F: testManyQueryRow},
 	{Name: "TestTxQuery", F: testTxQuery},
 	{Name: "TestPreparedStmt", F: testPreparedStmt},
@@ -1812,6 +1881,56 @@ func testBlobs(t *testing.T) {
 		t.Errorf("string scan: %v", err)
 	} else if got != want {
 		t.Errorf("for string, got %q; want %q", got, want)
+	}
+}
+
+func testMultiBlobs(t *testing.T) {
+	db.tearDown()
+	db.mustExec("create table foo (id integer primary key, bar " + db.blobType(16) + ")")
+	var blob0 = []byte{0, 1, 2, 3, 4, 5, 6, 7}
+	db.mustExec(db.q("insert into foo (id, bar) values(?,?)"), 0, blob0)
+	var blob1 = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	db.mustExec(db.q("insert into foo (id, bar) values(?,?)"), 1, blob1)
+
+	r, err := db.Query(db.q("select bar from foo order by id"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if !r.Next() {
+		if r.Err() != nil {
+			t.Fatal(err)
+		}
+		t.Fatal("expected one rows")
+	}
+
+	want0 := fmt.Sprintf("%x", blob0)
+	b0 := make([]byte, 8)
+	err = r.Scan(&b0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got0 := fmt.Sprintf("%x", b0)
+
+	if !r.Next() {
+		if r.Err() != nil {
+			t.Fatal(err)
+		}
+		t.Fatal("expected one rows")
+	}
+
+	want1 := fmt.Sprintf("%x", blob1)
+	b1 := make([]byte, 16)
+	err = r.Scan(&b1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got1 := fmt.Sprintf("%x", b1)
+	if got0 != want0 {
+		t.Errorf("for []byte, got %q; want %q", got0, want0)
+	}
+	if got1 != want1 {
+		t.Errorf("for []byte, got %q; want %q", got1, want1)
 	}
 }
 

@@ -205,13 +205,13 @@ const (
 	SQLITE_UPDATE = C.SQLITE_UPDATE
 )
 
-// SQLiteDriver implement sql.Driver.
+// SQLiteDriver implements driver.Driver.
 type SQLiteDriver struct {
 	Extensions  []string
 	ConnectHook func(*SQLiteConn) error
 }
 
-// SQLiteConn implement sql.Conn.
+// SQLiteConn implements driver.Conn.
 type SQLiteConn struct {
 	mu          sync.Mutex
 	db          *C.sqlite3
@@ -221,12 +221,12 @@ type SQLiteConn struct {
 	aggregators []*aggInfo
 }
 
-// SQLiteTx implemen sql.Tx.
+// SQLiteTx implements driver.Tx.
 type SQLiteTx struct {
 	c *SQLiteConn
 }
 
-// SQLiteStmt implement sql.Stmt.
+// SQLiteStmt implements driver.Stmt.
 type SQLiteStmt struct {
 	mu     sync.Mutex
 	c      *SQLiteConn
@@ -236,13 +236,13 @@ type SQLiteStmt struct {
 	cls    bool
 }
 
-// SQLiteResult implement sql.Result.
+// SQLiteResult implements sql.Result.
 type SQLiteResult struct {
 	id      int64
 	changes int64
 }
 
-// SQLiteRows implement sql.Rows.
+// SQLiteRows implements driver.Rows.
 type SQLiteRows struct {
 	s        *SQLiteStmt
 	nc       int
@@ -891,6 +891,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	// Options
 	var loc *time.Location
+	authCreate := false
+	authUser := ""
+	authPass := ""
+	authCrypt := ""
+	authSalt := ""
 	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	txlock := "BEGIN"
 
@@ -914,6 +919,23 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		params, err := url.ParseQuery(dsn[pos+1:])
 		if err != nil {
 			return nil, err
+		}
+
+		// Authentication
+		if _, ok := params["_auth"]; ok {
+			authCreate = true
+		}
+		if val := params.Get("_auth_user"); val != "" {
+			authUser = val
+		}
+		if val := params.Get("_auth_pass"); val != "" {
+			authPass = val
+		}
+		if val := params.Get("_auth_crypt"); val != "" {
+			authCrypt = val
+		}
+		if val := params.Get("_auth_salt"); val != "" {
+			authSalt = val
 		}
 
 		// _loc
@@ -1248,11 +1270,174 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil
 	}
 
+	// USER AUTHENTICATION
+	//
+	// User Authentication is always performed even when
+	// sqlite_userauth is not compiled in, because without user authentication
+	// the authentication is a no-op.
+	//
+	// Workflow
+	//	- Authenticate
+	//		ON::SUCCESS		=> Continue
+	//		ON::SQLITE_AUTH => Return error and exit Open(...)
+	//
+	//  - Activate User Authentication
+	//		Check if the user wants to activate User Authentication.
+	//		If so then first create a temporary AuthConn to the database
+	//		This is possible because we are already succesfully authenticated.
+	//
+	//	- Check if `sqlite_user`` table exists
+	//		YES				=> Add the provided user from DSN as Admin User and
+	//						   activate user authentication.
+	//		NO				=> Continue
+	//
+
+	// Create connection to SQLite
+	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
+
+	// Password Cipher has to be registerd before authentication
+	if len(authCrypt) > 0 {
+		switch strings.ToUpper(authCrypt) {
+		case "SHA1":
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA1, true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSHA1: %s", err)
+			}
+		case "SSHA1":
+			if len(authSalt) == 0 {
+				return nil, fmt.Errorf("_auth_crypt=ssha1, requires _auth_salt")
+			}
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA1(authSalt), true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSSHA1: %s", err)
+			}
+		case "SHA256":
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA256, true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSHA256: %s", err)
+			}
+		case "SSHA256":
+			if len(authSalt) == 0 {
+				return nil, fmt.Errorf("_auth_crypt=ssha256, requires _auth_salt")
+			}
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA256(authSalt), true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSSHA256: %s", err)
+			}
+		case "SHA384":
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA384, true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSHA384: %s", err)
+			}
+		case "SSHA384":
+			if len(authSalt) == 0 {
+				return nil, fmt.Errorf("_auth_crypt=ssha384, requires _auth_salt")
+			}
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA384(authSalt), true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSSHA384: %s", err)
+			}
+		case "SHA512":
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA512, true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSHA512: %s", err)
+			}
+		case "SSHA512":
+			if len(authSalt) == 0 {
+				return nil, fmt.Errorf("_auth_crypt=ssha512, requires _auth_salt")
+			}
+			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA512(authSalt), true); err != nil {
+				return nil, fmt.Errorf("CryptEncoderSSHA512: %s", err)
+			}
+		}
+	}
+
+	// Preform Authentication
+	if err := conn.Authenticate(authUser, authPass); err != nil {
+		return nil, err
+	}
+
+	// Register: authenticate
+	// Authenticate will perform an authentication of the provided username
+	// and password against the database.
+	//
+	// If a database contains the SQLITE_USER table, then the
+	// call to Authenticate must be invoked with an
+	// appropriate username and password prior to enable read and write
+	//access to the database.
+	//
+	// Return SQLITE_OK on success or SQLITE_ERROR if the username/password
+	// combination is incorrect or unknown.
+	//
+	// If the SQLITE_USER table is not present in the database file, then
+	// this interface is a harmless no-op returnning SQLITE_OK.
+	if err := conn.RegisterFunc("authenticate", conn.authenticate, true); err != nil {
+		return nil, err
+	}
+	//
+	// Register: auth_user_add
+	// auth_user_add can be used (by an admin user only)
+	// to create a new user. When called on a no-authentication-required
+	// database, this routine converts the database into an authentication-
+	// required database, automatically makes the added user an
+	// administrator, and logs in the current connection as that user.
+	// The AuthUserAdd only works for the "main" database, not
+	// for any ATTACH-ed databases. Any call to AuthUserAdd by a
+	// non-admin user results in an error.
+	if err := conn.RegisterFunc("auth_user_add", conn.authUserAdd, true); err != nil {
+		return nil, err
+	}
+	//
+	// Register: auth_user_change
+	// auth_user_change can be used to change a users
+	// login credentials or admin privilege.  Any user can change their own
+	// login credentials. Only an admin user can change another users login
+	// credentials or admin privilege setting. No user may change their own
+	// admin privilege setting.
+	if err := conn.RegisterFunc("auth_user_change", conn.authUserChange, true); err != nil {
+		return nil, err
+	}
+	//
+	// Register: auth_user_delete
+	// auth_user_delete can be used (by an admin user only)
+	// to delete a user. The currently logged-in user cannot be deleted,
+	// which guarantees that there is always an admin user and hence that
+	// the database cannot be converted into a no-authentication-required
+	// database.
+	if err := conn.RegisterFunc("auth_user_delete", conn.authUserDelete, true); err != nil {
+		return nil, err
+	}
+
+	// Register: auth_enabled
+	// auth_enabled can be used to check if user authentication is enabled
+	if err := conn.RegisterFunc("auth_enabled", conn.authEnabled, true); err != nil {
+		return nil, err
+	}
+
 	// Auto Vacuum
+	// Moved auto_vacuum command, the user preference for auto_vacuum needs to be implemented directly after
+	// the authentication and before the sqlite_user table gets created if the user
+	// decides to activate User Authentication because
+	// auto_vacuum needs to be set before any tables are created
+	// and activating user authentication creates the internal table `sqlite_user`.
 	if autoVacuum > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA auto_vacuum = %d;", autoVacuum)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
+		}
+	}
+
+	// Check if user wants to activate User Authentication
+	if authCreate {
+		// Before going any further, we need to check that the user
+		// has provided an username and password within the DSN.
+		// We are not allowed to continue.
+		if len(authUser) < 0 {
+			return nil, fmt.Errorf("Missing '_auth_user' while user authentication was requested with '_auth'")
+		}
+		if len(authPass) < 0 {
+			return nil, fmt.Errorf("Missing '_auth_pass' while user authentication was requested with '_auth'")
+		}
+
+		// Check if User Authentication is Enabled
+		authExists := conn.AuthEnabled()
+		if !authExists {
+			if err := conn.AuthUserAdd(authUser, authPass, true); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -1347,8 +1532,6 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 	}
 
-	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
-
 	if len(d.Extensions) > 0 {
 		if err := conn.loadExtensions(d.Extensions); err != nil {
 			conn.Close()
@@ -1428,6 +1611,17 @@ const (
 	SQLITE_LIMIT_TRIGGER_DEPTH       = C.SQLITE_LIMIT_TRIGGER_DEPTH
 	SQLITE_LIMIT_WORKER_THREADS      = C.SQLITE_LIMIT_WORKER_THREADS
 )
+
+// GetFilename returns the absolute path to the file containing
+// the requested schema. When passed an empty string, it will
+// instead use the database's default schema: "main".
+// See: sqlite3_db_filename, https://www.sqlite.org/c3ref/db_filename.html
+func (c *SQLiteConn) GetFilename(schemaName string) string {
+	if schemaName == "" {
+		schemaName = "main"
+	}
+	return C.GoString(C.sqlite3_db_filename(c.db, C.CString(schemaName)))
+}
 
 // GetLimit returns the current value of a run-time limit.
 // See: sqlite3_limit, http://www.sqlite.org/c3ref/limit.html
@@ -1511,11 +1705,15 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 		case float64:
 			rv = C.sqlite3_bind_double(s.s, n, C.double(v))
 		case []byte:
-			ln := len(v)
-			if ln == 0 {
-				v = placeHolder
+			if v == nil {
+				rv = C.sqlite3_bind_null(s.s, n)
+			} else {
+				ln := len(v)
+				if ln == 0 {
+					v = placeHolder
+				}
+				rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(&v[0]), C.int(ln))
 			}
-			rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(&v[0]), C.int(ln))
 		case time.Time:
 			b := []byte(v.Format(SQLiteTimestampFormats[0]))
 			rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
@@ -1685,11 +1883,11 @@ func (rc *SQLiteRows) DeclTypes() []string {
 
 // Next move cursor to next.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
+	rc.s.mu.Lock()
+	defer rc.s.mu.Unlock()
 	if rc.s.closed {
 		return io.EOF
 	}
-	rc.s.mu.Lock()
-	defer rc.s.mu.Unlock()
 	rv := C.sqlite3_step(rc.s.s)
 	if rv == C.SQLITE_DONE {
 		return io.EOF
@@ -1739,8 +1937,6 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 			}
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
 			switch dest[i].(type) {
-			case sql.RawBytes:
-				dest[i] = (*[1 << 30]byte)(p)[0:n]
 			default:
 				slice := make([]byte, n)
 				copy(slice[:], (*[1 << 30]byte)(p)[0:n])

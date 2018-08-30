@@ -80,7 +80,6 @@ func randStringBytes(n int) string {
 }
 
 func initDatabase(t *testing.T, db *sql.DB, rowCount int64) {
-	t.Logf("Executing db initializing statements")
 	for _, query := range testTableStatements {
 		_, err := db.Exec(query)
 		if err != nil {
