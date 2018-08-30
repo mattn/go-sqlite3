@@ -1,3 +1,8 @@
+// Copyright (C) 2018 CovenantSQL <auxten@covenantsql.io>.
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file.
+
 package main
 
 import (
@@ -18,6 +23,7 @@ func main() {
 	defer db.Close()
 
 	sqlStmt := `
+	PRAGMA key = auxten;
 	create table foo (id integer not null primary key, name text);
 	delete from foo;
 	`

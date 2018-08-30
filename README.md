@@ -39,6 +39,7 @@ Supported Golang version:
   - [Usage](#usage)
 - [Extensions](#extensions)
   - [Spatialite](#spatialite)
+  - [Encrypted Storage](#encrypted-storage)
 - [FAQ](#faq)
 - [License](#license)
 
@@ -154,6 +155,7 @@ go build --tags "icu json1 fts5 secure_delete"
 | Secure Delete (FAST) | sqlite_secure_delete_fast | For more information see [PRAGMA secure_delete](https://www.sqlite.org/pragma.html#pragma_secure_delete) |
 | Tracing / Debug | sqlite_trace | Activate trace functions |
 | User Authentication | sqlite_userauth | SQLite User Authentication see [User Authentication](#user-authentication) for more information. |
+| Encrypted Storage | sqlite_encrypt | SQLite with Encrypted Storage see [Encrypted Storage](#encrypted-storage) for more information. |
 
 # Compilation
 
@@ -321,6 +323,8 @@ This package supports the SQLite User Authentication module.
 
 To use the User authentication module the package has to be compiled with the tag `sqlite_userauth`. See [Features](#features).
 
+To use Encrypted Storage module the package has to be compiled with the tag `sqlite_encrypt`. See [Features](#features).
+
 ## Usage
 
 ### Create protected database
@@ -432,6 +436,22 @@ If you want your own extension to be listed here or you want to add a reference 
 
 Spatialite is available as an extension to SQLite, and can be used in combination with this repository.
 For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatialite).
+
+## Encrypted Storage
+
+The Encrypted Storage extension will be builtin by compiling with the tag `sqlite_encrypt` 
+ you have 2 ways to enable cipher:
+
+- DSN
+
+    > You can try DSN like this, `file:foo.db?_crypto_key=auxten`
+
+- PRAGMA
+
+    > After Open db, before execute any statement do `db.Exec("PRAGMA key = auxten;")`
+    
+    See also: https://github.com/sqlcipher/sqlcipher#encrypting-a-database
+
 
 # FAQ
 
