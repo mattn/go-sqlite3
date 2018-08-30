@@ -648,6 +648,8 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl interface{}, pure bool
 
 // AutoCommit return which currently auto commit or not.
 func (c *SQLiteConn) AutoCommit() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return int(C.sqlite3_get_autocommit(c.db)) != 0
 }
 
