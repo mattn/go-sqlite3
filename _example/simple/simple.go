@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/CovenantSQL/go-sqlite3-encrypt"
+	_ "github.com/CovenantSQL/go-sqlite3"
 	"log"
 	"os"
 )

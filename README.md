@@ -1,4 +1,4 @@
-go-sqlite3-encrypt
+go-sqlite3
 ==========
 
 [![GoDoc Reference](https://godoc.org/github.com/mattn/go-sqlite3?status.svg)](http://godoc.org/github.com/mattn/go-sqlite3)
@@ -7,15 +7,6 @@ go-sqlite3-encrypt
 [![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
 
 # Description
-go-sqlite3-encrypt is go-sqlite3 with sqlcipher. follow the instructions below, the cipher extension will be builtin by default.
-
-you have 2 ways to enable cipher:
-
-1. DSN    
-    1. You can try DSN like this, `sql.Open("sqlite3", "file:dbFileName?_crypto_key=auxten")`
-1. PRAGMA
-    1. After Open db, before execute any statement do `db.Exec("PRAGMA key = auxten;")`
-
 
 sqlite3 driver conforming to the built-in database/sql interface
 
