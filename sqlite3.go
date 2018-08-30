@@ -208,13 +208,13 @@ const (
 	SQLITE_UPDATE = C.SQLITE_UPDATE
 )
 
-// SQLiteDriver implement sql.Driver.
+// SQLiteDriver implements driver.Driver.
 type SQLiteDriver struct {
 	Extensions  []string
 	ConnectHook func(*SQLiteConn) error
 }
 
-// SQLiteConn implement sql.Conn.
+// SQLiteConn implements driver.Conn.
 type SQLiteConn struct {
 	mu          sync.Mutex
 	db          *C.sqlite3
@@ -224,12 +224,12 @@ type SQLiteConn struct {
 	aggregators []*aggInfo
 }
 
-// SQLiteTx implemen sql.Tx.
+// SQLiteTx implements driver.Tx.
 type SQLiteTx struct {
 	c *SQLiteConn
 }
 
-// SQLiteStmt implement sql.Stmt.
+// SQLiteStmt implements driver.Stmt.
 type SQLiteStmt struct {
 	mu     sync.Mutex
 	c      *SQLiteConn
@@ -239,13 +239,13 @@ type SQLiteStmt struct {
 	cls    bool
 }
 
-// SQLiteResult implement sql.Result.
+// SQLiteResult implements sql.Result.
 type SQLiteResult struct {
 	id      int64
 	changes int64
 }
 
-// SQLiteRows implement sql.Rows.
+// SQLiteRows implements driver.Rows.
 type SQLiteRows struct {
 	s        *SQLiteStmt
 	nc       int
