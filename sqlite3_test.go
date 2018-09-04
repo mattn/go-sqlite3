@@ -345,6 +345,53 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+func TestUpdateMultithreaded(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("create table foo (id integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	_, err = db.Exec("insert into foo(id) values(123)")
+	if err != nil {
+		t.Fatal("Failed to insert record:", err)
+	}
+
+	var keep bool
+	var wg sync.WaitGroup
+	wg.Add(2)
+	keep = true
+	go func() {
+		for i := uint64(0); keep; i++ {
+			_, err = db.Exec("update foo set id = 234")
+			if err != nil {
+				fmt.Printf("%v, i=%d\n", err, i)
+				keep = false
+			}
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		for i := uint64(0); keep; i++ {
+			_, err = db.Exec("update foo set id = 456")
+			if err != nil {
+				fmt.Printf("%v, i=%d\n", err, i)
+				keep = false
+			}
+		}
+		wg.Done()
+	}()
+	wg.Wait()
+}
+
 func TestDelete(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
