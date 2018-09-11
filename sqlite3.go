@@ -243,7 +243,7 @@ const (
 	SQLITE_FUNCTION            = C.SQLITE_FUNCTION
 	SQLITE_SAVEPOINT           = C.SQLITE_SAVEPOINT
 	SQLITE_COPY                = C.SQLITE_COPY
-	SQLITE_RECURSIVE           = C.SQLITE_RECURSIVE
+	/*SQLITE_RECURSIVE           = C.SQLITE_RECURSIVE*/
 )
 
 // SQLiteDriver implements driver.Driver.
