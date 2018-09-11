@@ -119,6 +119,8 @@ int commitHookTrampoline(void*);
 void rollbackHookTrampoline(void*);
 void updateHookTrampoline(void*, int, char*, char*, sqlite3_int64);
 
+int authorizerTrampoline(void*, int, char*, char*, char*, char*);
+
 #ifdef SQLITE_LIMIT_WORKER_THREADS
 # define _SQLITE_HAS_LIMIT
 # define SQLITE_LIMIT_LENGTH                    0
@@ -200,9 +202,48 @@ func Version() (libVersion string, libVersionNumber int, sourceID string) {
 }
 
 const (
+	// used by authorizer and pre_update_hook
 	SQLITE_DELETE = C.SQLITE_DELETE
 	SQLITE_INSERT = C.SQLITE_INSERT
 	SQLITE_UPDATE = C.SQLITE_UPDATE
+
+	// used by authorzier - as return value
+	SQLITE_OK     = C.SQLITE_OK
+	SQLITE_IGNORE = C.SQLITE_IGNORE
+	SQLITE_DENY   = C.SQLITE_DENY
+
+	// different actions query tries to do - passed as argument to authorizer
+	SQLITE_CREATE_INDEX        = C.SQLITE_CREATE_INDEX
+	SQLITE_CREATE_TABLE        = C.SQLITE_CREATE_TABLE
+	SQLITE_CREATE_TEMP_INDEX   = C.SQLITE_CREATE_TEMP_INDEX
+	SQLITE_CREATE_TEMP_TABLE   = C.SQLITE_CREATE_TEMP_TABLE
+	SQLITE_CREATE_TEMP_TRIGGER = C.SQLITE_CREATE_TEMP_TRIGGER
+	SQLITE_CREATE_TEMP_VIEW    = C.SQLITE_CREATE_TEMP_VIEW
+	SQLITE_CREATE_TRIGGER      = C.SQLITE_CREATE_TRIGGER
+	SQLITE_CREATE_VIEW         = C.SQLITE_CREATE_VIEW
+	SQLITE_CREATE_VTABLE       = C.SQLITE_CREATE_VTABLE
+	SQLITE_DROP_INDEX          = C.SQLITE_DROP_INDEX
+	SQLITE_DROP_TABLE          = C.SQLITE_DROP_TABLE
+	SQLITE_DROP_TEMP_INDEX     = C.SQLITE_DROP_TEMP_INDEX
+	SQLITE_DROP_TEMP_TABLE     = C.SQLITE_DROP_TEMP_TABLE
+	SQLITE_DROP_TEMP_TRIGGER   = C.SQLITE_DROP_TEMP_TRIGGER
+	SQLITE_DROP_TEMP_VIEW      = C.SQLITE_DROP_TEMP_VIEW
+	SQLITE_DROP_TRIGGER        = C.SQLITE_DROP_TRIGGER
+	SQLITE_DROP_VIEW           = C.SQLITE_DROP_VIEW
+	SQLITE_DROP_VTABLE         = C.SQLITE_DROP_VTABLE
+	SQLITE_PRAGMA              = C.SQLITE_PRAGMA
+	SQLITE_READ                = C.SQLITE_READ
+	SQLITE_SELECT              = C.SQLITE_SELECT
+	SQLITE_TRANSACTION         = C.SQLITE_TRANSACTION
+	SQLITE_ATTACH              = C.SQLITE_ATTACH
+	SQLITE_DETACH              = C.SQLITE_DETACH
+	SQLITE_ALTER_TABLE         = C.SQLITE_ALTER_TABLE
+	SQLITE_REINDEX             = C.SQLITE_REINDEX
+	SQLITE_ANALYZE             = C.SQLITE_ANALYZE
+	SQLITE_FUNCTION            = C.SQLITE_FUNCTION
+	SQLITE_SAVEPOINT           = C.SQLITE_SAVEPOINT
+	SQLITE_COPY                = C.SQLITE_COPY
+	SQLITE_RECURSIVE           = C.SQLITE_RECURSIVE
 )
 
 // SQLiteDriver implements driver.Driver.
@@ -437,6 +478,20 @@ func (c *SQLiteConn) RegisterUpdateHook(callback func(int, string, string, int64
 		C.sqlite3_update_hook(c.db, nil, nil)
 	} else {
 		C.sqlite3_update_hook(c.db, (*[0]byte)(C.updateHookTrampoline), unsafe.Pointer(newHandle(c, callback)))
+	}
+}
+
+// RegisterAuthorizer sets the authorizer for connection.
+//
+// The parameters to the callback are the operation (one of the constants
+// SQLITE_INSERT, SQLITE_DELETE, or SQLITE_UPDATE), and 1 to 3 arguments,
+// depending on operation. More details see:
+// https://www.sqlite.org/c3ref/c_alter_table.html
+func (c *SQLiteConn) RegisterAuthorizer(callback func(int, string, string, string) int) {
+	if callback == nil {
+		C.sqlite3_set_authorizer(c.db, nil, nil)
+	} else {
+		C.sqlite3_set_authorizer(c.db, (*[0]byte)(C.authorizerTrampoline), unsafe.Pointer(newHandle(c, callback)))
 	}
 }
 
