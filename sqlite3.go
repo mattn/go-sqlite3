@@ -1987,7 +1987,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		case C.SQLITE_BLOB:
 			p := C.sqlite3_column_blob(rc.s.s, C.int(i))
 			if p == nil {
-				dest[i] = nil
+				dest[i] = []byte{}
 				continue
 			}
 			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
