@@ -1999,8 +1999,10 @@ func testNullZeroLengthBlobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b1 == nil || len(b1) > 0 {
-		t.Errorf("for id=1, got nil; want zero-length slice")
+	if b1 == nil {
+		t.Error("for id=1, got nil; want zero-length slice")
+	} else if len(b1) > 0 {
+		t.Errorf("for id=1, got %x; want zero-length slice", b1)
 	}
 }
 
