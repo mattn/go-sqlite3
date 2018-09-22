@@ -1733,7 +1733,7 @@ func TestSuite(t *testing.T) {
 	db = &TestDB{t, d, SQLITE, sync.Once{}}
 	ok := testing.RunTests(func(string, string) (bool, error) { return true, nil }, tests)
 	if !ok {
-		t.Fail()
+		t.Fatal("A subtest failed")
 	}
 
 	if !testing.Short() {
