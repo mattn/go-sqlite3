@@ -290,7 +290,7 @@ For example the TDM-GCC Toolchain can be found [here](ttps://sourceforge.net/pro
     When receiving a compile time error referencing recompile with `-FPIC` then you
     are probably using a hardend system.
 
-    You can copile the library on a hardend system with the following command.
+    You can compile the library on a hardend system with the following command.
 
     ```bash
     go build -ldflags '-extldflags=-fno-PIC'
