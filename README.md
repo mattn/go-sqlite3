@@ -198,7 +198,7 @@ Additional information:
 
 # Google Cloud Platform
 
-Building on GCP is not possible because `Google Cloud Platform does not allow `gcc` to be executed.
+Building on GCP is not possible because Google Cloud Platform does not allow `gcc` to be executed.
 
 Please work only with compiled final binaries.
 
