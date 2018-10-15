@@ -67,6 +67,7 @@ This is also known as a DSN string. (Data Source Name).
 
 Options are append after the filename of the SQLite database.
 The database filename and options are seperated by an `?` (Question Mark).
+Options should be URL-encoded (see [url.QueryEscape](https://golang.org/pkg/net/url/#QueryEscape)).
 
 This also applies when using an in-memory database instead of a file.
 
