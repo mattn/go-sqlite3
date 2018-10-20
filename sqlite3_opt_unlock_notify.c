@@ -10,7 +10,7 @@
 extern int unlock_notify_wait(sqlite3 *db);
 
 int
-sqlite3_step_blocking(sqlite3_stmt *stmt)
+_sqlite3_step_blocking(sqlite3_stmt *stmt)
 {
   int rv;
   sqlite3* db;
@@ -35,7 +35,7 @@ sqlite3_step_blocking(sqlite3_stmt *stmt)
 }
 
 int
-_sqlite3_step_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes)
+_sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes)
 {
   int rv;
   sqlite3* db;
@@ -62,7 +62,7 @@ _sqlite3_step_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes)
 }
 
 int
-sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
+_sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
 {
   int rv;
 
