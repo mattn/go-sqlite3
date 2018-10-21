@@ -78,8 +78,38 @@ _sqlite3_exec(sqlite3* db, const char* pcmd, long long* rowid, long long* change
   return rv;
 }
 
+#ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
+extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
+extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
+extern int _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail);
+
 static int
-_sqlite3_step(sqlite3_stmt* stmt, long long* rowid, long long* changes)
+_sqlite3_step_internal(sqlite3_stmt *stmt)
+{
+  return _sqlite3_step_blocking(stmt);
+}
+
+static int
+_sqlite3_step_row_internal(sqlite3_stmt* stmt, long long* rowid, long long* changes)
+{
+  return _sqlite3_step_row_blocking(stmt, rowid, changes);
+}
+
+static int
+_sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
+{
+  return _sqlite3_prepare_v2_blocking(db, zSql, nBytes, ppStmt, pzTail);
+}
+
+#else
+static int
+_sqlite3_step_internal(sqlite3_stmt *stmt)
+{
+  return sqlite3_step(stmt);
+}
+
+static int
+_sqlite3_step_row_internal(sqlite3_stmt* stmt, long long* rowid, long long* changes)
 {
   int rv = sqlite3_step(stmt);
   sqlite3* db = sqlite3_db_handle(stmt);
@@ -87,6 +117,13 @@ _sqlite3_step(sqlite3_stmt* stmt, long long* rowid, long long* changes)
   *changes = (long long) sqlite3_changes(db);
   return rv;
 }
+
+static int
+_sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
+{
+  return sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
+}
+#endif
 
 void _sqlite3_result_text(sqlite3_context* ctx, const char* s) {
   sqlite3_result_text(ctx, s, -1, &free);
@@ -1637,7 +1674,7 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 	defer C.free(unsafe.Pointer(pquery))
 	var s *C.sqlite3_stmt
 	var tail *C.char
-	rv := C.sqlite3_prepare_v2(c.db, pquery, -1, &s, &tail)
+	rv := C._sqlite3_prepare_v2_internal(c.db, pquery, -1, &s, &tail)
 	if rv != C.SQLITE_OK {
 		return nil, c.lastError()
 	}
@@ -1871,7 +1908,7 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 	}
 
 	var rowid, changes C.longlong
-	rv := C._sqlite3_step(s.s, &rowid, &changes)
+	rv := C._sqlite3_step_row_internal(s.s, &rowid, &changes)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		err := s.c.lastError()
 		C.sqlite3_reset(s.s)
@@ -1943,7 +1980,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	if rc.s.closed {
 		return io.EOF
 	}
-	rv := C.sqlite3_step(rc.s.s)
+	rv := C._sqlite3_step_internal(rc.s.s)
 	if rv == C.SQLITE_DONE {
 		return io.EOF
 	}
