@@ -280,7 +280,7 @@ To compile this package on Windows OS you must have the `gcc` compiler installed
 3) Open a terminal for the TDM-GCC toolchain, can be found in the Windows Start menu.
 4) Navigate to your project folder and run the `go build ...` command for this package.
 
-For example the TDM-GCC Toolchain can be found [here](ttps://sourceforge.net/projects/tdm-gcc/).
+For example the TDM-GCC Toolchain can be found [here](https://sourceforge.net/projects/tdm-gcc/).
 
 ## Errors
 
