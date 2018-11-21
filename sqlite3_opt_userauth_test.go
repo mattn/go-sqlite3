@@ -447,13 +447,13 @@ func TestUserAuthModifyUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rv != SQLITE_AUTH {
-		t.Fatal("Password change succesful while not allowed")
+		t.Fatal("Password change successful while not allowed")
 	}
 
 	// Modify other user password and flag through *SQLiteConn
 	err = c2.AuthUserChange("user2", "invalid", false)
 	if err != ErrAdminRequired {
-		t.Fatal("Password change succesful while not allowed")
+		t.Fatal("Password change successful while not allowed")
 	}
 }
 

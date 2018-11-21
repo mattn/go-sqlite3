@@ -1299,10 +1299,7 @@ func TestAggregatorRegistration(t *testing.T) {
 
 	sql.Register("sqlite3_AggregatorRegistration", &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
-			if err := conn.RegisterAggregator("customSum", customSum, true); err != nil {
-				return err
-			}
-			return nil
+			return conn.RegisterAggregator("customSum", customSum, true)
 		},
 	})
 	db, err := sql.Open("sqlite3_AggregatorRegistration", ":memory:")
