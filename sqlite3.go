@@ -1376,7 +1376,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	//  - Activate User Authentication
 	//		Check if the user wants to activate User Authentication.
 	//		If so then first create a temporary AuthConn to the database
-	//		This is possible because we are already succesfully authenticated.
+	//		This is possible because we are already successfully authenticated.
 	//
 	//	- Check if `sqlite_user`` table exists
 	//		YES				=> Add the provided user from DSN as Admin User and
@@ -1387,7 +1387,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Create connection to SQLite
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
 
-	// Password Cipher has to be registerd before authentication
+	// Password Cipher has to be registered before authentication
 	if len(authCrypt) > 0 {
 		switch strings.ToUpper(authCrypt) {
 		case "SHA1":
