@@ -2027,13 +2027,8 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 				dest[i] = nil
 				continue
 			}
-			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
-			switch dest[i].(type) {
-			default:
-				slice := make([]byte, n)
-				copy(slice[:], (*[1 << 30]byte)(p)[0:n])
-				dest[i] = slice
-			}
+			n := C.sqlite3_column_bytes(rc.s.s, C.int(i))
+			dest[i] = C.GoBytes(p, n)
 		case C.SQLITE_NULL:
 			dest[i] = nil
 		case C.SQLITE_TEXT:
