@@ -1770,6 +1770,7 @@ var tests = []testing.InternalTest{
 	{Name: "TestResult", F: testResult},
 	{Name: "TestBlobs", F: testBlobs},
 	{Name: "TestMultiBlobs", F: testMultiBlobs},
+	{Name: "TestNullZeroLengthBlobs", F: testNullZeroLengthBlobs},
 	{Name: "TestManyQueryRow", F: testManyQueryRow},
 	{Name: "TestTxQuery", F: testTxQuery},
 	{Name: "TestPreparedStmt", F: testPreparedStmt},
@@ -1972,6 +1973,36 @@ func testMultiBlobs(t *testing.T) {
 	}
 	if got1 != want1 {
 		t.Errorf("for []byte, got %q; want %q", got1, want1)
+	}
+}
+
+// testBlobs tests that we distinguish between null and zero-length blobs
+func testNullZeroLengthBlobs(t *testing.T) {
+	db.tearDown()
+	db.mustExec("create table foo (id integer primary key, bar " + db.blobType(16) + ")")
+	db.mustExec(db.q("insert into foo (id, bar) values(?,?)"), 0, nil)
+	db.mustExec(db.q("insert into foo (id, bar) values(?,?)"), 1, []byte{})
+
+	r0 := db.QueryRow(db.q("select bar from foo where id=0"))
+	var b0 []byte
+	err := r0.Scan(&b0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b0 != nil {
+		t.Errorf("for id=0, got %x; want nil", b0)
+	}
+
+	r1 := db.QueryRow(db.q("select bar from foo where id=1"))
+	var b1 []byte
+	err = r1.Scan(&b1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b1 == nil {
+		t.Error("for id=1, got nil; want zero-length slice")
+	} else if len(b1) > 0 {
+		t.Errorf("for id=1, got %x; want zero-length slice", b1)
 	}
 }
 
