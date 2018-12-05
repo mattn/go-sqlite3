@@ -1009,10 +1009,17 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	writableSchema := -1
 
 	pos := strings.IndexRune(dsn, '?')
+
+        isRW := false
+
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
 		if err != nil {
 			return nil, err
+		}
+
+		if val := params.Get("mode"); val == "rw" {
+			isRW = true
 		}
 
 		// Authentication
@@ -1338,10 +1345,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var db *C.sqlite3
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
-	rv := C._sqlite3_open_v2(name, &db,
-		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
-		nil)
-	if rv != 0 {
+        var rv C.int
+	if isRW {
+		rv = C._sqlite3_open_v2(name, &db,
+			mutex|C.SQLITE_OPEN_READWRITE,
+			nil)
+        } else {
+		rv = C._sqlite3_open_v2(name, &db,
+			mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
+			nil)
+	}
+
+	if int(rv) != 0 {
 		return nil, Error{Code: ErrNo(rv)}
 	}
 	if db == nil {
