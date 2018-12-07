@@ -1342,6 +1342,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
 		nil)
 	if rv != 0 {
+		if db != nil {
+			C.sqlite3_close_v2(db)
+		}
 		return nil, Error{Code: ErrNo(rv)}
 	}
 	if db == nil {
