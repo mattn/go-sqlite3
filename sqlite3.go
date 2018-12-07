@@ -990,7 +990,6 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	authPass := ""
 	authCrypt := ""
 	authSalt := ""
-	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	txlock := "BEGIN"
 
 	// PRAGMA's
@@ -1007,12 +1006,24 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	secureDelete := "DEFAULT"
 	synchronousMode := "NORMAL"
 	writableSchema := -1
+	flags := C.SQLITE_OPEN_READWRITE | C.SQLITE_OPEN_CREATE | C.SQLITE_OPEN_FULLMUTEX
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
 		params, err := url.ParseQuery(dsn[pos+1:])
 		if err != nil {
 			return nil, err
+		}
+
+		if val := params.Get("mode"); val != "" {
+			switch val {
+			case "ro":
+				flags |= C.SQLITE_OPEN_READONLY
+			case "rw":
+				flags ^= C.SQLITE_OPEN_CREATE
+			case "rwc":
+				flags |= C.SQLITE_OPEN_CREATE
+			}
 		}
 
 		// Authentication
@@ -1049,9 +1060,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		if val := params.Get("_mutex"); val != "" {
 			switch strings.ToLower(val) {
 			case "no":
-				mutex = C.SQLITE_OPEN_NOMUTEX
+				flags |= C.SQLITE_OPEN_NOMUTEX
 			case "full":
-				mutex = C.SQLITE_OPEN_FULLMUTEX
+				flags |= C.SQLITE_OPEN_FULLMUTEX
 			default:
 				return nil, fmt.Errorf("Invalid _mutex: %v", val)
 			}
@@ -1338,9 +1349,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var db *C.sqlite3
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
-	rv := C._sqlite3_open_v2(name, &db,
-		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
-		nil)
+
+	rv := C._sqlite3_open_v2(name, &db, C.int(flags), nil)
 	if rv != 0 {
 		if db != nil {
 			C.sqlite3_close_v2(db)
