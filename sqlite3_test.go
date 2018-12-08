@@ -87,6 +87,64 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+func TestOpenNoCreate(t *testing.T) {
+	filename := t.Name() + ".sqlite"
+
+	if err := os.Remove(filename); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	defer os.Remove(filename)
+
+	// https://golang.org/pkg/database/sql/#Open
+	// "Open may just validate its arguments without creating a connection
+	// to the database. To verify that the data source name is valid, call Ping."
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=rw", filename))
+	if err == nil {
+		defer db.Close()
+
+		err = db.Ping()
+		if err == nil {
+			t.Fatal("expected error from Open or Ping")
+		}
+	}
+
+	sqlErr, ok := err.(Error)
+	if !ok {
+		t.Fatalf("expected *Error, but got %T", err)
+	}
+
+	if sqlErr.Code != ErrCantOpen {
+		t.Fatalf("expected SQLITE_CANTOPEN, but got %v", sqlErr)
+	}
+
+	// make sure database file truly was not created
+	if _, err := os.Stat(filename); !os.IsNotExist(err) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Fatal("expected database file to not exist")
+	}
+
+	// verify that it works if the mode is "rwc" instead
+	db, err = sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=rwc", filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		t.Fatal(err)
+	}
+
+	// make sure database file truly was created
+	if _, err := os.Stat(filename); err != nil {
+		if !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		t.Fatal("expected database file to exist")
+	}
+}
+
 func TestReadonly(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
