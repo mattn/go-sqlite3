@@ -110,7 +110,7 @@ func TestOpenNoCreate(t *testing.T) {
 
 	sqlErr, ok := err.(Error)
 	if !ok {
-		t.Fatalf("expected *Error, but got %T", err)
+		t.Fatalf("expected sqlite3.Error, but got %T", err)
 	}
 
 	if sqlErr.Code != ErrCantOpen {
