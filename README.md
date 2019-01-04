@@ -456,9 +456,9 @@ For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatial
 
     Why is it racy if I use a `sql.Open("sqlite3", ":memory:")` database?
 
-    Each connection to :memory: opens a brand new in-memory sql database, so if
+    Each connection to `":memory:"` opens a brand new in-memory sql database, so if
     the stdlib's sql engine happens to open another connection and you've only
-    specified ":memory:", that connection will see a brand new database. A
+    specified `":memory:"`, that connection will see a brand new database. A
     workaround is to use `"file::memory:?cache=shared"` (or `"file:foobar?mode=memory&cache=shared"`). Every
     connection to this string will point to the same in-memory database.
     
