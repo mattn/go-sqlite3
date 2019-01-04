@@ -459,12 +459,16 @@ For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatial
     Each connection to :memory: opens a brand new in-memory sql database, so if
     the stdlib's sql engine happens to open another connection and you've only
     specified ":memory:", that connection will see a brand new database. A
-    workaround is to use "file::memory:?mode=memory&cache=shared". Every
-    connection to this string will point to the same in-memory database. 
+    workaround is to use `"file::memory:?cache=shared"` (or `"file:foobar?mode=memory&cache=shared"`). Every
+    connection to this string will point to the same in-memory database.
+    
+    Note that if the last database connection in the pool closes, the in-memory database is deleted. Make sure the [max idle connection limit](https://golang.org/pkg/database/sql/#DB.SetMaxIdleConns) is > 0, and the [connection lifetime](https://golang.org/pkg/database/sql/#DB.SetConnMaxLifetime) is infinite.
     
     For more information see
     * [#204](https://github.com/mattn/go-sqlite3/issues/204)
     * [#511](https://github.com/mattn/go-sqlite3/issues/511)
+    * https://www.sqlite.org/sharedcache.html#shared_cache_and_in_memory_databases
+    * https://www.sqlite.org/inmemorydb.html#sharedmemdb
 
 - Reading from database with large amount of goroutines fails on OSX.
 
