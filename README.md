@@ -483,7 +483,7 @@ For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatial
 
 - Error: `database is locked`
 
-    When you get an database is locked. Please use the following options.
+    When you get a database is locked. Please use the following options.
 
     Add to DSN: `cache=shared`
 
