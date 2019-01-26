@@ -223,7 +223,6 @@ var SQLiteTimestampFormats = []string{
 const (
 	columnDate      string = "date"
 	columnDatetime  string = "datetime"
-	columnText      string = "text"
 	columnTimestamp string = "timestamp"
 )
 
@@ -2062,14 +2061,8 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 					t = t.In(rc.s.c.loc)
 				}
 				dest[i] = t
-			case columnText:
-				dest[i] = s
 			default:
-				if strings.Contains(strings.ToLower(rc.decltype[i]), "char") {
-					dest[i] = s
-				} else {
-					dest[i] = []byte(s)
-				}
+				dest[i] = s
 			}
 		}
 	}
