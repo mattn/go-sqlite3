@@ -1683,7 +1683,7 @@ func TestNonColumnString(t *testing.T) {
 	}
 	s, ok := x.(string)
 	if !ok {
-		t.Fatal("non-column string must return string")
+		t.Fatalf("non-column string must return string but got %T", x)
 	}
 	if s != "hello" {
 		t.Fatalf("non-column string must return %q but got %q", "hello", s)
