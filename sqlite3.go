@@ -2062,9 +2062,8 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 				}
 				dest[i] = t
 			default:
-				dest[i] = []byte(s)
+				dest[i] = s
 			}
-
 		}
 	}
 	return nil
