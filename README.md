@@ -495,7 +495,7 @@ For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatial
     Second please set the database connections of the SQL package to 1.
     
     ```go
-    db.SetMaxOpenConn(1)
+    db.SetMaxOpenConns(1)
     ```
 
     More information see [#209](https://github.com/mattn/go-sqlite3/issues/209)
