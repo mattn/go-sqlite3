@@ -683,7 +683,7 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl interface{}, pure bool
 		ai.stepArgConverters = append(ai.stepArgConverters, conv)
 	}
 	if step.IsVariadic() {
-		conv, err := callbackArg(t.In(start + stepNArgs).Elem())
+		conv, err := callbackArg(step.In(start + stepNArgs).Elem())
 		if err != nil {
 			return err
 		}
