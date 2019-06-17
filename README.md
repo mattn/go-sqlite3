@@ -247,7 +247,7 @@ Required dependency
 brew install sqlite3
 ```
 
-For OSX there is an additional package install which is required if you whish to build the `icu` extension.
+For OSX there is an additional package install which is required if you wish to build the `icu` extension.
 
 This additional package can be installed with `homebrew`.
 
