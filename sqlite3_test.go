@@ -34,20 +34,32 @@ func TempFilename(t *testing.T) string {
 }
 
 func doTestOpen(t *testing.T, option string) (string, error) {
-	var url string
 	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-	if option != "" {
-		url = tempFilename + option
-	} else {
-		url = tempFilename
-	}
+	url := tempFilename + option
+
+	defer func() {
+		err := os.Remove(tempFilename)
+		if err != nil {
+			t.Error("temp file remove error:", err)
+		}
+	}()
+
 	db, err := sql.Open("sqlite3", url)
 	if err != nil {
 		return "Failed to open database:", err
 	}
-	defer os.Remove(tempFilename)
-	defer db.Close()
+
+	defer func() {
+		err = db.Close()
+		if err != nil {
+			t.Error("db close error:", err)
+		}
+	}()
+
+	err = db.Ping()
+	if err != nil {
+		return "ping error:", err
+	}
 
 	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
