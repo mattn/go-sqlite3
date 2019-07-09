@@ -483,7 +483,7 @@ For an example see [shaxbee/go-spatialite](https://github.com/shaxbee/go-spatial
 
     You need to implement the feature or call the sqlite3 cli.
 
-    More infomation see [#305](https://github.com/mattn/go-sqlite3/issues/305)
+    More information see [#305](https://github.com/mattn/go-sqlite3/issues/305)
 
 - Error: `database is locked`
 
