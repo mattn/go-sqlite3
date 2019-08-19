@@ -1867,7 +1867,7 @@ func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows,
 	return rows, nil
 }
 
-// LastInsertId teturn last inserted ID.
+// LastInsertId return last inserted ID.
 func (r *SQLiteResult) LastInsertId() (int64, error) {
 	return r.id, nil
 }
