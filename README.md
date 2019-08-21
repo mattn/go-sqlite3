@@ -16,15 +16,21 @@ Supported Golang version: See .travis.yml
 
 ### Overview
 
+- [go-sqlite3](#go-sqlite3)
+- [Description](#description)
+    - [Overview](#overview)
 - [Installation](#installation)
 - [API Reference](#api-reference)
 - [Connection String](#connection-string)
+  - [DSN Examples](#dsn-examples)
 - [Features](#features)
+    - [Usage](#usage)
+    - [Feature / Extension List](#feature--extension-list)
 - [Compilation](#compilation)
   - [Android](#android)
-  - [ARM](#arm)
-  - [Cross Compile](#cross-compile)
-  - [Google Cloud Platform](#google-cloud-platform)
+- [ARM](#arm)
+- [Cross Compile](#cross-compile)
+- [Google Cloud Platform](#google-cloud-platform)
   - [Linux](#linux)
     - [Alpine](#alpine)
     - [Fedora](#fedora)
@@ -34,11 +40,22 @@ Supported Golang version: See .travis.yml
   - [Errors](#errors)
 - [User Authentication](#user-authentication)
   - [Compile](#compile)
-  - [Usage](#usage)
+  - [Usage](#usage-1)
+    - [Create protected database](#create-protected-database)
+    - [Password Encoding](#password-encoding)
+      - [Available Encoders](#available-encoders)
+    - [Restrictions](#restrictions)
+    - [Support](#support)
+    - [User Management](#user-management)
+      - [SQL](#sql)
+        - [Examples](#examples)
+      - [*SQLiteConn](#sqliteconn)
+    - [Attached database](#attached-database)
 - [Extensions](#extensions)
   - [Spatialite](#spatialite)
 - [FAQ](#faq)
 - [License](#license)
+- [Author](#author)
 
 # Installation
 
@@ -149,6 +166,7 @@ go build --tags "icu json1 fts5 secure_delete"
 |  International Components for Unicode | sqlite_icu | This option causes the International Components for Unicode or "ICU" extension to SQLite to be added to the build |
 | Introspect PRAGMAS | sqlite_introspect | This option adds some extra PRAGMA statements. <ul><li>PRAGMA function_list</li><li>PRAGMA module_list</li><li>PRAGMA pragma_list</li></ul> |
 | JSON SQL Functions | sqlite_json | When this option is defined in the amalgamation, the JSON SQL functions are added to the build automatically |
+| Pre Update Hook | sqlite_preupdate_hook | Registers a callback function that is invoked prior to each INSERT, UPDATE, and DELETE operation on a database table. |
 | Secure Delete | sqlite_secure_delete | This compile-time option changes the default setting of the secure_delete pragma.<br><br>When this option is not used, secure_delete defaults to off. When this option is present, secure_delete defaults to on.<br><br>The secure_delete setting causes deleted content to be overwritten with zeros. There is a small performance penalty since additional I/O must occur.<br><br>On the other hand, secure_delete can prevent fragments of sensitive information from lingering in unused parts of the database file after it has been deleted. See the documentation on the secure_delete pragma for additional information |
 | Secure Delete (FAST) | sqlite_secure_delete_fast | For more information see [PRAGMA secure_delete](https://www.sqlite.org/pragma.html#pragma_secure_delete) |
 | Tracing / Debug | sqlite_trace | Activate trace functions |
