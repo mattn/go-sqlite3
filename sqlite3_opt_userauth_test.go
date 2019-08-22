@@ -60,7 +60,14 @@ func init() {
 			file = TempFilename(t)
 		}
 
-		db, err = sql.Open("sqlite3_with_conn", "file:"+file+fmt.Sprintf("?_auth&_auth_user=%s&_auth_pass=%s", username, password))
+		params := "?_auth"
+		if len(username) > 0 {
+			params = fmt.Sprintf("%s&_auth_user=%s", params, username)
+		}
+		if len(password) > 0 {
+			params = fmt.Sprintf("%s&_auth_pass=%s", params, password)
+		}
+		db, err = sql.Open("sqlite3_with_conn", "file:"+file+params)
 		if err != nil {
 			defer os.Remove(file)
 			return file, nil, nil, err
@@ -161,6 +168,23 @@ func TestUserAuthCreateDatabase(t *testing.T) {
 	}
 	if !a {
 		t.Fatal("UserAuth: User is not administrator")
+	}
+}
+
+func TestUserAuthCreateDatabaseWithoutArgs(t *testing.T) {
+	_, db, c, err := connect(t, "", "", "")
+	if err == nil && c == nil && db == nil {
+		t.Fatal("Should have failed due to missing _auth_* parameters")
+	}
+
+	_, db, c, err = connect(t, "", "", "admin")
+	if err == nil && c == nil && db == nil {
+		t.Fatal("Should have failed due to missing _auth_user parameter")
+	}
+
+	_, db, c, err = connect(t, "", "admin", "")
+	if err == nil && c == nil && db == nil {
+		t.Fatal("Should have failed due to missing _auth_pass parameter")
 	}
 }
 
