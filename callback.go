@@ -242,6 +242,8 @@ func callbackArgGeneric(v *C.sqlite3_value) (reflect.Value, error) {
 
 func callbackArg(typ reflect.Type) (callbackArgConverter, error) {
 	switch typ.Kind() {
+	case reflect.Ptr:
+		return callbackArg(typ.Elem())
 	case reflect.Interface:
 		if typ.NumMethod() != 0 {
 			return nil, errors.New("the only supported interface type is interface{}")
