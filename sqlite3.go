@@ -1522,10 +1522,10 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		// Before going any further, we need to check that the user
 		// has provided an username and password within the DSN.
 		// We are not allowed to continue.
-		if len(authUser) < 0 {
+		if len(authUser) <= 0 {
 			return nil, fmt.Errorf("Missing '_auth_user' while user authentication was requested with '_auth'")
 		}
-		if len(authPass) < 0 {
+		if len(authPass) <= 0 {
 			return nil, fmt.Errorf("Missing '_auth_pass' while user authentication was requested with '_auth'")
 		}
 
