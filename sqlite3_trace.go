@@ -89,6 +89,7 @@ func fillExpandedSQL(info *TraceInfo, db *C.sqlite3, pStmt unsafe.Pointer) {
 	}
 
 	expSQLiteCStr := C.sqlite3_expanded_sql((*C.sqlite3_stmt)(pStmt))
+	defer C.sqlite3_free(unsafe.Pointer(expSQLiteCStr))
 	if expSQLiteCStr == nil {
 		fillDBError(&info.DBError, db)
 		return
