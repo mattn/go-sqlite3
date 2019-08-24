@@ -182,16 +182,13 @@ static int _sqlite3_limit(sqlite3* db, int limitId, int newLimit) {
 #else
   return sqlite3_limit(db, limitId, newLimit);
 #endif
+}
 
-#if SQLITE_VERSION_NUMBER >= 3012000
-#define _HAS_SQLITE3_SYSTEM_ERRNO 1
-#else
-#define _HAS_SQLITE3_SYSTEM_ERRNO 0
-int sqlite3_system_errno(sqlite3 *db) {
+#if SQLITE_VERSION_NUMBER < 3012000
+static int sqlite3_system_errno(sqlite3 *db) {
   return 0;
 }
 #endif
-}
 */
 import "C"
 import (
@@ -235,10 +232,6 @@ const (
 	columnDatetime  string = "datetime"
 	columnTimestamp string = "timestamp"
 )
-
-// Indicates whether sqlite3_system_errno is defined in this version of SQLite.
-// Needed for unit testing.
-const hasSystemErrno = C._HAS_SQLITE3_SYSTEM_ERRNO != 0
 
 func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})

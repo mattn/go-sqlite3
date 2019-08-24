@@ -241,8 +241,9 @@ func TestExtendedErrorCodes_Unique(t *testing.T) {
 }
 
 func TestError_SystemErrno(t *testing.T) {
-	if !hasSystemErrno {
-		t.Skip("sqlite3_system_errno not supported")
+	_, n, _ := Version()
+	if n < 3012000 {
+		t.Skip("sqlite3_system_errno requires sqlite3 >= 3.12.0")
 	}
 
 	// open a non-existent database in read-only mode so we get an IO error.
