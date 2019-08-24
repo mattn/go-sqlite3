@@ -238,5 +238,31 @@ func TestExtendedErrorCodes_Unique(t *testing.T) {
 				extended, expected)
 		}
 	}
+}
 
+func TestError_SystemErrno(t *testing.T) {
+	// open a non-existent database in read-only mode so we get an IO error.
+	db, err := sql.Open("sqlite3", "file:nonexistent.db?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err == nil {
+		t.Fatal("expected error pinging read-only non-existent database, but got nil")
+	}
+
+	serr, ok := err.(Error)
+	if !ok {
+		t.Fatalf("expected error to be of type Error, but got %[1]T %[1]v", err)
+	}
+
+	if serr.SystemErrno == 0 {
+		t.Fatal("expected SystemErrno to be set")
+	}
+
+	if !os.IsNotExist(serr.SystemErrno) {
+		t.Errorf("expected SystemErrno to be a not exists error, but got %v", serr.SystemErrno)
+	}
 }
