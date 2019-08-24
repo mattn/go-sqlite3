@@ -241,6 +241,10 @@ func TestExtendedErrorCodes_Unique(t *testing.T) {
 }
 
 func TestError_SystemErrno(t *testing.T) {
+	if !hasSystemErrno {
+		t.Skip("sqlite3_system_errno not supported")
+	}
+
 	// open a non-existent database in read-only mode so we get an IO error.
 	db, err := sql.Open("sqlite3", "file:nonexistent.db?mode=ro")
 	if err != nil {
