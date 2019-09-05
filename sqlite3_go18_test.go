@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -132,6 +133,93 @@ func TestShortTimeout(t *testing.T) {
 	}
 	if ctx.Err() != nil && ctx.Err() != context.DeadlineExceeded {
 		t.Fatal(ctx.Err())
+	}
+}
+
+func TestQueryRowContextCancel(t *testing.T) {
+	srcTempFilename := TempFilename(t)
+	defer os.Remove(srcTempFilename)
+
+	db, err := sql.Open("sqlite3", srcTempFilename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	initDatabase(t, db, 100)
+
+	const query = `SELECT key_id FROM test_table ORDER BY key2 ASC`
+	var keyID string
+	unexpectedErrors := make(map[string]int)
+	for i := 0; i < 10000; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		row := db.QueryRowContext(ctx, query)
+
+		cancel()
+		// it is fine to get "nil" as context cancellation can be handled with delay
+		if err := row.Scan(&keyID); err != nil && err != context.Canceled {
+			if err.Error() == "sql: Rows are closed" {
+				// see https://github.com/golang/go/issues/24431
+				// fixed in 1.11.1 to properly return context error
+				continue
+			}
+			unexpectedErrors[err.Error()]++
+		}
+	}
+	for errText, count := range unexpectedErrors {
+		t.Error(errText, count)
+	}
+}
+
+func TestQueryRowContextCancelParallel(t *testing.T) {
+	srcTempFilename := TempFilename(t)
+	defer os.Remove(srcTempFilename)
+
+	db, err := sql.Open("sqlite3", srcTempFilename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+
+	defer db.Close()
+	initDatabase(t, db, 100)
+
+	const query = `SELECT key_id FROM test_table ORDER BY key2 ASC`
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
+
+	testCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			var keyID string
+			for {
+				select {
+				case <-testCtx.Done():
+					return
+				default:
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				row := db.QueryRowContext(ctx, query)
+
+				cancel()
+				_ = row.Scan(&keyID) // see TestQueryRowContextCancel
+			}
+		}()
+	}
+
+	var keyID string
+	for i := 0; i < 10000; i++ {
+		// note that testCtx is not cancelled during query execution
+		row := db.QueryRowContext(testCtx, query)
+
+		if err := row.Scan(&keyID); err != nil {
+			t.Fatal(i, err)
+		}
 	}
 }
 
