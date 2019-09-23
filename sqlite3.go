@@ -1232,7 +1232,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		if _, ok := params["_locking"]; ok {
 			pkey = "_locking"
 		}
-		if val := params.Get("_locking"); val != "" {
+		if val := params.Get(pkey); val != "" {
 			switch strings.ToUpper(val) {
 			case "NORMAL", "EXCLUSIVE":
 				lockingMode = strings.ToUpper(val)
