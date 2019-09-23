@@ -1000,7 +1000,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	deferForeignKeys := -1
 	foreignKeys := -1
 	ignoreCheckConstraints := -1
-	journalMode := "DELETE"
+	var journalMode string
 	lockingMode := "NORMAL"
 	queryOnly := -1
 	recursiveTriggers := -1
@@ -1571,10 +1571,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	// Journal Mode
-	// Because default Journal Mode is DELETE this PRAGMA can always be executed.
-	if err := exec(fmt.Sprintf("PRAGMA journal_mode = %s;", journalMode)); err != nil {
-		C.sqlite3_close_v2(db)
-		return nil, err
+	if journalMode != "" {
+		if err := exec(fmt.Sprintf("PRAGMA journal_mode = %s;", journalMode)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// Locking Mode
