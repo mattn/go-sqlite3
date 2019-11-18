@@ -1,8 +1,10 @@
 // Copyright (C) 2019 G.J.R. Timmer <gjr.timmer@gmail.com>.
 // Copyright (C) 2018 segment.com <friends@segment.com>
-
+//
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
+
+// +build cgo
 
 package sqlite3
 
