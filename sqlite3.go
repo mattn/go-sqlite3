@@ -1894,6 +1894,14 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 	return s.exec(context.Background(), list)
 }
 
+func isInterruptErr(err error) bool {
+	sqliteErr, ok := err.(Error)
+	if ok {
+		return sqliteErr.Code == ErrInterrupt
+	}
+	return false
+}
+
 // exec executes a query that doesn't return rows. Attempts to honor context timeout.
 func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result, error) {
 	if ctx.Done() == nil {
@@ -1909,19 +1917,22 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 		r, err := s.execSync(args)
 		resultCh <- result{r, err}
 	}()
+	var rv result
 	select {
-	case rv := <-resultCh:
-		return rv.r, rv.err
+	case rv = <-resultCh:
 	case <-ctx.Done():
 		select {
-		case <-resultCh: // no need to interrupt
+		case rv = <-resultCh: // no need to interrupt, operation completed in db
 		default:
 			// this is still racy and can be no-op if executed between sqlite3_* calls in execSync.
 			C.sqlite3_interrupt(s.c.db)
-			<-resultCh // ensure goroutine completed
+			rv = <-resultCh // wait for goroutine completed
+			if isInterruptErr(rv.err) {
+				return nil, ctx.Err()
+			}
 		}
-		return nil, ctx.Err()
 	}
+	return rv.r, rv.err
 }
 
 func (s *SQLiteStmt) execSync(args []namedValue) (driver.Result, error) {
