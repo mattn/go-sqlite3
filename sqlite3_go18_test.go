@@ -229,7 +229,7 @@ func TestQueryRowContextCancelParallel(t *testing.T) {
 	testCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
