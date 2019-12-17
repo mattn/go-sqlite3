@@ -897,7 +897,7 @@ func errorString(err Error) string {
 //      - rwc
 //      - memory
 //
-//   shared
+//   cache
 //     SQLite Shared-Cache Mode
 //     https://www.sqlite.org/sharedcache.html
 //     Values:
@@ -1891,7 +1891,7 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 		resultCh <- result{r, err}
 	}()
 	select {
-	case rv := <- resultCh:
+	case rv := <-resultCh:
 		return rv.r, rv.err
 	case <-ctx.Done():
 		select {
@@ -1992,7 +1992,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		resultCh <- rc.nextSyncLocked(dest)
 	}()
 	select {
-	case err := <- resultCh:
+	case err := <-resultCh:
 		return err
 	case <-rc.ctx.Done():
 		select {
