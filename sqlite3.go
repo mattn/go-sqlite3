@@ -1000,6 +1000,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var pkey string
 
 	// Options
+	mode := C.int(C.SQLITE_OPEN_READWRITE | C.SQLITE_OPEN_CREATE)
 	var loc *time.Location
 	authCreate := false
 	authUser := ""
@@ -1029,6 +1030,16 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		params, err := url.ParseQuery(dsn[pos+1:])
 		if err != nil {
 			return nil, err
+		}
+		
+		//mode
+		if val := params.Get("mode"); val != "" {
+			switch strings.ToLower(val) {
+			case "ro":
+				mode = C.SQLITE_OPEN_READONLY
+			case "rw":
+				mode = C.SQLITE_OPEN_READWRITE
+			}
 		}
 
 		// Authentication
@@ -1355,7 +1366,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
 	rv := C._sqlite3_open_v2(name, &db,
-		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
+		mutex|mode,
 		nil)
 	if rv != 0 {
 		// Save off the error _before_ closing the database.
