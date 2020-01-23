@@ -7,6 +7,8 @@ go-sqlite3
 [![Coverage Status](https://coveralls.io/repos/mattn/go-sqlite3/badge.svg?branch=master)](https://coveralls.io/r/mattn/go-sqlite3?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
 
+NOTE: v2.0.1 or higher is unfortunatal release. So there are no big changes. And does not provide v2 feature.
+
 # Description
 
 sqlite3 driver conforming to the built-in database/sql interface
