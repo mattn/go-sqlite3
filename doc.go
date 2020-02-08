@@ -108,5 +108,12 @@ call RegisterFunction from ConnectHook.
 
 See the documentation of RegisterFunc for more details.
 
+Cgo SQLite3 Extensions
+
+Go callbacks are convenient, but the runtime overhead of reflecting
+incoming types can be significant.  For performance-critical
+functions, Cgo functions can also be defined.  See SQLiteConn's Raw
+method for an example.
+
 */
 package sqlite3
