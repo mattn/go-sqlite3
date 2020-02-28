@@ -233,8 +233,14 @@ const (
 	columnTimestamp string = "timestamp"
 )
 
+// synchronization barrier for sqlite3 C-library initialization
+var initCh chan struct{}
+
 func init() {
 	sql.Register("sqlite3", &SQLiteDriver{})
+
+	initCh = make(chan struct{}, 1)
+	initCh <- struct{}{}
 }
 
 // Version returns SQLite library version information.
@@ -1354,9 +1360,19 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var db *C.sqlite3
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
+
+	// SQLite3 initialization is not thread-safe (see the prologue of sqlite3_initialize) and
+	// sqlite3_open_v2 implicitly calls sqlite3_initialize().
+	// This initCh channel contains a single dummy message so the first call performs initialization
+	// while other concurrent calls are waiting. Then the channel closed and does not work as a init barrier anymore.
+	_, ok := <-initCh
 	rv := C._sqlite3_open_v2(name, &db,
 		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
 		nil)
+	if ok {
+		close(initCh)
+	}
+
 	if rv != 0 {
 		// Save off the error _before_ closing the database.
 		// This is safe even if db is nil.
