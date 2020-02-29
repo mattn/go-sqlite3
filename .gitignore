@@ -3,6 +3,8 @@
 *.dll
 *.o
 
+.idea
+
 # VSCode
 .vscode
 

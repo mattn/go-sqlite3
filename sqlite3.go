@@ -991,6 +991,8 @@ func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
 //     can be changed using ordinary UPDATE, INSERT, and DELETE statements.
 //     Warning: misuse of this pragma can easily result in a corrupt database file.
 //
+//   _crypto_key=XXX
+//     Specify symmetric crypto key for use by sqlcipher.  X must be text key without quotes.
 //
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
@@ -1020,6 +1022,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	lockingMode := "NORMAL"
 	queryOnly := -1
 	recursiveTriggers := -1
+	cryptoKey := ""
 	secureDelete := "DEFAULT"
 	synchronousMode := "NORMAL"
 	writableSchema := -1
@@ -1060,6 +1063,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 				}
 			}
 		}
+		// _crypto_key
+		cryptoKey = params.Get("_crypto_key")
 
 		// _mutex
 		if val := params.Get("_mutex"); val != "" {
@@ -1384,6 +1389,15 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return lastError(db)
 		}
 		return nil
+	}
+
+	// crypto key must be specified BEFORE any other action
+	if cryptoKey != "" {
+		tmp := fmt.Sprintf("PRAGMA key = '%s'", strings.Replace(cryptoKey, "'", "''", -1))
+		if err := exec(tmp); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// USER AUTHENTICATION
