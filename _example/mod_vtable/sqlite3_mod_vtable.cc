@@ -1,6 +1,6 @@
 #include <string>
 #include <sstream>
-#include <sqlite3-binding.h>
+#include <sqlite3.h>
 #include <sqlite3ext.h>
 #include <curl/curl.h>
 #include "picojson.h"
