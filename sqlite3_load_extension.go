@@ -30,10 +30,14 @@ func (c *SQLiteConn) loadExtensions(extensions []string) error {
 	for _, extension := range extensions {
 		cext := C.CString(extension)
 		defer C.free(unsafe.Pointer(cext))
-		rv = C.sqlite3_load_extension(c.db, cext, nil, nil)
+
+		var errMsg *C.char
+		defer C.sqlite3_free(unsafe.Pointer(errMsg))
+
+		rv = C.sqlite3_load_extension(c.db, cext, nil, &errMsg)
 		if rv != C.SQLITE_OK {
 			C.sqlite3_enable_load_extension(c.db, 0)
-			return errors.New(C.GoString(C.sqlite3_errmsg(c.db)))
+			return errors.New(C.GoString(errMsg))
 		}
 	}
 
