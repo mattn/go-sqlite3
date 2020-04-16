@@ -1,24 +1,29 @@
 ifeq ($(OS),Windows_NT)
 EXE=extension.exe
-EXT=sqlite3_mod_vtable.dll
+LIB_EXT=dll
 RM=cmd /c del
 LIBCURL=-lcurldll
 LDFLAG=
 else
 EXE=extension
-EXT=sqlite3_mod_vtable.so
-RM=rm
+ifeq ($(shell uname -s),Darwin)
+LIB_EXT=dylib
+else
+LIB_EXT=so
+endif
+RM=rm -f
 LDFLAG=-fPIC
 LIBCURL=-lcurl
 endif
+LIB=sqlite3_mod_vtable.$(LIB_EXT)
 
-all : $(EXE) $(EXT)
+all : $(EXE) $(LIB)
 
 $(EXE) : extension.go
 	go build $<
 
-$(EXT) : sqlite3_mod_vtable.cc
+$(LIB) : sqlite3_mod_vtable.cc
 	g++ $(LDFLAG) -shared -o $@ $< -lsqlite3 $(LIBCURL)
 
 clean :
-	@-$(RM) $(EXE) $(EXT)
+	@-$(RM) $(EXE) $(LIB)
