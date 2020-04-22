@@ -1800,6 +1800,9 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 	}
 
 	for _, arg := range args {
+		if arg.Ordinal == 0 {
+			continue
+		}
 		n := C.int(arg.Ordinal)
 		switch v := arg.Value.(type) {
 		case nil:
