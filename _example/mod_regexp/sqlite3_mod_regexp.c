@@ -13,9 +13,13 @@ static void regexp_func(sqlite3_context *context, int argc, sqlite3_value **argv
     int vec[500];
     int n, rc;
     pcre* re = pcre_compile(pattern, 0, &errstr, &erroff, NULL);
+    if (!re) {
+      sqlite3_result_error(context, errstr, 0);
+      return;
+    }
     rc = pcre_exec(re, NULL, target, strlen(target), 0, 0, vec, 500); 
     if (rc <= 0) {
-      sqlite3_result_error(context, errstr, 0);
+      sqlite3_result_int(context, 0);
       return;
     }
     sqlite3_result_int(context, 1);
