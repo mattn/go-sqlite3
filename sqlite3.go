@@ -802,20 +802,29 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) 
 		}
 		var res driver.Result
 		if s.(*SQLiteStmt).s != nil {
+			stmtArgs := make([]namedValue, 0, len(args))
 			na := s.NumInput()
-			if len(args) < na {
+			if len(args) - start < na {
 				s.Close()
 				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args))
 			}
-			for i := 0; i < na; i++ {
-				args[i].Ordinal -= start
+			// consume the number of arguments used in the current
+			// statement and append all named arguments not
+			// contained therein
+			stmtArgs = append(stmtArgs, args[start:start+na]...)
+			for i := range args {
+				if (i < start || i >= na) && args[i].Name != "" {
+					stmtArgs = append(stmtArgs, args[i])
+				}
 			}
-			res, err = s.(*SQLiteStmt).exec(ctx, args[:na])
+			for i := range stmtArgs {
+				stmtArgs[i].Ordinal = i + 1
+			}
+			res, err = s.(*SQLiteStmt).exec(ctx, stmtArgs)
 			if err != nil && err != driver.ErrSkip {
 				s.Close()
 				return nil, err
 			}
-			args = args[na:]
 			start += na
 		}
 		tail := s.(*SQLiteStmt).t
@@ -848,24 +857,33 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue) (driver.Rows, error) {
 	start := 0
 	for {
+		stmtArgs := make([]namedValue, 0, len(args))
 		s, err := c.prepare(ctx, query)
 		if err != nil {
 			return nil, err
 		}
 		s.(*SQLiteStmt).cls = true
 		na := s.NumInput()
-		if len(args) < na {
-			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args))
+		if len(args) - start < na {
+			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args) - start)
 		}
-		for i := 0; i < na; i++ {
-			args[i].Ordinal -= start
+		// consume the number of arguments used in the current
+		// statement and append all named arguments not contained
+		// therein
+		stmtArgs = append(stmtArgs, args[start:start+na]...)
+		for i := range args {
+			if (i < start || i >= na) && args[i].Name != "" {
+				stmtArgs = append(stmtArgs, args[i])
+			}
 		}
-		rows, err := s.(*SQLiteStmt).query(ctx, args[:na])
+		for i := range stmtArgs {
+			stmtArgs[i].Ordinal = i + 1
+		}
+		rows, err := s.(*SQLiteStmt).query(ctx, stmtArgs)
 		if err != nil && err != driver.ErrSkip {
 			s.Close()
 			return rows, err
 		}
-		args = args[na:]
 		start += na
 		tail := s.(*SQLiteStmt).t
 		if tail == "" {
@@ -1800,6 +1818,10 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 	}
 
 	for _, arg := range args {
+		if arg.Ordinal == 0 {
+			// skip unused named parameter
+			continue
+		}
 		n := C.int(arg.Ordinal)
 		switch v := arg.Value.(type) {
 		case nil:
