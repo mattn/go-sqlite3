@@ -213,25 +213,14 @@ This library can be cross-compiled.
 In some cases you are required to the `CC` environment variable with the cross compiler.
 
 ## Cross Compiling from MAC OSX
-Install the `musl-cross` and `mingw-w64` formulae.
-```bash
-brew install FiloSottile/musl-cross/musl-cross
-brew install mingw-w64
-```
-During cross compilation, in addition to `CGO_ENABLED=1`, define the `CC` and `CXX` flags depending on the target platform:
-- Windows
-    ```
-    CC=i686-w64-mingw32-gcc CXX=i686-w64-mingw32-g++
-    ```
-- Linux
-    ```
-    CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++
-    ```
+The simplest way to cross compile from OSX is to use [xgo](https://github.com/karalabe/xgo).
 
-Additional information:
-- [#384](https://github.com/mattn/go-sqlite3/issues/384) 
-- [#491](https://github.com/mattn/go-sqlite3/issues/491)
-- [#560](https://github.com/mattn/go-sqlite3/issues/560)
+Steps:
+- Install [xgo](https://github.com/karalabe/xgo) (`go get github.com/karalabe/xgo`).
+- Ensure that your project is within your `GOPATH`.
+- Run `xgo local/path/to/project`.
+
+Please refer to the project's [README](https://github.com/karalabe/xgo/blob/master/README.md) for further information.
 
 # Google Cloud Platform
 
