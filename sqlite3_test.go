@@ -1778,6 +1778,45 @@ func TestInsertNilByteSlice(t *testing.T) {
 	}
 }
 
+func TestNamedParam(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("drop table foo")
+	_, err = db.Exec("create table foo (id integer, name text, amount integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = db.Exec("insert into foo(id, name, amount) values(:id, @name, $amount)",
+		sql.Named("bar", 42), sql.Named("baz", "quux"),
+		sql.Named("amount", 123), sql.Named("corge", "waldo"),
+		sql.Named("id", 2), sql.Named("name", "grault"))
+	if err != nil {
+		t.Fatal("Failed to insert record with named parameters:", err)
+	}
+
+	rows, err := db.Query("select id, name, amount from foo")
+	if err != nil {
+		t.Fatal("Failed to select records:", err)
+	}
+	defer rows.Close()
+
+	rows.Next()
+
+	var id, amount int
+	var name string
+	rows.Scan(&id, &name, &amount)
+	if id != 2 || name != "grault" || amount != 123 {
+		t.Errorf("Expected %d, %q, %d for fetched result, but got %d, %q, %d:", 2, "grault", 123, id, name, amount)
+	}
+}
+
 var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
