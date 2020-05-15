@@ -212,9 +212,15 @@ This library can be cross-compiled.
 
 In some cases you are required to the `CC` environment variable with the cross compiler.
 
-Additional information:
-- [#491](https://github.com/mattn/go-sqlite3/issues/491)
-- [#560](https://github.com/mattn/go-sqlite3/issues/560)
+## Cross Compiling from MAC OSX
+The simplest way to cross compile from OSX is to use [xgo](https://github.com/karalabe/xgo).
+
+Steps:
+- Install [xgo](https://github.com/karalabe/xgo) (`go get github.com/karalabe/xgo`).
+- Ensure that your project is within your `GOPATH`.
+- Run `xgo local/path/to/project`.
+
+Please refer to the project's [README](https://github.com/karalabe/xgo/blob/master/README.md) for further information.
 
 # Google Cloud Platform
 
