@@ -30,8 +30,6 @@ import (
 	"reflect"
 	"sync"
 	"unsafe"
-
-	"github.com/mattn/go-pointer"
 )
 
 //export callbackTrampoline
@@ -111,13 +109,19 @@ var handleVals = make(map[unsafe.Pointer]handleVal)
 func newHandle(db *SQLiteConn, v interface{}) unsafe.Pointer {
 	handleLock.Lock()
 	defer handleLock.Unlock()
-	return pointer.Save(handleVal{db, v})
+	val := handleVal{db: db, val: v}
+	var p unsafe.Pointer = C.malloc(C.size_t(1))
+	if p == nil {
+		panic("can't allocate 'cgo-pointer hack index pointer': ptr == nil")
+	}
+	handleVals[p] = val
+	return p
 }
 
 func lookupHandleVal(handle unsafe.Pointer) handleVal {
 	handleLock.Lock()
 	defer handleLock.Unlock()
-	return pointer.Restore(handle).(handleVal)
+	return handleVals[handle]
 }
 
 func lookupHandle(handle unsafe.Pointer) interface{} {
@@ -130,7 +134,7 @@ func deleteHandles(db *SQLiteConn) {
 	for handle, val := range handleVals {
 		if val.db == db {
 			delete(handleVals, handle)
-			pointer.Unref(handle)
+			C.free(handle)
 		}
 	}
 }
