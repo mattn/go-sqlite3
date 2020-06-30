@@ -10,12 +10,14 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,9 +25,18 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-const buildFlags = "-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT=1"
+var (
+	cFlags  = "-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT=1"
+	cleanup = true
+)
 
 func main() {
+	flag.StringVar(&shellPath, "shell", shellPath, "path to shell executable")
+	flag.StringVar(&makePath, "make", makePath, "path to make executable")
+	flag.StringVar(&cFlags, "cflags", cFlags, "sqlite CFLAGS")
+	flag.BoolVar(&cleanup, "cleanup", cleanup, "cleanup source")
+	flag.Parse()
+
 	err := func() error {
 		fmt.Println("Go-SQLite3 Upgrade Tool")
 
@@ -46,7 +57,7 @@ func main() {
 
 		// Extract Source
 		baseDir, err := extractZip(source)
-		if baseDir != "" && !filepath.IsAbs(baseDir) {
+		if cleanup && baseDir != "" && !filepath.IsAbs(baseDir) {
 			defer func() {
 				fmt.Println("Cleaning up source: deleting", baseDir)
 				os.RemoveAll(baseDir)
@@ -57,9 +68,9 @@ func main() {
 		}
 		fmt.Println("Extracted sqlite source to", baseDir)
 
-		// Build amalgamation files (OS-specific)
-		fmt.Printf("Starting to generate amalgamation with build flags: %s\n", buildFlags)
-		if err := buildAmalgamation(baseDir, buildFlags); err != nil {
+		// Build amalgamation files
+		fmt.Printf("Starting to generate amalgamation with CFLAGS: %s\n", cFlags)
+		if err := buildAmalgamation(baseDir, cFlags); err != nil {
 			return fmt.Errorf("failed to build amalgamation: %v", err)
 		}
 		fmt.Println("SQLite3 amalgamation built")
@@ -73,7 +84,7 @@ func main() {
 		return nil
 	}()
 	if err != nil {
-		log.Fatal("Returned with error:", err)
+		log.Fatalln("Returned with error:", err)
 	}
 }
 
@@ -252,6 +263,30 @@ func patchSource(baseDir, src, dst string, extensions ...string) error {
 	}
 
 	fmt.Printf("Patched: %s -> %s\n", src, dst)
+
+	return nil
+}
+
+func buildAmalgamation(baseDir, buildFlags string) error {
+	configureScript := "./configure"
+	if cFlags != "" {
+		configureScript += fmt.Sprintf(" CFLAGS=%q", cFlags)
+	}
+	cmd := exec.Command(shellPath, "-c", configureScript)
+	cmd.Dir = baseDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("configure failed: %v\n\n%s", err, out)
+	}
+	fmt.Println("Ran configure successfully")
+
+	cmd = exec.Command(makePath, "sqlite3.c")
+	cmd.Dir = baseDir
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("make failed: %v\n\n%s", err, out)
+	}
+	fmt.Println("Ran make successfully")
 
 	return nil
 }
