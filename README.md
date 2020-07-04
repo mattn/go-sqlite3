@@ -526,17 +526,23 @@ For an example see [dinedal/go-sqlite3-extension-functions](https://github.com/d
 
 - Error: `database is locked`
 
-    When you get a database is locked. Please use the following options.
+    This means two different connections are trying to write to the database at
+    the same time.
 
-    Add to DSN: `cache=shared`
+    One way to fix this is to ensure your program limits the number of writers
+    to 1, for example by using `sync.Mutex` (it's fine to be have multiple
+    reads, even when writing).
 
-    Example:
+    Adding `_journal_mode=wal` improves the general concurrency in most cases,
+    although it doesn't 100% eliminate locking issues:
+
     ```go
-    db, err := sql.Open("sqlite3", "file:locked.sqlite?cache=shared")
+    db, err := sql.Open("sqlite3", "file:locked.sqlite?_journal_mode=wal")
     ```
 
-    Second please set the database connections of the SQL package to 1.
-    
+    To guarantee only one connection is being run at the same time yoi can set
+    the maximum number of database connections to `1`:
+
     ```go
     db.SetMaxOpenConns(1)
     ```
