@@ -15,34 +15,34 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
+	"regexp"
 	"time"
-
-	"github.com/PuerkitoBio/goquery"
 )
 
 func download(prefix string) (url string, content []byte, err error) {
 	year := time.Now().Year()
 
-	site := "https://www.sqlite.org/download.html"
-	//fmt.Printf("scraping %v\n", site)
-	doc, err := goquery.NewDocument(site)
+	releasePage := "https://www.sqlite.org/download.html"
+	//fmt.Printf("scraping %v\n", releasePage)
+	resp, err := http.Get(releasePage)
+	defer resp.Body.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	doc.Find("a").Each(func(_ int, s *goquery.Selection) {
-		if strings.HasPrefix(s.Text(), prefix) {
-			url = fmt.Sprintf("https://www.sqlite.org/%d/", year) + s.Text()
-		}
-	})
-
-	if url == "" {
-		return "", nil, fmt.Errorf("Unable to find prefix '%s' on sqlite.org", prefix)
+	content, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return "", nil, err
 	}
 
+	filename := regexp.MustCompile(regexp.QuoteMeta(prefix) + `[0-9]+\.zip`).Find(content)
+	if filename == nil {
+		return "", nil, fmt.Errorf("Unable to find prefix '%s' on %s", prefix, releasePage)
+	}
+	url = fmt.Sprintf("https://www.sqlite.org/%d/%s", year, filename)
+
 	fmt.Printf("Downloading %v\n", url)
-	resp, err := http.Get(url)
+	resp, err = http.Get(url)
 	if err != nil {
 		log.Fatal(err)
 	}
