@@ -1,5 +1,7 @@
 language: go
 
+go_import_path: github.com/mattn/go-sqlite3
+
 os:
   - linux
   - osx
@@ -9,10 +11,11 @@ addons:
     update: true
 
 go:
-  - 1.11.x
-  - 1.12.x
+  - 1.14.x
+  - tip
   - 1.13.x
-  - master
+  - 1.12.x
+  - 1.11.x
 
 before_install:
   - |
