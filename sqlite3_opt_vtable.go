@@ -353,7 +353,7 @@ func mPrintf(format, arg string) *C.char {
 
 //export goMInit
 func goMInit(db, pClientData unsafe.Pointer, argc C.int, argv **C.char, pzErr **C.char, isCreate C.int) C.uintptr_t {
-	m := lookupHandle(uintptr(pClientData)).(*sqliteModule)
+	m := lookupHandle(pClientData).(*sqliteModule)
 	if m.c.db != (*C.sqlite3)(db) {
 		*pzErr = mPrintf("%s", "Inconsistent db handles")
 		return 0
