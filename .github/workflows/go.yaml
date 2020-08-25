@@ -13,42 +13,42 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
-        go: [ '1.11.13', '1.12.17', '1.13.15', '1.14.7', '1.15' ]
+        os: [ubuntu-latest, macos-latest]
+        go: ['1.11.13', '1.12.17', '1.13.15', '1.14.7', '1.15']
       fail-fast: false
     steps:
-    - if: startsWith(matrix.os, 'macos')
-      run: brew update
+      - if: startsWith(matrix.os, 'macos')
+        run: brew update
 
-    - uses: actions/setup-go@v2
-      with:
-        go-version: ${{ matrix.go }}
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
 
-    - name: Get Build Tools
-      run: |
-        go get github.com/mattn/goveralls
-        go get golang.org/x/tools/cmd/cover
+      - name: Get Build Tools
+        run: |
+          go get github.com/mattn/goveralls
+          go get golang.org/x/tools/cmd/cover
 
-    - name: Add $GOPATH/bin to $PATH
-      run: |
-        echo "::add-path::$(go env GOPATH)/bin"
+      - name: Add $GOPATH/bin to $PATH
+        run: |
+          echo "::add-path::$(go env GOPATH)/bin"
 
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Setup goveralls
-      run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel
+      - name: Setup goveralls
+        run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel
 
-    - name: Test1
-      run: go test -race -v . -tags ""
+      - name: 'Tags: default'
+        run: go test -race -v . -tags ""
 
-    - name: Test2
-      run: go test -race -v . -tags "libsqlite3"
+      - name: 'Tags: libsqlite3'
+        run: go test -race -v . -tags "libsqlite3"
 
-    - name: Test3
-      run: go test -race -v . -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
+      - name: 'Tags: full'
+        run: go test -race -v . -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
 
-    - name: Test4
-      run: go test -race -v . -tags "sqlite_vacuum_full"
+      - name: 'Tags: vacuum'
+        run: go test -race -v . -tags "sqlite_vacuum_full"
 
   test-windows:
     name: Test for Windows
@@ -59,73 +59,73 @@ jobs:
 
     strategy:
       matrix:
-        go: [ '1.11.13', '1.12.17', '1.13.15', '1.14.7', '1.15' ]
+        go: ['1.11.13', '1.12.17', '1.13.15', '1.14.7', '1.15']
       fail-fast: false
     steps:
-    - uses: msys2/setup-msys2@v2
-      with:
-        update: true
-        install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-sqlite3
-        msystem: MINGW64
-        path-type: inherit
+      - uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-sqlite3
+          msystem: MINGW64
+          path-type: inherit
 
-    - uses: actions/setup-go@v2
-      with:
-        go-version: ${{ matrix.go }}
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
 
-    - name: Get Build Tools
-      run: |
-        go get github.com/mattn/goveralls
-        go get golang.org/x/tools/cmd/cover
-      shell: msys2 {0}
+      - name: Get Build Tools
+        run: |
+          go get github.com/mattn/goveralls
+          go get golang.org/x/tools/cmd/cover
+        shell: msys2 {0}
 
-    - name: Add $GOPATH/bin to $PATH
-      run: |
-        echo "::add-path::$(go env GOPATH)/bin"
-      shell: msys2 {0}
+      - name: Add $GOPATH/bin to $PATH
+        run: |
+          echo "::add-path::$(go env GOPATH)/bin"
+        shell: msys2 {0}
 
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Setup goveralls
-      run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel
-      shell: msys2 {0}
+      - name: Setup goveralls
+        run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel
+        shell: msys2 {0}
 
-    - name: Test1
-      run: go test -race -v . -tags ""
-      shell: msys2 {0}
+      - name: Test1
+        run: go test -race -v . -tags ""
+        shell: msys2 {0}
 
-    - name: Test2
-      run: go test -race -v . -tags "libsqlite3"
-      shell: msys2 {0}
+      - name: Test2
+        run: go test -race -v . -tags "libsqlite3"
+        shell: msys2 {0}
 
-    - name: Test3
-      run: |
-        echo 'skip this test'
-        echo go test -race -v . -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
-      shell: msys2 {0}
+      - name: Test3
+        run: |
+          echo 'skip this test'
+          echo go test -race -v . -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
+        shell: msys2 {0}
 
-    - name: Test4
-      run: go test -race -v . -tags "sqlite_vacuum_full"
-      shell: msys2 {0}
+      - name: Test4
+        run: go test -race -v . -tags "sqlite_vacuum_full"
+        shell: msys2 {0}
 
   finish:
     needs: [test, test-windows]
     name: Test Finished
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-go@v2
-      with:
-        go-version: 1.x
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.x
 
-    - name: Get Build Tools
-      run: |
-        go get github.com/mattn/goveralls
-        go get golang.org/x/tools/cmd/cover
-    - name: Add $GOPATH/bin to $PATH
-      run: |
-        echo "::add-path::$(go env GOPATH)/bin"
-    - name: Send coverage
-      env:
-        COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel-finish
+      - name: Get Build Tools
+        run: |
+          go get github.com/mattn/goveralls
+          go get golang.org/x/tools/cmd/cover
+      - name: Add $GOPATH/bin to $PATH
+        run: |
+          echo "::add-path::$(go env GOPATH)/bin"
+      - name: Send coverage
+        env:
+          COVERALLS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel-finish
 # based on: github.com/koron-go/_skeleton/.github/workflows/go.yml
