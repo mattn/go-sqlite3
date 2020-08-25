@@ -16,6 +16,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         go: ['1.11.13', '1.12.17', '1.13.15', '1.14.7', '1.15']
       fail-fast: false
+    env:
+      OS: ${{ matrix.os }}
+      GO: ${{ matrix.go }}
     steps:
       - if: startsWith(matrix.os, 'macos')
         run: brew update
@@ -26,8 +29,7 @@ jobs:
 
       - name: Get Build Tools
         run: |
-          go get github.com/mattn/goveralls
-          go get golang.org/x/tools/cmd/cover
+          go get github.com/ory/go-acc
 
       - name: Add $GOPATH/bin to $PATH
         run: |
@@ -35,20 +37,23 @@ jobs:
 
       - uses: actions/checkout@v2
 
-      - name: Setup goveralls
-        run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel
-
       - name: 'Tags: default'
-        run: go test -race -v . -tags ""
+        run: go-acc . -- -race -v -tags ""
 
       - name: 'Tags: libsqlite3'
-        run: go test -race -v . -tags "libsqlite3"
+        run: go-acc . -- -race -v -tags "libsqlite3"
 
       - name: 'Tags: full'
-        run: go test -race -v . -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
+        run: go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
 
       - name: 'Tags: vacuum'
-        run: go test -race -v . -tags "sqlite_vacuum_full"
+        run: go-acc . -- -race -v -tags "sqlite_vacuum_full"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          env_vars: OS,GO
+          file: coverage.txt
 
   test-windows:
     name: Test for Windows
@@ -61,6 +66,9 @@ jobs:
       matrix:
         go: ['1.11.13', '1.12.17', '1.13.15', '1.14.7', '1.15']
       fail-fast: false
+    env:
+      OS: windows-latest
+      GO: ${{ matrix.go }}
     steps:
       - uses: msys2/setup-msys2@v2
         with:
@@ -75,8 +83,7 @@ jobs:
 
       - name: Get Build Tools
         run: |
-          go get github.com/mattn/goveralls
-          go get golang.org/x/tools/cmd/cover
+          go get -u github.com/ory/go-acc
         shell: msys2 {0}
 
       - name: Add $GOPATH/bin to $PATH
@@ -86,46 +93,28 @@ jobs:
 
       - uses: actions/checkout@v2
 
-      - name: Setup goveralls
-        run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel
+      - name: 'Tags: default'
+        run: go-acc . -- -race -v -tags ""
         shell: msys2 {0}
 
-      - name: Test1
-        run: go test -race -v . -tags ""
+      - name: 'Tags: libsqlite3'
+        run: go-acc . -- -race -v -tags "libsqlite3"
         shell: msys2 {0}
 
-      - name: Test2
-        run: go test -race -v . -tags "libsqlite3"
-        shell: msys2 {0}
-
-      - name: Test3
+      - name: 'Tags: full'
         run: |
           echo 'skip this test'
-          echo go test -race -v . -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
+          echo go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
         shell: msys2 {0}
 
-      - name: Test4
-        run: go test -race -v . -tags "sqlite_vacuum_full"
+      - name: 'Tags: vacuum'
+        run: go-acc . -- -race -v -tags "sqlite_vacuum_full"
         shell: msys2 {0}
 
-  finish:
-    needs: [test, test-windows]
-    name: Test Finished
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-go@v2
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
         with:
-          go-version: 1.x
+          env_vars: OS,GO
+          file: coverage.txt
 
-      - name: Get Build Tools
-        run: |
-          go get github.com/mattn/goveralls
-          go get golang.org/x/tools/cmd/cover
-      - name: Add $GOPATH/bin to $PATH
-        run: |
-          echo "::add-path::$(go env GOPATH)/bin"
-      - name: Send coverage
-        env:
-          COVERALLS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-        run: goveralls -repotoken 3qJVUE0iQwqnCbmNcDsjYu1nh4J4KIFXx -parallel-finish
 # based on: github.com/koron-go/_skeleton/.github/workflows/go.yml
