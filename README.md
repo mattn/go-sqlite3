@@ -2,18 +2,20 @@ go-sqlite3
 ==========
 
 [![GoDoc Reference](https://godoc.org/github.com/mattn/go-sqlite3?status.svg)](http://godoc.org/github.com/mattn/go-sqlite3)
-[![Build Status](https://travis-ci.org/mattn/go-sqlite3.svg?branch=master)](https://travis-ci.org/mattn/go-sqlite3)
+[![GitHub Actions](https://github.com/mattn/go-sqlite3/workflows/Go/badge.svg)](https://github.com/mattn/go-sqlite3/actions?query=workflow%3AGo)
 [![Financial Contributors on Open Collective](https://opencollective.com/mattn-go-sqlite3/all/badge.svg?label=financial+contributors)](https://opencollective.com/mattn-go-sqlite3) 
-[![Coverage Status](https://coveralls.io/repos/mattn/go-sqlite3/badge.svg?branch=master)](https://coveralls.io/r/mattn/go-sqlite3?branch=master)
+[![codecov](https://codecov.io/gh/mattn/go-sqlite3/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-sqlite3)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
 
-NOTE: v2.0.1 or higher is unfortunatal release. So there are no big changes. And does not provide v2 feature.
+Latest stable version is v1.14 or later not v2.
+
+~~**NOTE:** The increase to v2 was an accident. There were no major changes or features.~~
 
 # Description
 
 sqlite3 driver conforming to the built-in database/sql interface
 
-Supported Golang version: See .travis.yml
+Supported Golang version: See .github/workflows/go.yaml
 
 [This package follows the official Golang Release Policy.](https://golang.org/doc/devel/release.html#policy)
 
@@ -212,9 +214,15 @@ This library can be cross-compiled.
 
 In some cases you are required to the `CC` environment variable with the cross compiler.
 
-Additional information:
-- [#491](https://github.com/mattn/go-sqlite3/issues/491)
-- [#560](https://github.com/mattn/go-sqlite3/issues/560)
+## Cross Compiling from MAC OSX
+The simplest way to cross compile from OSX is to use [xgo](https://github.com/karalabe/xgo).
+
+Steps:
+- Install [xgo](https://github.com/karalabe/xgo) (`go get github.com/karalabe/xgo`).
+- Ensure that your project is within your `GOPATH`.
+- Run `xgo local/path/to/project`.
+
+Please refer to the project's [README](https://github.com/karalabe/xgo/blob/master/README.md) for further information.
 
 # Google Cloud Platform
 
