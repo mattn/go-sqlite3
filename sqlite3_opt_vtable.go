@@ -288,10 +288,13 @@ type InfoOrderBy struct {
 }
 
 func constraints(info *C.sqlite3_index_info) []InfoConstraint {
-	l := info.nConstraint
-	slice := (*[1 << 30]C.struct_sqlite3_index_constraint)(unsafe.Pointer(info.aConstraint))[:l:l]
+	slice := *(*[]C.struct_sqlite3_index_constraint)(unsafe.Pointer(&reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(info.aConstraint)),
+		Len:  int(info.nConstraint),
+		Cap:  int(info.nConstraint),
+	}))
 
-	cst := make([]InfoConstraint, 0, l)
+	cst := make([]InfoConstraint, 0, len(slice))
 	for _, c := range slice {
 		var usable bool
 		if c.usable > 0 {
@@ -307,10 +310,13 @@ func constraints(info *C.sqlite3_index_info) []InfoConstraint {
 }
 
 func orderBys(info *C.sqlite3_index_info) []InfoOrderBy {
-	l := info.nOrderBy
-	slice := (*[1 << 30]C.struct_sqlite3_index_orderby)(unsafe.Pointer(info.aOrderBy))[:l:l]
+	slice := *(*[]C.struct_sqlite3_index_orderby)(unsafe.Pointer(&reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(info.aOrderBy)),
+		Len:  int(info.nOrderBy),
+		Cap:  int(info.nOrderBy),
+	}))
 
-	ob := make([]InfoOrderBy, 0, l)
+	ob := make([]InfoOrderBy, 0, len(slice))
 	for _, c := range slice {
 		var desc bool
 		if c.desc > 0 {
@@ -418,13 +424,17 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	}
 
 	// Get a pointer to constraint_usage struct so we can update in place.
-	l := info.nConstraint
-	s := (*[1 << 30]C.struct_sqlite3_index_constraint_usage)(unsafe.Pointer(info.aConstraintUsage))[:l:l]
+
+	slice := *(*[]C.struct_sqlite3_index_constraint_usage)(unsafe.Pointer(&reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(info.aConstraintUsage)),
+		Len:  int(info.nConstraint),
+		Cap:  int(info.nConstraint),
+	}))
 	index := 1
-	for i := C.int(0); i < info.nConstraint; i++ {
+	for i := range slice {
 		if res.Used[i] {
-			s[i].argvIndex = C.int(index)
-			s[i].omit = C.uchar(1)
+			slice[i].argvIndex = C.int(index)
+			slice[i].omit = C.uchar(1)
 			index++
 		}
 	}
