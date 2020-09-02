@@ -7,7 +7,6 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
-	"crypto/sha1"
 	"encoding/hex"
 	"errors"
 	"flag"
@@ -23,6 +22,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -110,7 +110,7 @@ func download(prefix string) (content, hash []byte, err error) {
 		if found {
 			s.Find("td").Each(func(_ int, s *goquery.Selection) {
 				text := s.Text()
-				split := strings.Split(text, "(sha1: ")
+				split := strings.Split(text, "(sha3: ")
 				if len(split) < 2 {
 					return
 				}
@@ -122,8 +122,8 @@ func download(prefix string) (content, hash []byte, err error) {
 	})
 
 	targetHash, err := hex.DecodeString(hashString)
-	if err != nil || len(targetHash) != sha1.Size {
-		return nil, nil, fmt.Errorf("unable to find valid sha1 hash on sqlite.org: %q", hashString)
+	if err != nil || len(targetHash) != 32 {
+		return nil, nil, fmt.Errorf("unable to find valid sha3-256 hash on sqlite.org: %q", hashString)
 	}
 
 	if url == "" {
@@ -137,7 +137,7 @@ func download(prefix string) (content, hash []byte, err error) {
 	}
 
 	// Ready Body Content
-	shasum := sha1.New()
+	shasum := sha3.New256()
 	content, err = ioutil.ReadAll(io.TeeReader(resp.Body, shasum))
 	defer resp.Body.Close()
 	if err != nil {
