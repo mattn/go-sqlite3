@@ -14,15 +14,12 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: ['1.11.13', '1.12.17', '1.13.15', '1.14.7', '1.15']
+        go: ['1.11.13', '1.12.17', '1.13.15', '1.14.9', '1.15']
       fail-fast: false
     env:
       OS: ${{ matrix.os }}
       GO: ${{ matrix.go }}
     steps:
-      - if: startsWith(matrix.os, 'macos')
-        run: brew update
-
       - uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
@@ -30,10 +27,6 @@ jobs:
       - name: Get Build Tools
         run: |
           go get github.com/ory/go-acc
-
-      - name: Add $GOPATH/bin to $PATH
-        run: |
-          echo "::add-path::$(go env GOPATH)/bin"
 
       - uses: actions/checkout@v2
 
@@ -60,11 +53,11 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        shell: bash
+        shell: msys2 {0}
 
     strategy:
       matrix:
-        go: ['1.11.13', '1.12.17', '1.13.15', '1.14.7', '1.15']
+        go: ['1.11.13', '1.12.17', '1.13.15', '1.14.9', '1.15']
       fail-fast: false
     env:
       OS: windows-latest
@@ -83,33 +76,23 @@ jobs:
 
       - name: Get Build Tools
         run: |
-          go get -u github.com/ory/go-acc
-        shell: msys2 {0}
-
-      - name: Add $GOPATH/bin to $PATH
-        run: |
-          echo "::add-path::$(go env GOPATH)/bin"
-        shell: msys2 {0}
+          go get github.com/ory/go-acc
 
       - uses: actions/checkout@v2
 
       - name: 'Tags: default'
         run: go-acc . -- -race -v -tags ""
-        shell: msys2 {0}
 
       - name: 'Tags: libsqlite3'
         run: go-acc . -- -race -v -tags "libsqlite3"
-        shell: msys2 {0}
 
       - name: 'Tags: full'
         run: |
           echo 'skip this test'
           echo go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
-        shell: msys2 {0}
 
       - name: 'Tags: vacuum'
         run: go-acc . -- -race -v -tags "sqlite_vacuum_full"
-        shell: msys2 {0}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1
