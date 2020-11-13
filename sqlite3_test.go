@@ -19,6 +19,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,6 +100,43 @@ func TestOpen(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestOpenWithVFS(t *testing.T) {
+	filename := t.Name() + ".sqlite"
+
+	if err := os.Remove(filename); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	defer os.Remove(filename)
+
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?vfs=hello", filename))
+	if err != nil {
+		t.Fatal("Failed to open", err)
+	}
+	err = db.Ping()
+	if err == nil {
+		t.Fatal("Failed to open", err)
+	}
+	db.Close()
+
+	defer os.Remove(filename)
+
+	var vfs string
+	if runtime.GOOS == "windows" {
+		vfs = "win32-none"
+	} else {
+		vfs = "unix-none"
+	}
+	db, err = sql.Open("sqlite3", fmt.Sprintf("file:%s?vfs=%s", filename, vfs))
+	if err != nil {
+		t.Fatal("Failed to open", err)
+	}
+	err = db.Ping()
+	if err != nil {
+		t.Fatal("Failed to ping", err)
+	}
+	db.Close()
 }
 
 func TestOpenNoCreate(t *testing.T) {
