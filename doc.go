@@ -90,7 +90,7 @@ ConnectHook to get the SQLiteConn.
 					},
 			})
 
-You can also use database/sql.Conn.Raw:
+You can also use database/sql.Conn.Raw (Go >= 1.13):
 
 	conn, err := db.Conn(context.Background())
 	// if err != nil { ... }

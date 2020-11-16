@@ -49,6 +49,10 @@ func TestBeginTxCancel(t *testing.T) {
 				if !ok {
 					t.Fatal("unexpected: wrong type")
 				}
+				// checks that conn.Raw can be used to get *SQLiteConn
+				if _, ok = driverConn.(*SQLiteConn); !ok {
+					t.Fatalf("conn.Raw() driverConn type=%T, expected *SQLiteConn", driverConn)
+				}
 
 				go cancel() // make it cancel concurrently with exec("BEGIN");
 				tx, err := d.BeginTx(ctx, driver.TxOptions{})
