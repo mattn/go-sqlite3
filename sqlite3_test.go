@@ -9,6 +9,7 @@ package sqlite3
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -2350,5 +2351,34 @@ func benchmarkStmtRows(b *testing.B) {
 		if err = r.Err(); err != nil {
 			panic(err)
 		}
+	}
+}
+
+func TestConnRawIsSQLiteConn(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open db:", err)
+	}
+	defer db.Close()
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Fatal("Failed to get conn:", err)
+	}
+	defer conn.Close()
+	err = conn.Raw(func(driverConn interface{}) error {
+		sqliteConn, ok := driverConn.(*SQLiteConn)
+		if !ok {
+			t.Errorf("driverConn type=%T; expected to be *SQLiteConn", driverConn)
+			return nil
+		}
+		// call a private SQLite API to confirm the raw conn "works"
+		if sqliteConn.AuthEnabled() {
+			t.Error("sqliteConn.AuthEnabled()=true; expected false")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error("conn.Raw() returned err:", err)
 	}
 }

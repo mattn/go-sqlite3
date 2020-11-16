@@ -79,9 +79,8 @@ Then, you can use this extension.
 
 Connection Hook
 
-You can hook and inject your code when the connection is established. database/sql
-doesn't provide a way to get native go-sqlite3 interfaces. So if you want,
-you need to set ConnectHook and get the SQLiteConn.
+You can hook and inject your code when the connection is established by setting
+ConnectHook to get the SQLiteConn.
 
 	sql.Register("sqlite3_with_hook_example",
 			&sqlite3.SQLiteDriver{
@@ -90,6 +89,17 @@ you need to set ConnectHook and get the SQLiteConn.
 						return nil
 					},
 			})
+
+You can also use database/sql.Conn.Raw:
+
+	conn, err := db.Conn(context.Background())
+	// if err != nil { ... }
+	defer conn.Close()
+	err = conn.Raw(func (driverConn interface{}) error {
+		sqliteConn := driverConn.(*sqlite3.SQLiteConn)
+		// ... use sqliteConn
+	})
+	// if err != nil { ... }
 
 Go SQlite3 Extensions
 
