@@ -302,6 +302,71 @@ func TestClose(t *testing.T) {
 	}
 }
 
+func TestTransactionState(t *testing.T) {
+	d := SQLiteDriver{}
+
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+	defer conn.Close()
+
+	sqlite3conn := conn.(*SQLiteConn)
+
+	state := sqlite3conn.TxnState("main")
+
+	if state != SQLITE_TXN_NONE {
+		t.Fatal("Invalid transaction state, should be SQLITE_TXN_NONE: ", state)
+	}
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text)", nil)
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = sqlite3conn.Exec("insert into foo(name) values(\"bar\")", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	_, err = sqlite3conn.Exec("begin", nil)
+
+	if err != nil {
+		t.Fatal("Failed to start a transaction", err)
+	}
+
+	rows, err := sqlite3conn.Query("select * from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
+	}
+	defer rows.Close()
+	value := []driver.Value{}
+	rows.Next(value)
+
+	state = sqlite3conn.TxnState("main")
+
+	if state != SQLITE_TXN_READ {
+		t.Fatal("Invalid transaction state, should be SQLITE_TXN_READ: ", state)
+	}
+
+	_, err = sqlite3conn.Exec("insert into foo(name) values(\"bar\")", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	state = sqlite3conn.TxnState("main")
+
+	if state != SQLITE_TXN_WRITE {
+		t.Fatal("Invalid transaction state, should be SQLITE_TXN_WRITE: ", state)
+	}
+
+	_, err = sqlite3conn.Exec("rollback", nil)
+
+	if err != nil {
+		t.Fatal("Failed to start a transaction", err)
+	}
+}
+
 func TestInsert(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)

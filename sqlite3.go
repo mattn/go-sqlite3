@@ -1779,6 +1779,22 @@ func (c *SQLiteConn) SetLimit(id int, newVal int) int {
 	return int(C._sqlite3_limit(c.db, C.int(id), C.int(newVal)))
 }
 
+// Transaction States.
+// See: http://www.sqlite.org/c3ref/txn_state.html
+const (
+	SQLITE_TXN_NONE  = C.SQLITE_TXN_NONE
+	SQLITE_TXN_READ  = C.SQLITE_TXN_READ
+	SQLITE_TXN_WRITE = C.SQLITE_TXN_WRITE
+)
+
+// Determine the transaction state of a database
+// See: sqlite3_txn_state, http://www.sqlite.org/c3ref/txn_state.html
+func (c *SQLiteConn) TxnState(schema string) int {
+	pschema := C.CString(schema)
+	defer C.free(unsafe.Pointer(pschema))
+	return int(C.sqlite3_txn_state(c.db, pschema))
+}
+
 // Close the statement.
 func (s *SQLiteStmt) Close() error {
 	s.mu.Lock()
