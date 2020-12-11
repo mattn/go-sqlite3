@@ -441,7 +441,6 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 
 	info.idxNum = C.int(res.IdxNum)
 	idxStr := C.CString(res.IdxStr)
-	defer C.free(unsafe.Pointer(idxStr))
 	info.idxStr = idxStr
 	info.needToFreeIdxStr = C.int(0)
 	if res.AlreadyOrdered {
@@ -471,6 +470,7 @@ func goMDestroy(pClientData unsafe.Pointer) {
 
 //export goVFilter
 func goVFilter(pCursor unsafe.Pointer, idxNum C.int, idxName *C.char, argc C.int, argv **C.sqlite3_value) *C.char {
+	defer C.free(unsafe.Pointer(idxName))
 	vtc := lookupHandle(pCursor).(*sqliteVTabCursor)
 	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
 	vals := make([]interface{}, 0, argc)
