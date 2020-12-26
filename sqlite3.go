@@ -1040,6 +1040,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	synchronousMode := "NORMAL"
 	writableSchema := -1
 	vfsName := ""
+	var cacheSize *int64
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -1363,6 +1364,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Cache size (_cache_size)
+		//
+		// https://sqlite.org/pragma.html#pragma_cache_size
+		//
+		if val := params.Get("_cache_size"); val != "" {
+			iv, err := strconv.ParseInt(val, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid _cache_size: %v: %v", val, err)
+			}
+			cacheSize = &iv
+		}
+
 		if val := params.Get("vfs"); val != "" {
 			vfsName = val
 		}
@@ -1670,6 +1683,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Writable Schema
 	if writableSchema > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA writable_schema = %d;", writableSchema)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Cache Size
+	if cacheSize != nil {
+		if err := exec(fmt.Sprintf("PRAGMA cache_size = %d;", *cacheSize)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
