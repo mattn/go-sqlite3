@@ -484,3 +484,125 @@ func (c *vtabUpdateCursor) Rowid() (int64, error) {
 func (c *vtabUpdateCursor) Close() error {
 	return nil
 }
+
+type testModuleEponymousOnly struct {
+	t        *testing.T
+	intarray []int
+}
+
+type testVTabEponymousOnly struct {
+	intarray []int
+}
+
+type testVTabCursorEponymousOnly struct {
+	vTab  *testVTabEponymousOnly
+	index int
+}
+
+func (m testModuleEponymousOnly) EponymousOnlyModule() {}
+
+func (m testModuleEponymousOnly) Create(c *SQLiteConn, args []string) (VTab, error) {
+	err := c.DeclareVTab("CREATE TABLE x(test INT)")
+	if err != nil {
+		return nil, err
+	}
+	return &testVTabEponymousOnly{m.intarray}, nil
+}
+
+func (m testModuleEponymousOnly) Connect(c *SQLiteConn, args []string) (VTab, error) {
+	return m.Create(c, args)
+}
+
+func (m testModuleEponymousOnly) DestroyModule() {}
+
+func (v *testVTabEponymousOnly) BestIndex(cst []InfoConstraint, ob []InfoOrderBy) (*IndexResult, error) {
+	used := make([]bool, 0, len(cst))
+	for range cst {
+		used = append(used, false)
+	}
+	return &IndexResult{
+		Used:           used,
+		IdxNum:         0,
+		IdxStr:         "test-index",
+		AlreadyOrdered: true,
+		EstimatedCost:  100,
+		EstimatedRows:  200,
+	}, nil
+}
+
+func (v *testVTabEponymousOnly) Disconnect() error {
+	return nil
+}
+
+func (v *testVTabEponymousOnly) Destroy() error {
+	return nil
+}
+
+func (v *testVTabEponymousOnly) Open() (VTabCursor, error) {
+	return &testVTabCursorEponymousOnly{v, 0}, nil
+}
+
+func (vc *testVTabCursorEponymousOnly) Close() error {
+	return nil
+}
+
+func (vc *testVTabCursorEponymousOnly) Filter(idxNum int, idxStr string, vals []interface{}) error {
+	vc.index = 0
+	return nil
+}
+
+func (vc *testVTabCursorEponymousOnly) Next() error {
+	vc.index++
+	return nil
+}
+
+func (vc *testVTabCursorEponymousOnly) EOF() bool {
+	return vc.index >= len(vc.vTab.intarray)
+}
+
+func (vc *testVTabCursorEponymousOnly) Column(c *SQLiteContext, col int) error {
+	if col != 0 {
+		return fmt.Errorf("column index out of bounds: %d", col)
+	}
+	c.ResultInt(vc.vTab.intarray[vc.index])
+	return nil
+}
+
+func (vc *testVTabCursorEponymousOnly) Rowid() (int64, error) {
+	return int64(vc.index), nil
+}
+
+func TestCreateModuleEponymousOnly(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	intarray := []int{1, 2, 3}
+	sql.Register("sqlite3_TestCreateModuleEponymousOnly", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			return conn.CreateModule("test", testModuleEponymousOnly{t, intarray})
+		},
+	})
+	db, err := sql.Open("sqlite3_TestCreateModuleEponymousOnly", tempFilename)
+	if err != nil {
+		t.Fatalf("could not open db: %v", err)
+	}
+
+	var i, value int
+	rows, err := db.Query("SELECT rowid, * FROM test")
+	if err != nil {
+		t.Fatalf("couldn't select from virtual table: %v", err)
+	}
+	for rows.Next() {
+		err := rows.Scan(&i, &value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if intarray[i] != value {
+			t.Fatalf("want %v but %v", intarray[i], value)
+		}
+	}
+
+	_, err = db.Exec("DROP TABLE test")
+	if err != nil {
+		t.Fatalf("couldn't drop virtual table: %v", err)
+	}
+}
