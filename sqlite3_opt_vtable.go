@@ -472,10 +472,21 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	}
 
 	info.idxNum = C.int(res.IdxNum)
-	idxStr := C.CString(res.IdxStr)
-	defer C.free(unsafe.Pointer(idxStr))
-	info.idxStr = idxStr
-	info.needToFreeIdxStr = C.int(0)
+	info.idxStr = (*C.char)(C.sqlite3_malloc(C.int(len(res.IdxStr) + 1)))
+	if info.idxStr == nil {
+		// C.malloc and C.CString ordinarily do this for you. See https://golang.org/cmd/cgo/
+		panic("out of memory")
+	}
+	info.needToFreeIdxStr = C.int(1)
+
+	idxStr := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(info.idxStr)),
+		Len:  len(res.IdxStr) + 1,
+		Cap:  len(res.IdxStr) + 1,
+	}))
+	copy(idxStr, res.IdxStr)
+	idxStr[len(idxStr)-1] = 0 // null-terminated string
+
 	if res.AlreadyOrdered {
 		info.orderByConsumed = C.int(1)
 	}
