@@ -37,26 +37,20 @@ func (rc *SQLiteRows) ColumnTypeNullable(i int) (nullable, ok bool) {
 	return false, false
 }
 */
-
 // ColumnTypeScanType implement RowsColumnTypeScanType.
 func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
-	switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
-	case C.SQLITE_INTEGER:
-		switch C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))) {
-		case "timestamp", "datetime", "date":
-			return reflect.TypeOf(time.Time{})
-		case "boolean":
-			return reflect.TypeOf(false)
-		}
+	switch C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))) {
+	case "int", "integer", "tinyint", "smallint", "mediumint", "bigint":
 		return reflect.TypeOf(int64(0))
-	case C.SQLITE_FLOAT:
+	case "timestamp", "datetime", "date":
+		return reflect.TypeOf(time.Time{})
+	case "boolean":
+		return reflect.TypeOf(false)
+	case "double", "float":
 		return reflect.TypeOf(float64(0))
-	case C.SQLITE_BLOB:
-		return reflect.SliceOf(reflect.TypeOf(byte(0)))
-	case C.SQLITE_NULL:
-		return reflect.TypeOf(nil)
-	case C.SQLITE_TEXT:
+	case "varchar", "character", "nchar":
 		return reflect.TypeOf("")
 	}
 	return reflect.SliceOf(reflect.TypeOf(byte(0)))
 }
+
