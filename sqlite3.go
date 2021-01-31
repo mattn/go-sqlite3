@@ -931,9 +931,9 @@ func (c *SQLiteConn) Serialize(schema string) []byte {
 // byte slice. If deserelization fails, error will contain the return code
 // of the underlying SQLite API call.
 //
-// Because the byte slice is in Go-controlled memory, this function
-// makes a copy of the data in C-controlled memory, before passing the
-// data to the SQLite library.
+// When this function returns, the connection is referencing database
+// data in Go space, so the connection and associated database must be copied
+// immediately if it is to be used further.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
@@ -945,9 +945,8 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	defer C.free(unsafe.Pointer(zSchema))
 
 	rc := C.sqlite3_deserialize(c.db, zSchema,
-		(*C.uint8_t)(C.CBytes(b)),
-		C.sqlite3_int64(len(b)), C.sqlite3_int64(len(b)),
-		C.SQLITE_DESERIALIZE_FREEONCLOSE|C.SQLITE_DESERIALIZE_RESIZEABLE)
+		(*C.uint8_t)(unsafe.Pointer(&b[0])),
+		C.sqlite3_int64(len(b)), C.sqlite3_int64(len(b)), 0)
 	if rc != 0 {
 		return fmt.Errorf("deserialize failed with return %v", rc)
 	}
