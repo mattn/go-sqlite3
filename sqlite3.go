@@ -931,6 +931,10 @@ func (c *SQLiteConn) Serialize(schema string) []byte {
 // byte slice. If deserelization fails, error will contain the return code
 // of the underlying SQLite API call.
 //
+// When this function returns, the connection is referencing database
+// data in Go space, so the connection and associated database must be copied
+// immediately if it is to be used further.
+//
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	if schema == "" {
