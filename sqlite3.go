@@ -923,6 +923,7 @@ func (c *SQLiteConn) Serialize(schema string) []byte {
 	if ptr == nil {
 		return nil
 	}
+	defer C.sqlite3_free(unsafe.Pointer(ptr))
 	return C.GoBytes(unsafe.Pointer(ptr), C.int(sz))
 }
 
