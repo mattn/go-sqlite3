@@ -150,7 +150,7 @@ go build --tags "<FEATURE>"
 ```
 
 For available features see the extension list.
-When using multiple build tags, all the different tags should be space delimted.
+When using multiple build tags, all the different tags should be space delimited.
 
 Example:
 
