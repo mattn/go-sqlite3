@@ -1676,7 +1676,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	//
 	// Because default is NORMAL this statement is always executed
 	if err := exec(fmt.Sprintf("PRAGMA synchronous = %s;", synchronousMode)); err != nil {
-		C.sqlite3_close_v2(db)
+		conn.Close()
 		return nil, err
 	}
 
