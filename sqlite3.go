@@ -19,7 +19,6 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_OMIT_DEPRECATED
 #cgo CFLAGS: -DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1
 #cgo CFLAGS: -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
-#cgo CFLAGS: -DSQLITE_ENABLE_COLUMN_METADATA
 #cgo CFLAGS: -Wno-deprecated-declarations
 #cgo linux,!android CFLAGS: -DHAVE_PREAD64=1 -DHAVE_PWRITE64=1
 #ifndef USE_LIBSQLITE3
@@ -2013,14 +2012,6 @@ func (s *SQLiteStmt) execSync(args []namedValue) (driver.Result, error) {
 // See: https://sqlite.org/c3ref/stmt_readonly.html
 func (s *SQLiteStmt) Readonly() bool {
 	return C.sqlite3_stmt_readonly(s.s) == 1
-}
-
-// ColumnTableName returns the table that is the origin of a particular result
-// column in a SELECT statement.
-//
-// See https://www.sqlite.org/c3ref/column_database_name.html
-func (s *SQLiteStmt) ColumnTableName(n int) string {
-        return C.GoString(C.sqlite3_column_table_name(s.s, C.int(n)))
 }
 
 // Close the rows.
