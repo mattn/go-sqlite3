@@ -44,7 +44,7 @@ jobs:
         run: go-acc . -- -race -v -tags "libsqlite3"
 
       - name: 'Tags: full'
-        run: go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
+        run: go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify sqlite_column_metadata"
 
       - name: 'Tags: vacuum'
         run: go-acc . -- -race -v -tags "sqlite_vacuum_full"
