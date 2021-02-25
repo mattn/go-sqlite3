@@ -9,13 +9,19 @@ import (
 )
 
 func main() {
-	os.Remove("./foo.db")
+	if err := os.Remove("./foo.db"); err != nil {
+		log.Fatal(err)
+	}
 
 	db, err := sql.Open("sqlite3", "./foo.db")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	sqlStmt := `
 	create table foo (id integer not null primary key, name text);
@@ -35,20 +41,30 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer stmt.Close()
+	defer func() {
+		if err := stmt.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	for i := 0; i < 100; i++ {
 		_, err = stmt.Exec(i, fmt.Sprintf("こんにちわ世界%03d", i))
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	tx.Commit()
+	if err := tx.Commit(); err != nil {
+		log.Fatal(err)
+	}
 
 	rows, err := db.Query("select id, name from foo")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	for rows.Next() {
 		var id int
 		var name string
@@ -67,7 +83,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer stmt.Close()
+	defer func() {
+		if err := stmt.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	var name string
 	err = stmt.QueryRow("3").Scan(&name)
 	if err != nil {
@@ -89,7 +109,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	for rows.Next() {
 		var id int
 		var name string
