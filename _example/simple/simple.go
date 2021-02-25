@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	if err := os.Remove("./foo.db"); err != nil {
+	if err := os.Remove("./foo.db"); err != nil && !os.IsNotExist(err) {
 		log.Fatal(err)
 	}
 
@@ -52,7 +52,13 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	errCommit := tx.Commit()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	if errCommit != nil && errCommit != sql.ErrTxDone {
 		log.Fatal(err)
 	}
 
