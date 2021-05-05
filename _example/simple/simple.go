@@ -42,7 +42,10 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	rows, err := db.Query("select id, name from foo")
 	if err != nil {
