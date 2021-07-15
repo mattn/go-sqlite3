@@ -153,7 +153,11 @@ func main() {
 		for scanner.Scan() {
 			text := scanner.Text()
 			if text == `#include "sqlite3.h"` {
-				text = `#include "sqlite3-binding.h"`
+				text = `#include "sqlite3-binding.h"
+#ifdef __clang__
+#define assert(condition) ((void)0)
+#endif
+`
 			}
 			_, err = fmt.Fprintln(f, text)
 			if err != nil {
