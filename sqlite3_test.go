@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-func TempFilename(t *testing.T) string {
+func TempFilename(t testing.TB) string {
 	f, err := ioutil.TempFile("", "go-sqlite3-test-")
 	if err != nil {
 		t.Fatal(err)
@@ -1888,28 +1888,21 @@ func BenchmarkCustomFunctions(b *testing.B) {
 }
 
 func TestSuite(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-	d, err := sql.Open("sqlite3", tempFilename+"?_busy_timeout=99999")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer d.Close()
+	initializeTestDB(t)
+	defer freeTestDB()
 
-	db = &TestDB{t, d, SQLITE, sync.Once{}}
-	ok := testing.RunTests(func(string, string) (bool, error) { return true, nil }, tests)
-	if !ok {
-		t.Fatal("A subtest failed")
+	for _, test := range tests {
+		t.Run(test.Name, test.F)
 	}
+}
 
-	if !testing.Short() {
-		for _, b := range benchmarks {
-			fmt.Printf("%-20s", b.Name)
-			r := testing.Benchmark(b.F)
-			fmt.Printf("%10d %10.0f req/s\n", r.N, float64(r.N)/r.T.Seconds())
-		}
+func BenchmarkSuite(b *testing.B) {
+	initializeTestDB(b)
+	defer freeTestDB()
+
+	for _, benchmark := range benchmarks {
+		b.Run(benchmark.Name, benchmark.F)
 	}
-	db.tearDown()
 }
 
 // Dialect is a type of dialect of databases.
@@ -1924,13 +1917,36 @@ const (
 
 // DB provide context for the tests
 type TestDB struct {
-	*testing.T
+	testing.TB
 	*sql.DB
-	dialect Dialect
-	once    sync.Once
+	dialect      Dialect
+	once         sync.Once
+	tempFilename string
 }
 
 var db *TestDB
+
+func initializeTestDB(t testing.TB) {
+	tempFilename := TempFilename(t)
+	d, err := sql.Open("sqlite3", tempFilename+"?_busy_timeout=99999")
+	if err != nil {
+		os.Remove(tempFilename)
+		t.Fatal(err)
+	}
+
+	db = &TestDB{t, d, SQLITE, sync.Once{}, tempFilename}
+}
+
+func freeTestDB() {
+	err := db.DB.Close()
+	if err != nil {
+		panic(err)
+	}
+	err = os.Remove(db.tempFilename)
+	if err != nil {
+		panic(err)
+	}
+}
 
 // the following tables will be created and dropped during the test
 var testTables = []string{"foo", "bar", "t", "bench"}
