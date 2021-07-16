@@ -12,6 +12,7 @@ import (
 	"math"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestCallbackArgCast(t *testing.T) {
@@ -73,6 +74,7 @@ func TestCallbackConverters(t *testing.T) {
 		{uint(0), false},
 		{float64(0), false},
 		{float32(0), false},
+		{time.Now(), false},
 
 		{func() {}, true},
 		{complex64(complex(0, 0)), true},
