@@ -290,8 +290,10 @@ const (
 
 // SQLiteDriver implements driver.Driver.
 type SQLiteDriver struct {
-	Extensions  []string
-	ConnectHook func(*SQLiteConn) error
+	Extensions           []string
+	ConnectHook          func(*SQLiteConn) error
+	PreConnectExtensions []string
+	PreConnectHook       func(*SQLiteConn) error
 }
 
 // SQLiteConn implements driver.Conn.
@@ -1385,7 +1387,62 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 	}
 
-	var db *C.sqlite3
+	open := func(name *C.char, vfs *C.char) (*C.sqlite3, error) {
+		var db *C.sqlite3
+		rv := C._sqlite3_open_v2(name, &db,
+			mutex|C.SQLITE_OPEN_FULLMUTEX|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
+			vfs)
+
+		if rv != 0 {
+			// Save off the error _before_ closing the database.
+			// This is safe even if db is nil.
+			err := lastError(db)
+			if db != nil {
+				C.sqlite3_close_v2(db)
+			}
+			return nil, err
+		}
+
+		if db == nil {
+			return nil, errors.New("sqlite succeeded without returning a database")
+		}
+
+		rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
+		if rv != C.SQLITE_OK {
+			C.sqlite3_close_v2(db)
+			return nil, Error{Code: ErrNo(rv)}
+		}
+		return db, nil
+	}
+
+	if len(d.PreConnectExtensions) > 0 || d.PreConnectHook != nil {
+		// create temp memory db for loading extensions before opening
+		name_temp := C.CString(":memory:")
+		defer C.free(unsafe.Pointer(name_temp))
+
+		db_temp, err := open(name_temp, nil)
+		defer C.sqlite3_close_v2(db_temp)
+		if err != nil {
+			return nil, err
+		}
+
+		conn_temp := &SQLiteConn{db: db_temp}
+		defer conn_temp.Close()
+
+		if len(d.PreConnectExtensions) > 0 {
+			if err := conn_temp.loadExtensions(d.PreConnectExtensions); err != nil {
+				return nil, err
+			}
+		}
+
+		if d.PreConnectHook != nil {
+			if err := d.PreConnectHook(conn_temp); err != nil {
+				conn_temp.Close()
+				return nil, err
+			}
+		}
+	}
+
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
 	var vfs *C.char
@@ -1393,26 +1450,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		vfs = C.CString(vfsName)
 		defer C.free(unsafe.Pointer(vfs))
 	}
-	rv := C._sqlite3_open_v2(name, &db,
-		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
-		vfs)
-	if rv != 0 {
-		// Save off the error _before_ closing the database.
-		// This is safe even if db is nil.
-		err := lastError(db)
-		if db != nil {
-			C.sqlite3_close_v2(db)
-		}
+	db, err := open(name, vfs)
+	if err != nil {
 		return nil, err
-	}
-	if db == nil {
-		return nil, errors.New("sqlite succeeded without returning a database")
-	}
-
-	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
-	if rv != C.SQLITE_OK {
-		C.sqlite3_close_v2(db)
-		return nil, Error{Code: ErrNo(rv)}
 	}
 
 	exec := func(s string) error {
