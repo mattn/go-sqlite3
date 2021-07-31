@@ -829,6 +829,10 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) 
 		tail := s.(*SQLiteStmt).t
 		s.Close()
 		if tail == "" {
+			if res == nil {
+				// https://github.com/mattn/go-sqlite3/issues/963
+				res = &SQLiteResult{0, 0}
+			}
 			return res, nil
 		}
 		query = tail
