@@ -1943,6 +1943,7 @@ var tests = []testing.InternalTest{
 	{Name: "TestManyQueryRow", F: testManyQueryRow},
 	{Name: "TestTxQuery", F: testTxQuery},
 	{Name: "TestPreparedStmt", F: testPreparedStmt},
+	{Name: "TestExecEmptyQuery", F: testExecEmptyQuery},
 }
 
 var benchmarks = []testing.InternalBenchmark{
@@ -2271,6 +2272,25 @@ func testPreparedStmt(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// testEmptyQuery is test for validating the API in case of empty query
+func testExecEmptyQuery(t *testing.T) {
+	db.tearDown()
+	res, err := db.Exec(" -- this is just a comment ")
+	if err != nil {
+		t.Fatalf("empty query err: %v", err)
+	}
+
+	_, err = res.LastInsertId()
+	if err != nil {
+		t.Fatalf("LastInsertId returned an error: %v", err)
+	}
+
+	_, err = res.RowsAffected()
+	if err != nil {
+		t.Fatalf("RowsAffected returned an error: %v", err)
+	}
 }
 
 // Benchmarks need to use panic() since b.Error errors are lost when
