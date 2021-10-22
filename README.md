@@ -15,7 +15,7 @@ Latest stable version is v1.14 or later, not v2.
 
 A sqlite3 driver that conforms to the built-in database/sql interface.
 
-Supported Golang version: See [.github/workflows/go.yaml](./.github/workflows/go.yaml),
+Supported Golang version: See [.github/workflows/go.yaml](./.github/workflows/go.yaml).
 
 This package follows the official [Golang Release Policy](https://golang.org/doc/devel/release.html#policy).
 
