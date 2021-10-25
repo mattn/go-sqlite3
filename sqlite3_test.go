@@ -1368,16 +1368,16 @@ func TestFunctionRegistration(t *testing.T) {
 		{"SELECT addf32_64(1.5,1.5)", float64(3)},
 		{"SELECT not(1)", false},
 		{"SELECT not(0)", true},
-		{`SELECT regex("^foo.*", "foobar")`, true},
-		{`SELECT regex("^foo.*", "barfoobar")`, false},
+		{`SELECT regex('^foo.*', 'foobar')`, true},
+		{`SELECT regex('^foo.*', 'barfoobar')`, false},
 		{"SELECT generic(1)", int64(1)},
 		{"SELECT generic(1.1)", int64(2)},
 		{`SELECT generic(NULL)`, int64(3)},
-		{`SELECT generic("foo")`, int64(4)},
+		{`SELECT generic('foo')`, int64(4)},
 		{"SELECT variadic(1,2)", int64(3)},
 		{"SELECT variadic(1,2,3,4)", int64(10)},
 		{"SELECT variadic(1,1,1,1,1,1,1,1,1,1)", int64(10)},
-		{`SELECT variadicGeneric(1,"foo",2.3, NULL)`, int64(4)},
+		{`SELECT variadicGeneric(1,'foo',2.3, NULL)`, int64(4)},
 	}
 
 	for _, op := range ops {
@@ -1487,11 +1487,11 @@ func TestCollationRegistration(t *testing.T) {
 
 	populate := []string{
 		`CREATE TABLE test (s TEXT)`,
-		`INSERT INTO test VALUES ("aaaa")`,
-		`INSERT INTO test VALUES ("ffff")`,
-		`INSERT INTO test VALUES ("qqqq")`,
-		`INSERT INTO test VALUES ("tttt")`,
-		`INSERT INTO test VALUES ("zzzz")`,
+		`INSERT INTO test VALUES ('aaaa')`,
+		`INSERT INTO test VALUES ('ffff')`,
+		`INSERT INTO test VALUES ('qqqq')`,
+		`INSERT INTO test VALUES ('tttt')`,
+		`INSERT INTO test VALUES ('zzzz')`,
 	}
 	for _, stmt := range populate {
 		if _, err := db.Exec(stmt); err != nil {
@@ -1586,7 +1586,7 @@ func TestDeclTypes(t *testing.T) {
 		t.Fatal("Failed to create table:", err)
 	}
 
-	_, err = sqlite3conn.Exec("insert into foo(name) values(\"bar\")", nil)
+	_, err = sqlite3conn.Exec("insert into foo(name) values('bar')", nil)
 	if err != nil {
 		t.Fatal("Failed to insert:", err)
 	}
