@@ -1415,12 +1415,6 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
 
-	rv = C.sqlite3_busy_timeout(db, C.int(busyTimeout))
-	if rv != C.SQLITE_OK {
-		C.sqlite3_close_v2(db)
-		return nil, Error{Code: ErrNo(rv)}
-	}
-
 	exec := func(s string) error {
 		cs := C.CString(s)
 		rv := C.sqlite3_exec(db, cs, nil, nil, nil)
@@ -1429,6 +1423,12 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return lastError(db)
 		}
 		return nil
+	}
+
+	// Busy timeout
+	if err := exec(fmt.Sprintf("PRAGMA busy_timeout = %d;", busyTimeout)); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
 	}
 
 	// USER AUTHENTICATION
