@@ -81,11 +81,6 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
-      - name: Get Build Tools
-        run: |
-          GO111MODULE=on go get github.com/ory/go-acc
-        shell: msys2 {0}
-
       - name: Add $GOPATH/bin to $PATH
         run: |
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
@@ -94,21 +89,21 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: 'Tags: default'
-        run: go-acc . -- -race -v -tags ""
+        run: go build -race -v -tags ""
         shell: msys2 {0}
 
       - name: 'Tags: libsqlite3'
-        run: go-acc . -- -race -v -tags "libsqlite3"
+        run: go build -race -v -tags "libsqlite3"
         shell: msys2 {0}
 
       - name: 'Tags: full'
         run: |
           echo 'skip this test'
-          echo go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
+          echo go build -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify"
         shell: msys2 {0}
 
       - name: 'Tags: vacuum'
-        run: go-acc . -- -race -v -tags "sqlite_vacuum_full"
+        run: go build -race -v -tags "sqlite_vacuum_full"
         shell: msys2 {0}
 
       - name: Upload coverage to Codecov
