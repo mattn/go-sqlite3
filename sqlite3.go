@@ -4,6 +4,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+//go:build cgo
 // +build cgo
 
 package sqlite3
@@ -233,8 +234,14 @@ const (
 	columnTimestamp string = "timestamp"
 )
 
+// This variable can be replaced with -ldflags like below:
+// go build -ldflags="-X 'github.com/mattn/go-sqlite3.driverName=my-sqlite3'"
+var driverName = "sqlite3"
+
 func init() {
-	sql.Register("sqlite3", &SQLiteDriver{})
+	if driverName != "" {
+		sql.Register(driverName, &SQLiteDriver{})
+	}
 }
 
 // Version returns SQLite library version information.
