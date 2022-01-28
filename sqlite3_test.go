@@ -3,6 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+//go:build cgo
 // +build cgo
 
 package sqlite3
@@ -1720,6 +1721,43 @@ func TestAuthorizer(t *testing.T) {
 			t.Fatalf("Authorizer didn't worked - nil received, but error expected: [%v]", statement)
 		}
 	}
+}
+
+func TestSetFileControlInt(t *testing.T) {
+	t.Run("PERSIST_WAL", func(t *testing.T) {
+		tempFilename := TempFilename(t)
+		defer os.Remove(tempFilename)
+
+		sql.Register("sqlite3_FCNTL_PERSIST_WAL", &SQLiteDriver{
+			ConnectHook: func(conn *SQLiteConn) error {
+				if err := conn.SetFileControlInt("", SQLITE_FCNTL_PERSIST_WAL, 1); err != nil {
+					return fmt.Errorf("Unexpected error from SetFileControlInt(): %w", err)
+				}
+				return nil
+			},
+		})
+
+		db, err := sql.Open("sqlite3_FCNTL_PERSIST_WAL", tempFilename)
+		if err != nil {
+			t.Fatal("Failed to open database:", err)
+		}
+		defer db.Close()
+
+		// Set to WAL mode & write a page.
+		if _, err := db.Exec(`PRAGMA journal_mode = wal`); err != nil {
+			t.Fatal("Failed to set journal mode:", err)
+		} else if _, err := db.Exec(`CREATE TABLE t (x)`); err != nil {
+			t.Fatal("Failed to create table:", err)
+		}
+		if err := db.Close(); err != nil {
+			t.Fatal("Failed to close database", err)
+		}
+
+		// Ensure WAL file persists after close.
+		if _, err := os.Stat(tempFilename + "-wal"); err != nil {
+			t.Fatal("Expected WAL file to be persisted after close", err)
+		}
+	})
 }
 
 func TestNonColumnString(t *testing.T) {
