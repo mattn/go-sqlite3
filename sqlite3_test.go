@@ -3,6 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+//go:build cgo
 // +build cgo
 
 package sqlite3
@@ -27,7 +28,7 @@ import (
 	"time"
 )
 
-func TempFilename(t *testing.T) string {
+func TempFilename(t testing.TB) string {
 	f, err := ioutil.TempFile("", "go-sqlite3-test-")
 	if err != nil {
 		t.Fatal(err)
@@ -1473,16 +1474,16 @@ func TestFunctionRegistration(t *testing.T) {
 		{"SELECT addf32_64(1.5,1.5)", float64(3)},
 		{"SELECT not(1)", false},
 		{"SELECT not(0)", true},
-		{`SELECT regex("^foo.*", "foobar")`, true},
-		{`SELECT regex("^foo.*", "barfoobar")`, false},
+		{`SELECT regex('^foo.*', 'foobar')`, true},
+		{`SELECT regex('^foo.*', 'barfoobar')`, false},
 		{"SELECT generic(1)", int64(1)},
 		{"SELECT generic(1.1)", int64(2)},
 		{`SELECT generic(NULL)`, int64(3)},
-		{`SELECT generic("foo")`, int64(4)},
+		{`SELECT generic('foo')`, int64(4)},
 		{"SELECT variadic(1,2)", int64(3)},
 		{"SELECT variadic(1,2,3,4)", int64(10)},
 		{"SELECT variadic(1,1,1,1,1,1,1,1,1,1)", int64(10)},
-		{`SELECT variadicGeneric(1,"foo",2.3, NULL)`, int64(4)},
+		{`SELECT variadicGeneric(1,'foo',2.3, NULL)`, int64(4)},
 	}
 
 	for _, op := range ops {
@@ -1592,11 +1593,11 @@ func TestCollationRegistration(t *testing.T) {
 
 	populate := []string{
 		`CREATE TABLE test (s TEXT)`,
-		`INSERT INTO test VALUES ("aaaa")`,
-		`INSERT INTO test VALUES ("ffff")`,
-		`INSERT INTO test VALUES ("qqqq")`,
-		`INSERT INTO test VALUES ("tttt")`,
-		`INSERT INTO test VALUES ("zzzz")`,
+		`INSERT INTO test VALUES ('aaaa')`,
+		`INSERT INTO test VALUES ('ffff')`,
+		`INSERT INTO test VALUES ('qqqq')`,
+		`INSERT INTO test VALUES ('tttt')`,
+		`INSERT INTO test VALUES ('zzzz')`,
 	}
 	for _, stmt := range populate {
 		if _, err := db.Exec(stmt); err != nil {
@@ -1691,7 +1692,7 @@ func TestDeclTypes(t *testing.T) {
 		t.Fatal("Failed to create table:", err)
 	}
 
-	_, err = sqlite3conn.Exec("insert into foo(name) values(\"bar\")", nil)
+	_, err = sqlite3conn.Exec("insert into foo(name) values('bar')", nil)
 	if err != nil {
 		t.Fatal("Failed to insert:", err)
 	}
@@ -1825,6 +1826,43 @@ func TestAuthorizer(t *testing.T) {
 			t.Fatalf("Authorizer didn't worked - nil received, but error expected: [%v]", statement)
 		}
 	}
+}
+
+func TestSetFileControlInt(t *testing.T) {
+	t.Run("PERSIST_WAL", func(t *testing.T) {
+		tempFilename := TempFilename(t)
+		defer os.Remove(tempFilename)
+
+		sql.Register("sqlite3_FCNTL_PERSIST_WAL", &SQLiteDriver{
+			ConnectHook: func(conn *SQLiteConn) error {
+				if err := conn.SetFileControlInt("", SQLITE_FCNTL_PERSIST_WAL, 1); err != nil {
+					return fmt.Errorf("Unexpected error from SetFileControlInt(): %w", err)
+				}
+				return nil
+			},
+		})
+
+		db, err := sql.Open("sqlite3_FCNTL_PERSIST_WAL", tempFilename)
+		if err != nil {
+			t.Fatal("Failed to open database:", err)
+		}
+		defer db.Close()
+
+		// Set to WAL mode & write a page.
+		if _, err := db.Exec(`PRAGMA journal_mode = wal`); err != nil {
+			t.Fatal("Failed to set journal mode:", err)
+		} else if _, err := db.Exec(`CREATE TABLE t (x)`); err != nil {
+			t.Fatal("Failed to create table:", err)
+		}
+		if err := db.Close(); err != nil {
+			t.Fatal("Failed to close database", err)
+		}
+
+		// Ensure WAL file persists after close.
+		if _, err := os.Stat(tempFilename + "-wal"); err != nil {
+			t.Fatal("Expected WAL file to be persisted after close", err)
+		}
+	})
 }
 
 func TestNonColumnString(t *testing.T) {
@@ -1993,28 +2031,21 @@ func BenchmarkCustomFunctions(b *testing.B) {
 }
 
 func TestSuite(t *testing.T) {
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-	d, err := sql.Open("sqlite3", tempFilename+"?_busy_timeout=99999")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer d.Close()
+	initializeTestDB(t)
+	defer freeTestDB()
 
-	db = &TestDB{t, d, SQLITE, sync.Once{}}
-	ok := testing.RunTests(func(string, string) (bool, error) { return true, nil }, tests)
-	if !ok {
-		t.Fatal("A subtest failed")
+	for _, test := range tests {
+		t.Run(test.Name, test.F)
 	}
+}
 
-	if !testing.Short() {
-		for _, b := range benchmarks {
-			fmt.Printf("%-20s", b.Name)
-			r := testing.Benchmark(b.F)
-			fmt.Printf("%10d %10.0f req/s\n", r.N, float64(r.N)/r.T.Seconds())
-		}
+func BenchmarkSuite(b *testing.B) {
+	initializeTestDB(b)
+	defer freeTestDB()
+
+	for _, benchmark := range benchmarks {
+		b.Run(benchmark.Name, benchmark.F)
 	}
-	db.tearDown()
 }
 
 // Dialect is a type of dialect of databases.
@@ -2029,13 +2060,36 @@ const (
 
 // DB provide context for the tests
 type TestDB struct {
-	*testing.T
+	testing.TB
 	*sql.DB
-	dialect Dialect
-	once    sync.Once
+	dialect      Dialect
+	once         sync.Once
+	tempFilename string
 }
 
 var db *TestDB
+
+func initializeTestDB(t testing.TB) {
+	tempFilename := TempFilename(t)
+	d, err := sql.Open("sqlite3", tempFilename+"?_busy_timeout=99999")
+	if err != nil {
+		os.Remove(tempFilename)
+		t.Fatal(err)
+	}
+
+	db = &TestDB{t, d, SQLITE, sync.Once{}, tempFilename}
+}
+
+func freeTestDB() {
+	err := db.DB.Close()
+	if err != nil {
+		panic(err)
+	}
+	err = os.Remove(db.tempFilename)
+	if err != nil {
+		panic(err)
+	}
+}
 
 // the following tables will be created and dropped during the test
 var testTables = []string{"foo", "bar", "t", "bench"}
@@ -2048,6 +2102,7 @@ var tests = []testing.InternalTest{
 	{Name: "TestManyQueryRow", F: testManyQueryRow},
 	{Name: "TestTxQuery", F: testTxQuery},
 	{Name: "TestPreparedStmt", F: testPreparedStmt},
+	{Name: "TestExecEmptyQuery", F: testExecEmptyQuery},
 }
 
 var benchmarks = []testing.InternalBenchmark{
@@ -2376,6 +2431,25 @@ func testPreparedStmt(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// testEmptyQuery is test for validating the API in case of empty query
+func testExecEmptyQuery(t *testing.T) {
+	db.tearDown()
+	res, err := db.Exec(" -- this is just a comment ")
+	if err != nil {
+		t.Fatalf("empty query err: %v", err)
+	}
+
+	_, err = res.LastInsertId()
+	if err != nil {
+		t.Fatalf("LastInsertId returned an error: %v", err)
+	}
+
+	_, err = res.RowsAffected()
+	if err != nil {
+		t.Fatalf("RowsAffected returned an error: %v", err)
+	}
 }
 
 // Benchmarks need to use panic() since b.Error errors are lost when
