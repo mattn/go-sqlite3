@@ -7,7 +7,11 @@ go-sqlite3
 [![codecov](https://codecov.io/gh/mattn/go-sqlite3/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-sqlite3)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
 
-Latest stable version is v1.14 or later, not v2.
+Latest stable version is v1.14 or later, not v2. Install the currently-latest version using
+
+```
+$ go get github.com/mattn/go-sqlite3@v1.14.11
+```
 
 ~~**NOTE:** The increase to v2 was an accident. There were no major changes or features.~~
 
