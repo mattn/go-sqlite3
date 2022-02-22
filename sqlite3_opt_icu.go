@@ -8,10 +8,12 @@
 package sqlite3
 
 /*
-#cgo LDFLAGS: -licuuc -licui18n
+#cgo LDFLAGS: -licuuc
 #cgo CFLAGS: -DSQLITE_ENABLE_ICU
+#cgo linux LDFLAGS: -licui18n
 #cgo darwin CFLAGS: -I/usr/local/opt/icu4c/include
-#cgo darwin LDFLAGS: -L/usr/local/opt/icu4c/lib
-#cgo openbsd LDFLAGS: -lsqlite3
+#cgo darwin LDFLAGS: -L/usr/local/opt/icu4c/lib -licui18n
+#cgo openbsd LDFLAGS: -lsqlite3 -licui18n
+#cgo windows LDFLAGS: -licuuc -licuin
 */
 import "C"
