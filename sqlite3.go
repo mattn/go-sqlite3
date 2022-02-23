@@ -26,6 +26,7 @@ package sqlite3
 #cgo openbsd LDFLAGS: -L/usr/local/lib
 #ifndef USE_LIBSQLITE3
 #include "amalgamation/sqlite3-binding.h"
+#include "amalgamation/sqlite3-binding.c"
 #else
 #include <sqlite3.h>
 #endif

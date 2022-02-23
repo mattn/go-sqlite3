@@ -13,6 +13,7 @@ package sqlite3
 
 #include <stdlib.h>
 #include "amalgamation/sqlite3-binding.h"
+#include "amalgamation/sqlite3_opt_unlock_notify.c"
 
 extern void unlock_notify_callback(void *arg, int argc);
 */
