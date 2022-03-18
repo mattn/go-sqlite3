@@ -30,6 +30,7 @@ You can write your own extension module for sqlite3. For example, below is an
 extension for a Regexp matcher operation.
 
     #include <pcre.h>
+    #include <stdint.h>
     #include <string.h>
     #include <stdio.h>
     #include <sqlite3ext.h>
@@ -37,6 +38,7 @@ extension for a Regexp matcher operation.
     SQLITE_EXTENSION_INIT1
     static void regexp_func(sqlite3_context *context, int argc, sqlite3_value **argv) {
       if (argc >= 2) {
+        uint8_t res = 1;
         const char *target  = (const char *)sqlite3_value_text(argv[1]);
         const char *pattern = (const char *)sqlite3_value_text(argv[0]);
         const char* errstr = NULL;
@@ -44,12 +46,16 @@ extension for a Regexp matcher operation.
         int vec[500];
         int n, rc;
         pcre* re = pcre_compile(pattern, 0, &errstr, &erroff, NULL);
-        rc = pcre_exec(re, NULL, target, strlen(target), 0, 0, vec, 500);
-        if (rc <= 0) {
+        if (!re) {
           sqlite3_result_error(context, errstr, 0);
           return;
         }
-        sqlite3_result_int(context, 1);
+        rc = pcre_exec(re, NULL, target, strlen(target), 0, 0, vec, 500);
+        if (rc <= 0) {
+          res = 0;
+        }
+        sqlite3_result_int(context, res);
+        pcre_free(re);
       }
     }
 
