@@ -309,7 +309,7 @@ const (
 
 // This variable can be replaced with -ldflags like below:
 // go build -ldflags="-X 'github.com/stetsyk2/go-sqlite3.driverName=my-sqlite3'"
-var driverName = "sqlite3_logica_extension"
+var driverName = "sqlite3"
 
 func init() {
 	if driverName != "" {
