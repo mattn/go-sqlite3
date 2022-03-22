@@ -3,8 +3,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/mattn/go-sqlite3"
 	"log"
+
+	"github.com/stetsyk2/go-sqlite3"
 )
 
 func main() {

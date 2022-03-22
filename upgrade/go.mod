@@ -1,4 +1,4 @@
-module github.com/mattn/go-sqlite3/upgrade
+module github.com/stetsyk2/go-sqlite3/upgrade
 
 go 1.16
 

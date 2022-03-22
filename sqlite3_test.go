@@ -1032,7 +1032,7 @@ func TestTimezoneConversion(t *testing.T) {
 }
 
 // TODO: Execer & Queryer currently disabled
-// https://github.com/mattn/go-sqlite3/issues/82
+// https://github.com/stetsyk2/go-sqlite3/issues/82
 func TestExecer(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)

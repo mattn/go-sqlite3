@@ -1,11 +1,11 @@
 go-sqlite3
 ==========
 
-[![GoDoc Reference](https://godoc.org/github.com/mattn/go-sqlite3?status.svg)](http://godoc.org/github.com/mattn/go-sqlite3)
-[![GitHub Actions](https://github.com/mattn/go-sqlite3/workflows/Go/badge.svg)](https://github.com/mattn/go-sqlite3/actions?query=workflow%3AGo)
+[![GoDoc Reference](https://godoc.org/github.com/stetsyk2/go-sqlite3?status.svg)](http://godoc.org/github.com/stetsyk2/go-sqlite3)
+[![GitHub Actions](https://github.com/stetsyk2/go-sqlite3/workflows/Go/badge.svg)](https://github.com/stetsyk2/go-sqlite3/actions?query=workflow%3AGo)
 [![Financial Contributors on Open Collective](https://opencollective.com/mattn-go-sqlite3/all/badge.svg?label=financial+contributors)](https://opencollective.com/mattn-go-sqlite3) 
 [![codecov](https://codecov.io/gh/mattn/go-sqlite3/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-sqlite3)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
+[![Go Report Card](https://goreportcard.com/badge/github.com/stetsyk2/go-sqlite3)](https://goreportcard.com/report/github.com/stetsyk2/go-sqlite3)
 
 Latest stable version is v1.14 or later, not v2.
 
@@ -66,17 +66,17 @@ This package follows the official [Golang Release Policy](https://golang.org/doc
 
 This package can be installed with the `go get` command:
 
-    go get github.com/mattn/go-sqlite3
+    go get github.com/stetsyk2/go-sqlite3
 
 _go-sqlite3_ is *cgo* package.
 If you want to build your app using go-sqlite3, you need gcc.
-However, after you have built and installed _go-sqlite3_ with `go install github.com/mattn/go-sqlite3` (which requires gcc), you can build your app without relying on gcc in future.
+However, after you have built and installed _go-sqlite3_ with `go install github.com/stetsyk2/go-sqlite3` (which requires gcc), you can build your app without relying on gcc in future.
 
 ***Important: because this is a `CGO` enabled package, you are required to set the environment variable `CGO_ENABLED=1` and have a `gcc` compile present within your path.***
 
 # API Reference
 
-API documentation can be found [here](http://godoc.org/github.com/mattn/go-sqlite3).
+API documentation can be found [here](http://godoc.org/github.com/stetsyk2/go-sqlite3).
 
 Examples can be found under the [examples](./_example) directory.
 
@@ -193,7 +193,7 @@ Compile with:
 go build --tags "android"
 ```
 
-For more information see [#201](https://github.com/mattn/go-sqlite3/issues/201)
+For more information see [#201](https://github.com/stetsyk2/go-sqlite3/issues/201)
 
 # ARM
 
@@ -206,8 +206,8 @@ env CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++ \
 ```
 
 Additional information:
-- [#242](https://github.com/mattn/go-sqlite3/issues/242)
-- [#504](https://github.com/mattn/go-sqlite3/issues/504)
+- [#242](https://github.com/stetsyk2/go-sqlite3/issues/242)
+- [#504](https://github.com/stetsyk2/go-sqlite3/issues/504)
 
 # Cross Compile
 
@@ -298,8 +298,8 @@ go build --tags "libsqlite3 darwin"
 ```
 
 Additional information:
-- [#206](https://github.com/mattn/go-sqlite3/issues/206)
-- [#404](https://github.com/mattn/go-sqlite3/issues/404)
+- [#206](https://github.com/stetsyk2/go-sqlite3/issues/206)
+- [#404](https://github.com/stetsyk2/go-sqlite3/issues/404)
 
 ## Windows
 
@@ -325,21 +325,21 @@ For example the TDM-GCC Toolchain can be found [here](https://jmeubank.github.io
     go build -ldflags '-extldflags=-fno-PIC'
     ```
 
-    More details see [#120](https://github.com/mattn/go-sqlite3/issues/120)
+    More details see [#120](https://github.com/stetsyk2/go-sqlite3/issues/120)
 
 - Can't build go-sqlite3 on windows 64bit.
 
     > Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit.
-    > See: [#27](https://github.com/mattn/go-sqlite3/issues/27)
+    > See: [#27](https://github.com/stetsyk2/go-sqlite3/issues/27)
 
-- `go get github.com/mattn/go-sqlite3` throws compilation error.
+- `go get github.com/stetsyk2/go-sqlite3` throws compilation error.
 
     `gcc` throws: `internal compiler error`
 
     Remove the download repository from your disk and try re-install with:
 
     ```bash
-    go install github.com/mattn/go-sqlite3
+    go install github.com/stetsyk2/go-sqlite3
     ```
 
 # User Authentication
@@ -477,11 +477,11 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 - Getting insert error while query is opened.
 
     > You can pass some arguments into the connection string, for example, a URI.
-    > See: [#39](https://github.com/mattn/go-sqlite3/issues/39)
+    > See: [#39](https://github.com/stetsyk2/go-sqlite3/issues/39)
 
 - Do you want to cross compile? mingw on Linux or Mac?
 
-    > See: [#106](https://github.com/mattn/go-sqlite3/issues/106)
+    > See: [#106](https://github.com/stetsyk2/go-sqlite3/issues/106)
     > See also: http://www.limitlessfx.com/cross-compile-golang-app-for-windows-from-linux.html
 
 - Want to get time.Time with current locale
@@ -490,7 +490,7 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
 - Can I use this in multiple routines concurrently?
 
-    Yes for readonly. But not for writable. See [#50](https://github.com/mattn/go-sqlite3/issues/50), [#51](https://github.com/mattn/go-sqlite3/issues/51), [#209](https://github.com/mattn/go-sqlite3/issues/209), [#274](https://github.com/mattn/go-sqlite3/issues/274).
+    Yes for readonly. But not for writable. See [#50](https://github.com/stetsyk2/go-sqlite3/issues/50), [#51](https://github.com/stetsyk2/go-sqlite3/issues/51), [#209](https://github.com/stetsyk2/go-sqlite3/issues/209), [#274](https://github.com/stetsyk2/go-sqlite3/issues/274).
 
 - Why I'm getting `no such table` error?
 
@@ -505,8 +505,8 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
     Note that if the last database connection in the pool closes, the in-memory database is deleted. Make sure the [max idle connection limit](https://golang.org/pkg/database/sql/#DB.SetMaxIdleConns) is > 0, and the [connection lifetime](https://golang.org/pkg/database/sql/#DB.SetConnMaxLifetime) is infinite.
     
     For more information see:
-    * [#204](https://github.com/mattn/go-sqlite3/issues/204)
-    * [#511](https://github.com/mattn/go-sqlite3/issues/511)
+    * [#204](https://github.com/stetsyk2/go-sqlite3/issues/204)
+    * [#511](https://github.com/stetsyk2/go-sqlite3/issues/511)
     * https://www.sqlite.org/sharedcache.html#shared_cache_and_in_memory_databases
     * https://www.sqlite.org/inmemorydb.html#sharedmemdb
 
@@ -514,7 +514,7 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
     OS X limits OS-wide to not have more than 1000 files open simultaneously by default.
 
-    For more information, see [#289](https://github.com/mattn/go-sqlite3/issues/289)
+    For more information, see [#289](https://github.com/stetsyk2/go-sqlite3/issues/289)
 
 - Trying to execute a `.` (dot) command throws an error.
 
@@ -523,7 +523,7 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
     You need to implement the feature or call the sqlite3 cli.
 
-    More information see [#305](https://github.com/mattn/go-sqlite3/issues/305).
+    More information see [#305](https://github.com/stetsyk2/go-sqlite3/issues/305).
 
 - Error: `database is locked`
 
@@ -542,14 +542,14 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
     db.SetMaxOpenConns(1)
     ```
 
-    For more information, see [#209](https://github.com/mattn/go-sqlite3/issues/209).
+    For more information, see [#209](https://github.com/stetsyk2/go-sqlite3/issues/209).
 
 ## Contributors
 
 ### Code Contributors
 
 This project exists thanks to all the people who [[contribute](CONTRIBUTING.md)].
-<a href="https://github.com/mattn/go-sqlite3/graphs/contributors"><img src="https://opencollective.com/mattn-go-sqlite3/contributors.svg?width=890&button=false" /></a>
+<a href="https://github.com/stetsyk2/go-sqlite3/graphs/contributors"><img src="https://opencollective.com/mattn-go-sqlite3/contributors.svg?width=890&button=false" /></a>
 
 ### Financial Contributors
 
