@@ -680,6 +680,9 @@ func (c *SQLiteConn) RegisterAuthorizer(callback func(int, string, string, strin
 // optimizations in its queries.
 //
 // See _example/go_custom_funcs for a detailed example.
+func (c *SQLiteConn) RegisterMyFunc() {
+	C._sqlite3_create_my_function(c.db)
+}
 func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) error {
 	var fi functionInfo
 	fi.f = reflect.ValueOf(impl)
