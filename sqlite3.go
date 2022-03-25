@@ -190,6 +190,78 @@ static int sqlite3_system_errno(sqlite3 *db) {
   return 0;
 }
 #endif
+
+static void MagicalEntangle(sqlite3_context *context, int argc, sqlite3_value **argv) {
+  	int type_id = sqlite3_value_type(argv[0]);
+    switch (type_id) {
+    case SQLITE_INTEGER: {
+      int value = sqlite3_value_int(argv[0]);
+      sqlite3_result_int(context, value); // value x 10
+      break;
+    }
+    case SQLITE_TEXT: {
+      char* value = (char *)sqlite3_value_text(argv[0]);
+      int len = sqlite3_value_bytes(argv[0]);
+      sqlite3_result_text(context, value, len, SQLITE_TRANSIENT);
+      break;
+    }
+    case SQLITE_NULL: {
+      sqlite3_result_null(context);
+      break;
+    }
+    default:
+      break;
+    }
+}
+
+static void ANY_VALUE(sqlite3_context *context, int argc, sqlite3_value **argv) {
+  if(argc == 0){
+    sqlite3_result_null(context);
+    return;
+  }
+  for(int i = 0; i < argc; ++i) {
+	  int type_id = sqlite3_value_type(argv[i]);
+    if(type_id == SQLITE_INTEGER) {
+      int value = sqlite3_value_int(argv[i]);
+      sqlite3_result_int(context, value);
+      return;
+    }
+    else if (type_id == SQLITE_TEXT) {
+      char* value = (char *)sqlite3_value_text(argv[i]);
+      int len = sqlite3_value_bytes(argv[i]);
+      sqlite3_result_text(context, value, len, SQLITE_TRANSIENT);
+      return;
+    }
+  }
+  sqlite3_result_null(context);
+  return;
+}
+
+int _sqlite3_create_logica_functions(sqlite3 *db)
+{
+	int rc = SQLITE_OK;
+	unsigned int i;
+	static const struct {
+		const char *zName;
+		int nArg;
+		int flag;
+		void (*xFunc)(sqlite3_context*,int,sqlite3_value**);
+	} aFunc[] = {
+		{ "MagicalEntangle",      2, 0,   MagicalEntangle       },
+		{ "ANY_VALUE",           -1, 0,   ANY_VALUE             },
+	};
+	static const int enc =
+		SQLITE_UTF8 |
+		SQLITE_DETERMINISTIC |
+		SQLITE_INNOCUOUS;
+	for(i=0; i<sizeof(aFunc)/sizeof(aFunc[0]) && rc==SQLITE_OK; i++){
+		rc = sqlite3_create_function(db, aFunc[i].zName, aFunc[i].nArg, enc,
+										(void*)&aFunc[i].flag,
+										aFunc[i].xFunc, 0, 0);
+	}
+	return rc;
+}
+
 */
 import "C"
 import (
@@ -607,6 +679,11 @@ func (c *SQLiteConn) RegisterAuthorizer(callback func(int, string, string, strin
 // optimizations in its queries.
 //
 // See _example/go_custom_funcs for a detailed example.
+
+func (c *SQLiteConn) RegisterLogicaFunctions() {
+	C._sqlite3_create_logica_functions(c.db)
+}
+
 func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) error {
 	var fi functionInfo
 	fi.f = reflect.ValueOf(impl)
