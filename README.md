@@ -85,7 +85,7 @@ Examples can be found under the [examples](./_example) directory.
 When creating a new SQLite database or connection to an existing one, with the file name additional options can be given.
 This is also known as a DSN (Data Source Name) string.
 
-Options are append after the filename of the SQLite database.
+Options are appended after the filename of the SQLite database.
 The database filename and options are separated by an `?` (Question Mark).
 Options should be URL-encoded (see [url.QueryEscape](https://golang.org/pkg/net/url/#QueryEscape)).
 
