@@ -1449,6 +1449,63 @@ func TestAggregatorRegistration(t *testing.T) {
 	}
 }
 
+type mode struct {
+        counts   map[interface{}]int
+        top      interface{}
+        topCount int
+}
+
+func newMode() *mode {
+        return &mode{
+                counts: map[interface{}]int{},
+        }
+}
+
+func (m *mode) Step(x interface{}) {
+        m.counts[x]++
+        c := m.counts[x]
+        if c > m.topCount {
+                m.top = x
+                m.topCount = c
+        }
+}
+
+func (m *mode) Done() interface{} {
+        return m.top
+}
+
+func TestAggregatorRegistration_GenericReturn(t *testing.T) {
+	sql.Register("sqlite3_AggregatorRegistration_GenericReturn", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			return conn.RegisterAggregator("mode", newMode, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_AggregatorRegistration_GenericReturn", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("create table foo (department integer, profits integer)")
+        if err != nil {
+                t.Fatal("Failed to create table:", err)
+        }
+        _, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
+        if err != nil {
+                t.Fatal("Failed to insert records:", err)
+        }
+
+	var mode int
+        err = db.QueryRow("select mode(profits) from foo").Scan(&mode)
+        if err != nil {
+                t.Fatal("MODE query error:", err)
+        }
+
+	if mode != 20 {
+		t.Fatal("Got incorrect mode. Wanted 20, got: ", mode)
+	}
+}
+
 func rot13(r rune) rune {
 	switch {
 	case r >= 'A' && r <= 'Z':
