@@ -353,6 +353,15 @@ func callbackRetNil(ctx *C.sqlite3_context, v reflect.Value) error {
 	return nil
 }
 
+func callbackRetAny(ctx *C.sqlite3_context, v reflect.Value) error {
+        cb, err := callbackRet(v.Elem().Type())
+        if err != nil {
+                return err
+        }
+
+        return cb(ctx, v.Elem())
+}
+
 func callbackRet(typ reflect.Type) (callbackRetConverter, error) {
 	switch typ.Kind() {
 	case reflect.Interface:
@@ -360,6 +369,11 @@ func callbackRet(typ reflect.Type) (callbackRetConverter, error) {
 		if typ.Implements(errorInterface) {
 			return callbackRetNil, nil
 		}
+
+		if typ.NumMethod() == 0 {
+			return callbackRetAny, nil
+		}
+
 		fallthrough
 	case reflect.Slice:
 		if typ.Elem().Kind() != reflect.Uint8 {
