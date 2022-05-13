@@ -353,7 +353,7 @@ func callbackRetNil(ctx *C.sqlite3_context, v reflect.Value) error {
 	return nil
 }
 
-func callbackRetAny(ctx *C.sqlite3_context, v reflect.Value) error {
+func callbackRetGeneric(ctx *C.sqlite3_context, v reflect.Value) error {
         cb, err := callbackRet(v.Elem().Type())
         if err != nil {
                 return err
@@ -371,7 +371,7 @@ func callbackRet(typ reflect.Type) (callbackRetConverter, error) {
 		}
 
 		if typ.NumMethod() == 0 {
-			return callbackRetAny, nil
+			return callbackRetGeneric, nil
 		}
 
 		fallthrough
