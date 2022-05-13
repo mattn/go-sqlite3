@@ -354,7 +354,12 @@ func callbackRetNil(ctx *C.sqlite3_context, v reflect.Value) error {
 }
 
 func callbackRetGeneric(ctx *C.sqlite3_context, v reflect.Value) error {
-        cb, err := callbackRet(v.Elem().Type())
+	if v.IsNil() {
+		C.sqlite3_result_null(ctx)
+		return nil
+	}
+
+	cb, err := callbackRet(v.Elem().Type())
         if err != nil {
                 return err
         }
