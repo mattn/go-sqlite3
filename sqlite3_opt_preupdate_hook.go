@@ -84,7 +84,7 @@ func (d *SQLitePreUpdateData) row(dest []interface{}, new bool) error {
 			src = nil
 		}
 
-		err := convertAssign(&dest[i], src)
+		err := convertAssign(dest[i], src)
 		if err != nil {
 			return err
 		}
