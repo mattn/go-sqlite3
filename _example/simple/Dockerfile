@@ -28,7 +28,7 @@ COPY . /workspace/
 RUN \
     go mod init github.com/mattn/sample && \
     go mod tidy && \
-    go install -ldflags="-s -w -extldflags \"-static\"" ./simple.go
+    go install -ldflags='-s -w -extldflags "-static"' ./simple.go
 
 RUN \
     # Smoke test
