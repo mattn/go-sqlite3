@@ -24,12 +24,12 @@ func main() {
 	defer db.Close()
 
 	sqlStmt := `
-    create table iris (
-           sepal_length float,
-           sepal_width  float,
-           petal_length float,
-           petal_width  float,
-           class int);
+	create table iris (
+	    sepal_length float,
+	    sepal_width  float,
+	    petal_length float,
+	    petal_width  float,
+	    class int);
 	`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
