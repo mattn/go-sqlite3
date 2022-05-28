@@ -42,10 +42,10 @@ func main() {
 		log.Fatal(err)
 	}
 	stmt, err := tx.Prepare(`
-    insert into iris(
-        sepal_length, sepal_width, petal_length, petal_width, class)
-        values(?, ?, ?, ?, ?)
-    `)
+	insert into iris(
+	    sepal_length, sepal_width, petal_length, petal_width, class)
+	    values(?, ?, ?, ?, ?)
+	`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,15 +82,14 @@ func main() {
 	tx.Commit()
 
 	rows, err := db.Query(`select
-        json_object(
-            'sepal_length', sepal_length,
-			'sepal_width', sepal_width,
-			'petal_length', petal_length,
-			'petal_width', petal_width,
-            'class', class
-        )
-    from iris
-    `)
+	    json_object(
+	        'sepal_length', sepal_length,
+	        'sepal_width', sepal_width,
+	        'petal_length', petal_length,
+	        'petal_width', petal_width,
+	        'class', class
+	    ) from iris
+	`)
 	if err != nil {
 		log.Fatal(err)
 	}
