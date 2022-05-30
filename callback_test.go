@@ -102,3 +102,15 @@ func TestCallbackConverters(t *testing.T) {
 		}
 	}
 }
+
+func TestCallbackReturnAny(t *testing.T) {
+	udf := func() interface{} {
+		return 1
+	}
+
+	typ := reflect.TypeOf(udf)
+	_, err := callbackRet(typ.Out(0))
+	if err != nil {
+		t.Errorf("Expected valid callback for any return type, got: %s", err)
+	}
+}
