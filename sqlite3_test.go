@@ -1080,17 +1080,19 @@ func TestQueryer(t *testing.T) {
 	}
 	defer rows.Close()
 	n := 1
-	if rows != nil {
-		for rows.Next() {
-			var id int
-			err = rows.Scan(&id)
-			if err != nil {
-				t.Error("Failed to db.Query:", err)
-			}
-			if id != n {
-				t.Error("Failed to db.Query: not matched results")
-			}
+	for rows.Next() {
+		var id int
+		err = rows.Scan(&id)
+		if err != nil {
+			t.Error("Failed to db.Query:", err)
 		}
+		if id != n {
+			t.Error("Failed to db.Query: not matched results")
+		}
+		n = n + 1
+	}
+	if n != 3 {
+		t.Errorf("Expected 3 rows but retrieved %v", n-1)
 	}
 }
 
