@@ -288,13 +288,13 @@ brew upgrade icu4c
 To compile for macOS X on x86:
 
 ```bash
-go build --tags "darwin,amd64"
+go build --tags "darwin amd64"
 ```
 
 To compile for macOS X on ARM chips:
 
 ```bash
-go build --tags "darwin,arm64"
+go build --tags "darwin arm64"
 ```
 
 If you wish to link directly to libsqlite3, use the `libsqlite3` build tag:
