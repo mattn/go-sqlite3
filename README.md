@@ -40,7 +40,7 @@ This package follows the official [Golang Release Policy](https://golang.org/doc
     - [Alpine](#alpine)
     - [Fedora](#fedora)
     - [Ubuntu](#ubuntu)
-  - [macOS X](#mac-osx)
+  - [macOS](#mac-osx)
   - [Windows](#windows)
   - [Errors](#errors)
 - [User Authentication](#user-authentication)
@@ -215,8 +215,8 @@ This library can be cross-compiled.
 
 In some cases you are required to the `CC` environment variable with the cross compiler.
 
-## Cross Compiling from macOS X
-The simplest way to cross compile from macOS X is to use [xgo](https://github.com/karalabe/xgo).
+## Cross Compiling from macOS
+The simplest way to cross compile from macOS is to use [xgo](https://github.com/karalabe/xgo).
 
 Steps:
 - Install [xgo](https://github.com/karalabe/xgo) (`go get github.com/karalabe/xgo`).
@@ -267,9 +267,9 @@ sudo yum groupinstall "Development Tools" "Development Libraries"
 sudo apt-get install build-essential
 ```
 
-## macOS X
+## macOS
 
-macOS X should have all the tools present to compile this package. If not, install XCode to add all the developers tools.
+macOS should have all the tools present to compile this package. If not, install XCode to add all the developers tools.
 
 Required dependency:
 
@@ -277,7 +277,7 @@ Required dependency:
 brew install sqlite3
 ```
 
-For macOS X, there is an additional package to install which is required if you wish to build the `icu` extension.
+For macOS, there is an additional package to install which is required if you wish to build the `icu` extension.
 
 This additional package can be installed with `homebrew`:
 
@@ -285,13 +285,13 @@ This additional package can be installed with `homebrew`:
 brew upgrade icu4c
 ```
 
-To compile for macOS X on x86:
+To compile for macOS on x86:
 
 ```bash
-go build --tags "darwin amd64"
+go build -tags "darwin amd64"
 ```
 
-To compile for macOS X on ARM chips:
+To compile for macOS on ARM chips:
 
 ```bash
 go build --tags "darwin arm64"
