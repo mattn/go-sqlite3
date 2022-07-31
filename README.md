@@ -145,7 +145,7 @@ Click [here](https://golang.org/pkg/go/build/#hdr-Build_Constraints) for more in
 If you wish to build this library with additional extensions / features, use the following command:
 
 ```bash
-go build --tags "<FEATURE>"
+go build -tags "<FEATURE>"
 ```
 
 For available features, see the extension list.
@@ -154,7 +154,7 @@ When using multiple build tags, all the different tags should be space delimited
 Example:
 
 ```bash
-go build --tags "icu json1 fts5 secure_delete"
+go build -tags "icu json1 fts5 secure_delete"
 ```
 
 ### Feature / Extension List
@@ -190,7 +190,7 @@ This package can be compiled for android.
 Compile with:
 
 ```bash
-go build --tags "android"
+go build -tags "android"
 ```
 
 For more information see [#201](https://github.com/mattn/go-sqlite3/issues/201)
@@ -238,13 +238,13 @@ To compile this package on Linux, you must install the development tools for you
 To compile under linux use the build tag `linux`.
 
 ```bash
-go build --tags "linux"
+go build -tags "linux"
 ```
 
 If you wish to link directly to libsqlite3 then you can use the `libsqlite3` build tag.
 
 ```
-go build --tags "libsqlite3 linux"
+go build -tags "libsqlite3 linux"
 ```
 
 ### Alpine
@@ -294,16 +294,16 @@ go build -tags "darwin amd64"
 To compile for macOS on ARM chips:
 
 ```bash
-go build --tags "darwin arm64"
+go build -tags "darwin arm64"
 ```
 
 If you wish to link directly to libsqlite3, use the `libsqlite3` build tag:
 
 ```
 # x86 
-go build --tags "libsqlite3 darwin amd64"
+go build -tags "libsqlite3 darwin amd64"
 # ARM
-go build --tags "libsqlite3 darwin arm64"
+go build -tags "libsqlite3 darwin arm64"
 ```
 
 Additional information:
