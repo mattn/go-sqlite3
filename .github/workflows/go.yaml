@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: ['1.16', '1.17', '1.18']
+        go: ['1.17', '1.18', '1.19']
       fail-fast: false
     env:
       OS: ${{ matrix.os }}
@@ -64,7 +64,7 @@ jobs:
 
     strategy:
       matrix:
-        go: ['1.16', '1.17', '1.18']
+        go: ['1.17', '1.18', '1.19']
       fail-fast: false
     env:
       OS: windows-latest
