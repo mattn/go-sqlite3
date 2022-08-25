@@ -124,6 +124,7 @@ Boolean values can be one of:
 | Synchronous | `_synchronous` \| `_sync` | <ul><li>0 \| OFF</li><li>1 \| NORMAL</li><li>2 \| FULL</li><li>3 \| EXTRA</li></ul> | For more information see [PRAGMA synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous) |
 | Time Zone Location | `_loc` | auto | Specify location of time format. |
 | Transaction Lock | `_txlock` | <ul><li>immediate</li><li>deferred</li><li>exclusive</li></ul> | Specify locking behavior for transactions. |
+| Trusted Schema | `_trusted_schema` | `Boolean` | For more information see [PRAGMA trusted_schema](https://www.sqlite.org/pragma.html#pragma_trusted_schema) |
 | Writable Schema | `_writable_schema` | `Boolean` | When this pragma is on, the SQLITE_MASTER tables in which database can be changed using ordinary UPDATE, INSERT, and DELETE statements. Warning: misuse of this pragma can easily result in a corrupt database file. |
 | Cache Size | `_cache_size` | `int` | Maximum cache size; default is 2000K (2M). See [PRAGMA cache_size](https://sqlite.org/pragma.html#pragma_cache_size) |
 

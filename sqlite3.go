@@ -1060,6 +1060,10 @@ func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
 //     Change the setting of the "synchronous" flag.
 //     https://www.sqlite.org/pragma.html#pragma_synchronous
 //
+//   _trusted_schema=Boolean
+//     Change the setting of the "trusted_schema" flag.
+//     https://www.sqlite.org/pragma.html#pragma_trusted_schema
+//
 //   _writable_schema=Boolean
 //     When this pragma is on, the SQLITE_MASTER tables in which database
 //     can be changed using ordinary UPDATE, INSERT, and DELETE statements.
@@ -1096,6 +1100,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	recursiveTriggers := -1
 	secureDelete := "DEFAULT"
 	synchronousMode := "NORMAL"
+	trustedSchema := -1
 	writableSchema := -1
 	vfsName := ""
 	var cacheSize *int64
@@ -1404,6 +1409,21 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 				synchronousMode = strings.ToUpper(val)
 			default:
 				return nil, fmt.Errorf("Invalid _synchronous: %v, expecting value of '0 OFF 1 NORMAL 2 FULL 3 EXTRA'", val)
+			}
+		}
+
+		// Trusted Schema (_trusted_schema)
+		//
+		// https://www.sqlite.org/pragma.html#pragma_trusted_schema
+		//
+		if val := params.Get("_trusted_schema"); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
+				trustedSchema = 0
+			case "1", "yes", "true", "on":
+				trustedSchema = 1
+			default:
+				return nil, fmt.Errorf("Invalid _trusted_schema: %v, expecting boolean value of '0 1 false true no yes off on'", val)
 			}
 		}
 
@@ -1736,6 +1756,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if err := exec(fmt.Sprintf("PRAGMA synchronous = %s;", synchronousMode)); err != nil {
 		conn.Close()
 		return nil, err
+	}
+
+	// Trusted Schema
+	if trustedSchema > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA trusted_schema = %d;", trustedSchema)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// Writable Schema
