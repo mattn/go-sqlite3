@@ -1091,7 +1091,7 @@ func TestQueryer(t *testing.T) {
 		}
 		n = n + 1
 	}
-	if n != 3 {
+	if n != 4 {
 		t.Errorf("Expected 3 rows but retrieved %v", n-1)
 	}
 }
