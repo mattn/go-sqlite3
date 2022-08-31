@@ -3,6 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+//go:build sqlite_vtable || vtable
 // +build sqlite_vtable vtable
 
 package sqlite3
@@ -367,6 +368,7 @@ func orderBys(info *C.sqlite3_index_info) []InfoOrderBy {
 // See: https://www.sqlite.org/c3ref/index_info.html
 type IndexResult struct {
 	Used           []bool // aConstraintUsage
+	Omit           []bool // sets the optional .omit flag
 	IdxNum         int
 	IdxStr         string
 	AlreadyOrdered bool // orderByConsumed
@@ -466,8 +468,11 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	for i := range slice {
 		if res.Used[i] {
 			slice[i].argvIndex = C.int(index)
-			slice[i].omit = C.uchar(1)
 			index++
+			// Omit was added, and is optional, so smartly handle if it's not there.
+			if i < len(res.Omit) && res.Omit[i] {
+				slice[i].omit = C.uchar(1)
+			}
 		}
 	}
 
