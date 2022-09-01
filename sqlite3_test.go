@@ -1063,36 +1063,44 @@ func TestQueryer(t *testing.T) {
 	defer db.Close()
 
 	_, err = db.Exec(`
-	create table foo (id integer);
+		create table foo (id integer);
 	`)
 	if err != nil {
 		t.Error("Failed to call db.Query:", err)
 	}
 
-	rows, err := db.Query(`
-	insert into foo(id) values(?);
-	insert into foo(id) values(?);
-	insert into foo(id) values(?);
-	select id from foo order by id;
+	_, err = db.Exec(`
+		insert into foo(id) values(?);
+		insert into foo(id) values(?);
+		insert into foo(id) values(?);
 	`, 3, 2, 1)
+	if err != nil {
+		t.Error("Failed to call db.Exec:", err)
+	}
+	rows, err := db.Query(`
+		select id from foo order by id;
+	`)
 	if err != nil {
 		t.Error("Failed to call db.Query:", err)
 	}
 	defer rows.Close()
-	n := 1
+	n := 0
 	for rows.Next() {
 		var id int
 		err = rows.Scan(&id)
 		if err != nil {
 			t.Error("Failed to db.Query:", err)
 		}
-		if id != n {
+		if id != n + 1 {
 			t.Error("Failed to db.Query: not matched results")
 		}
 		n = n + 1
 	}
+	if err := rows.Err(); err != nil {
+		t.Errorf("Post-scan failed: %v\n", err)
+	}
 	if n != 3 {
-		t.Errorf("Expected 3 rows but retrieved %v", n-1)
+		t.Errorf("Expected 3 rows but retrieved %v", n)
 	}
 }
 
