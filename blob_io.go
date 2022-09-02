@@ -45,16 +45,16 @@ func (conn *SQLiteConn) Blob(database, table, column string, rowid int64, flags 
 	var blob *C.sqlite3_blob
 	ret := C.sqlite3_blob_open(conn.db, databaseptr, tableptr, columnptr, C.longlong(rowid), C.int(flags), &blob)
 
-	if ret == C.SQLITE_OK {
-		size := int(C.sqlite3_blob_bytes(blob))
-		bb := &SQLiteBlob{conn, blob, size, 0}
-
-		runtime.SetFinalizer(bb, (*SQLiteBlob).Close)
-
-		return bb, nil
+	if ret != C.SQLITE_OK {
+		return nil, conn.lastError()
 	}
 
-	return nil, conn.lastError()
+	size := int(C.sqlite3_blob_bytes(blob))
+	bb := &SQLiteBlob{conn, blob, size, 0}
+
+	runtime.SetFinalizer(bb, (*SQLiteBlob).Close)
+
+	return bb, nil
 }
 
 // Read implements the io.Reader interface.
