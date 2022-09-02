@@ -10,25 +10,33 @@ package sqlite3
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"io"
 	"testing"
 )
 
 func TestBlobIO(t *testing.T) {
-	driverName := "sqlite3_TestBlobIO2"
-	var driverConn *SQLiteConn
-	sql.Register(driverName, &SQLiteDriver{
-		ConnectHook: func(conn *SQLiteConn) error {
-			driverConn = conn
-			return nil
-		}})
-
-	db, err := sql.Open(driverName, ":memory:")
+	db, err := sql.Open("sqlite3", "file:testblobio?mode=memory&cache=shared")
 	if err != nil {
 		t.Fatal("Fail to open:", err)
 	}
 	defer db.Close()
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Fatal("Failed to get raw connection:", err)
+	}
+	defer conn.Close()
+
+	var driverConn *SQLiteConn
+	err = conn.Raw(func(conn interface{}) error {
+		driverConn = conn.(*SQLiteConn)
+		return nil
+	})
+	if err != nil {
+		t.Fatal("Failed to get raw connection:", err)
+	}
 
 	// Test data
 	expected := []byte("I ❤️ SQLite in \x00\x01\x02…")
