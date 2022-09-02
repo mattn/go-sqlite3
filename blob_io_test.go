@@ -37,6 +37,7 @@ func TestBlobIO(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to get raw connection:", err)
 	}
+	defer driverConn.Close()
 
 	// Test data
 	expected := []byte("I ❤️ SQLite in \x00\x01\x02…")
