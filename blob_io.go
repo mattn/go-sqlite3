@@ -52,7 +52,7 @@ func (conn *SQLiteConn) Blob(database, table, column string, rowid int64, flags 
 	}
 
 	size := int(C.sqlite3_blob_bytes(blob))
-	bb := &SQLiteBlob{conn, blob, size, 0}
+	bb := &SQLiteBlob{conn: conn, blob: blob, size: size, offset: 0}
 
 	runtime.SetFinalizer(bb, (*SQLiteBlob).Close)
 
