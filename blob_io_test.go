@@ -16,16 +16,15 @@ import (
 	"testing"
 )
 
-func TestBlobIO(t *testing.T) {
-	db, err := sql.Open("sqlite3", "file:testblobio?mode=memory&cache=shared")
+func blobTestData(dbname string, rowid int64, blob []byte) (*sql.DB, *SQLiteConn, error) {
+	db, err := sql.Open("sqlite3", "file:"+dbname+"?mode=memory&cache=shared")
 	if err != nil {
-		t.Fatal("Fail to open:", err)
+		return nil, nil, err
 	}
-	defer db.Close()
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		t.Fatal("Failed to get raw connection:", err)
+		return nil, nil, err
 	}
 	defer conn.Close()
 
@@ -35,13 +34,8 @@ func TestBlobIO(t *testing.T) {
 		return nil
 	})
 	if err != nil {
-		t.Fatal("Failed to get raw connection:", err)
+		return nil, nil, err
 	}
-	defer driverConn.Close()
-
-	// Test data
-	expected := []byte("I ❤️ SQLite in \x00\x01\x02…")
-	rowid := int64(6581)
 
 	query := `
 		CREATE TABLE data (
@@ -52,10 +46,24 @@ func TestBlobIO(t *testing.T) {
 			VALUES (:rowid, :value);
 	`
 
-	_, err = db.Exec(query, sql.Named("rowid", rowid), sql.Named("value", expected))
+	_, err = db.Exec(query, sql.Named("rowid", rowid), sql.Named("value", blob))
 	if err != nil {
-		t.Fatal("Failed to execute", err)
+		return nil, nil, err
 	}
+
+	return db, driverConn, nil
+}
+
+func TestBlobIO(t *testing.T) {
+	rowid := int64(6581)
+	expected := []byte("I ❤️ SQLite in \x00\x01\x02…")
+
+	db, driverConn, err := blobTestData("testblobio", rowid, expected)
+	if err != nil {
+		t.Fatal("Failed to get raw connection:", err)
+	}
+	defer driverConn.Close()
+	defer db.Close()
 
 	// Open blob
 	blob, err := driverConn.Blob("main", "data", "value", rowid, 0)
