@@ -31,7 +31,9 @@ type SQLiteBlob struct {
 
 // Blob opens a blob.
 //
-// The flag parameter is ignored.
+// See https://www.sqlite.org/c3ref/blob_open.html for usage.
+//
+// Should only be used with conn.Raw. The flag parameter is ignored.
 func (conn *SQLiteConn) Blob(database, table, column string, rowid int64, flags int) (*SQLiteBlob, error) {
 	databaseptr := C.CString(database)
 	defer C.free(unsafe.Pointer(databaseptr))
