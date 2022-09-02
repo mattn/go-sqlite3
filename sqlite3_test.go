@@ -248,6 +248,43 @@ func TestForeignKeys(t *testing.T) {
 	}
 }
 
+func TestDeferredForeignKey(t *testing.T) {
+	fname := TempFilename(t)
+	uri := "file:" + fname + "?_foreign_keys=1"
+	db, err := sql.Open("sqlite3", uri)
+	if err != nil {
+		os.Remove(fname)
+		t.Errorf("sql.Open(\"sqlite3\", %q): %v", uri, err)
+	}
+	_, err = db.Exec("CREATE TABLE bar (id INTEGER PRIMARY KEY)")
+	if err != nil {
+		t.Errorf("failed creating tables: %v", err)
+	}
+	_, err = db.Exec("CREATE TABLE foo (bar_id INTEGER, FOREIGN KEY(bar_id) REFERENCES bar(id) DEFERRABLE INITIALLY DEFERRED)")
+	if err != nil {
+		t.Errorf("failed creating tables: %v", err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Errorf("Failed to begin transaction: %v", err)
+	}
+	_, err = tx.Exec("INSERT INTO foo (bar_id) VALUES (123)")
+	if err != nil {
+		t.Errorf("Failed to insert row: %v", err)
+	}
+	err = tx.Commit()
+	if err == nil {
+		t.Errorf("Expected an error: %v", err)
+	}
+	_, err = db.Begin()
+	if err != nil {
+		t.Errorf("Failed to begin transaction: %v", err)
+	}
+
+	db.Close()
+	os.Remove(fname)
+}
+
 func TestRecursiveTriggers(t *testing.T) {
 	cases := map[string]bool{
 		"?_recursive_triggers=1": true,
