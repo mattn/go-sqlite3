@@ -23,10 +23,10 @@ import (
 
 // SQLiteBlob implements the SQLite Blob I/O interface.
 type SQLiteBlob struct {
-	conn *SQLiteConn
-	blob *C.sqlite3_blob
-	size int
-	offs int
+	conn   *SQLiteConn
+	blob   *C.sqlite3_blob
+	size   int
+	offset int
 }
 
 // Blob opens a blob.
@@ -61,22 +61,22 @@ func (conn *SQLiteConn) Blob(database, table, column string, rowid int64, flags 
 
 // Read implements the io.Reader interface.
 func (s *SQLiteBlob) Read(b []byte) (n int, err error) {
-	if s.offs >= s.size {
+	if s.offset >= s.size {
 		return 0, io.EOF
 	}
 
-	n = s.size - s.offs
+	n = s.size - s.offset
 	if len(b) < n {
 		n = len(b)
 	}
 
 	p := &b[0]
-	ret := C.sqlite3_blob_read(s.blob, unsafe.Pointer(p), C.int(n), C.int(s.offs))
+	ret := C.sqlite3_blob_read(s.blob, unsafe.Pointer(p), C.int(n), C.int(s.offset))
 	if ret != C.SQLITE_OK {
 		return 0, s.conn.lastError()
 	}
 
-	s.offs += n
+	s.offset += n
 
 	return n, nil
 }
