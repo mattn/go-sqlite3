@@ -181,7 +181,7 @@ go build --tags "icu json1 fts5 secure_delete"
 
 # Compilation
 
-This package requires the `CGO_ENABLED=1` ennvironment variable if not set by default, and the presence of the `gcc` compiler.
+This package requires the `CGO_ENABLED=1` environment variable if not set by default, and the presence of the `gcc` compiler.
 
 If you need to add additional CFLAGS or LDFLAGS to the build command, and do not want to modify this package, then this can be achieved by using the `CGO_CFLAGS` and `CGO_LDFLAGS` environment variables.
 
