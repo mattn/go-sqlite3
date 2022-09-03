@@ -16,6 +16,12 @@ import (
 	"testing"
 )
 
+// Verify interface implementations
+var _ io.Reader = &SQLiteBlob{}
+var _ io.Writer = &SQLiteBlob{}
+var _ io.Seeker = &SQLiteBlob{}
+var _ io.Closer = &SQLiteBlob{}
+
 func blobTestData(dbname string, rowid int64, blob []byte) (*sql.DB, *SQLiteConn, error) {
 	db, err := sql.Open("sqlite3", "file:"+dbname+"?mode=memory&cache=shared")
 	if err != nil {
@@ -54,11 +60,11 @@ func blobTestData(dbname string, rowid int64, blob []byte) (*sql.DB, *SQLiteConn
 	return db, driverConn, nil
 }
 
-func TestBlobIO(t *testing.T) {
+func TestBlobRead(t *testing.T) {
 	rowid := int64(6581)
 	expected := []byte("I ❤️ SQLite in \x00\x01\x02…")
 
-	db, driverConn, err := blobTestData("testblobio", rowid, expected)
+	db, driverConn, err := blobTestData("testblobread", rowid, expected)
 	if err != nil {
 		t.Fatal("Failed to get raw connection:", err)
 	}
@@ -107,5 +113,139 @@ func TestBlobIO(t *testing.T) {
 
 	if err != io.EOF || n3 != 0 {
 		t.Error("Expected EOF", err)
+	}
+}
+
+func TestBlobWrite(t *testing.T) {
+	rowid := int64(8580)
+	expected := []byte{
+		// Random data from /dev/urandom
+		0xe5, 0x48, 0x94, 0xad, 0xa6, 0x7c, 0x81, 0xa2, 0x70, 0x07, 0x79, 0x60,
+		0x33, 0xbc, 0x64, 0x33, 0x8f, 0x48, 0x43, 0xa6, 0x33, 0x5c, 0x08, 0x32,
+	}
+
+	// Allocate a zero blob
+	data := make([]byte, len(expected))
+	db, driverConn, err := blobTestData("testblobwrite", rowid, data)
+	if err != nil {
+		t.Fatal("Failed to get raw connection:", err)
+	}
+	defer driverConn.Close()
+	defer db.Close()
+
+	// Open blob for read/write
+	blob, err := driverConn.Blob("main", "data", "value", rowid, 1)
+	if err != nil {
+		t.Error("failed", err)
+	}
+	defer blob.Close()
+
+	// Write blob incrementally
+	middle := len(expected) / 2
+	first := expected[:middle]
+	second := expected[middle:]
+
+	// Write part Ⅰ
+	n1, err := blob.Write(first)
+
+	if err != nil || n1 != len(first) {
+		t.Errorf("Failed to write %d bytes", n1)
+	}
+
+	// Write part Ⅱ
+	n2, err := blob.Write(second)
+
+	if err != nil || n2 != len(second) {
+		t.Errorf("Failed to write %d bytes", n2)
+	}
+
+	// EOF
+	b3 := make([]byte, 10)
+	n3, err := blob.Write(b3)
+
+	if err != io.EOF || n3 != 0 {
+		t.Error("Expected EOF", err)
+	}
+
+	// Verify written data
+	_, err = blob.Seek(0, io.SeekStart)
+	if err != nil {
+		t.Fatal("Failed to seek:", err)
+	}
+
+	b4 := make([]byte, len(expected))
+	n4, err := blob.Read(b4)
+
+	if err != nil || n4 != len(b4) {
+		t.Errorf("Failed to read %d bytes", n4)
+	}
+
+	if bytes.Compare(expected, b4) != 0 {
+		t.Error("Expected\n", expected, "got\n", b4)
+	}
+}
+
+func TestBlobSeek(t *testing.T) {
+	rowid := int64(6510)
+	data := make([]byte, 1000)
+
+	db, driverConn, err := blobTestData("testblobseek", rowid, data)
+	if err != nil {
+		t.Fatal("Failed to get raw connection:", err)
+	}
+	defer driverConn.Close()
+	defer db.Close()
+
+	// Open blob
+	blob, err := driverConn.Blob("main", "data", "value", rowid, 0)
+	if err != nil {
+		t.Error("failed", err)
+	}
+	defer blob.Close()
+
+	// Test data
+	begin := int64(0)
+	middle := int64(len(data) / 2)
+	end := int64(len(data) - 1)
+	eof := int64(len(data))
+
+	tests := []struct {
+		offset   int64
+		whence   int
+		expected int64
+	}{
+		{offset: begin, whence: io.SeekStart, expected: begin},
+		{offset: middle, whence: io.SeekStart, expected: middle},
+		{offset: end, whence: io.SeekStart, expected: end},
+		{offset: eof, whence: io.SeekStart, expected: eof},
+
+		{offset: -1, whence: io.SeekCurrent, expected: middle - 1},
+		{offset: 0, whence: io.SeekCurrent, expected: middle},
+		{offset: 1, whence: io.SeekCurrent, expected: middle + 1},
+		{offset: -middle, whence: io.SeekCurrent, expected: begin},
+
+		{offset: -2, whence: io.SeekEnd, expected: end - 1},
+		{offset: -1, whence: io.SeekEnd, expected: end},
+		{offset: 0, whence: io.SeekEnd, expected: eof},
+		{offset: 1, whence: io.SeekEnd, expected: eof + 1},
+		{offset: -eof, whence: io.SeekEnd, expected: begin},
+	}
+
+	for _, tc := range tests {
+		// Start in the middle
+		_, err := blob.Seek(middle, io.SeekStart)
+		if err != nil {
+			t.Fatal("Failed to seek:", err)
+		}
+
+		// Test
+		got, err := blob.Seek(tc.offset, tc.whence)
+		if err != nil {
+			t.Fatal("Failed to seek:", err)
+		}
+
+		if tc.expected != got {
+			t.Error("For", tc, "expected", tc.expected, "got", got)
+		}
 	}
 }

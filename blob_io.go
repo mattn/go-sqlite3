@@ -16,7 +16,9 @@ package sqlite3
 import "C"
 
 import (
+	"errors"
 	"io"
+	"math"
 	"runtime"
 	"unsafe"
 )
@@ -33,7 +35,7 @@ type SQLiteBlob struct {
 //
 // See https://www.sqlite.org/c3ref/blob_open.html for usage.
 //
-// Should only be used with conn.Raw. The flag parameter is ignored.
+// Should only be used with conn.Raw.
 func (conn *SQLiteConn) Blob(database, table, column string, rowid int64, flags int) (*SQLiteBlob, error) {
 	databaseptr := C.CString(database)
 	defer C.free(unsafe.Pointer(databaseptr))
@@ -79,6 +81,55 @@ func (s *SQLiteBlob) Read(b []byte) (n int, err error) {
 	s.offset += n
 
 	return n, nil
+}
+
+// Write implements the io.Writer interface.
+func (s *SQLiteBlob) Write(b []byte) (n int, err error) {
+	if s.offset >= s.size {
+		return 0, io.EOF
+	}
+
+	n = s.size - s.offset
+	if len(b) < n {
+		n = len(b)
+	}
+
+	p := &b[0]
+	ret := C.sqlite3_blob_write(s.blob, unsafe.Pointer(p), C.int(n), C.int(s.offset))
+	if ret != C.SQLITE_OK {
+		return 0, s.conn.lastError()
+	}
+
+	s.offset += n
+
+	return n, nil
+}
+
+// Seek implements the io.Seeker interface.
+func (s *SQLiteBlob) Seek(offset int64, whence int) (int64, error) {
+	if offset > math.MaxInt32 {
+		return 0, errors.New("sqlite3.SQLiteBlob.Seek: invalid position")
+	}
+
+	var abs int64
+	switch whence {
+	case io.SeekStart:
+		abs = offset
+	case io.SeekCurrent:
+		abs = int64(s.offset) + offset
+	case io.SeekEnd:
+		abs = int64(s.size) + offset
+	default:
+		return 0, errors.New("sqlite3.SQLiteBlob.Seek: invalid whence")
+	}
+
+	if abs < 0 {
+		return 0, errors.New("sqlite.SQLiteBlob.Seek: negative position")
+	}
+
+	s.offset = int(abs)
+
+	return abs, nil
 }
 
 // Close implements the io.Closer interface.
