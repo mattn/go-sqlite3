@@ -37,7 +37,7 @@ func main() {
 	}
 	defer stmt.Close()
 	for i := 0; i < 100; i++ {
-		_, err = stmt.Exec(i, fmt.Sprintf("こんにちわ世界%03d", i))
+		_, err = stmt.Exec(i, fmt.Sprintf("こんにちは世界%03d", i))
 		if err != nil {
 			log.Fatal(err)
 		}

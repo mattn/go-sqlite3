@@ -33,7 +33,7 @@ RUN \
 RUN \
     # Smoke test
     set -o pipefail; \
-    /go/bin/simple | grep 99\ こんにちわ世界099
+    /go/bin/simple | grep 99\ こんにちは世界099
 
 # -----------------------------------------------------------------------------
 #  Main Stage
