@@ -17,6 +17,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"runtime"
@@ -120,7 +121,7 @@ func (s *SQLiteBlob) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekEnd:
 		abs = int64(s.size) + offset
 	default:
-		return 0, errors.New("sqlite3.SQLiteBlob.Seek: invalid whence")
+		return 0, fmt.Errorf("sqlite3.SQLiteBlob.Seek: invalid whence %d", whence)
 	}
 
 	if abs < 0 {
