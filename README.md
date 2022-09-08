@@ -217,14 +217,13 @@ This library can be cross-compiled.
 In some cases you are required to the `CC` environment variable with the cross compiler.
 
 ## Cross Compiling from MAC OSX
-The simplest way to cross compile from OSX is to use [xgo](https://github.com/karalabe/xgo).
+The simplest way to cross compile from OSX is to use [musl-cross](https://github.com/FiloSottile/homebrew-musl-cross).
 
 Steps:
-- Install [xgo](https://github.com/karalabe/xgo) (`go get github.com/karalabe/xgo`).
-- Ensure that your project is within your `GOPATH`.
-- Run `xgo local/path/to/project`.
+- Install [musl-cross](https://github.com/FiloSottile/homebrew-musl-cross) (`brew install FiloSottile/musl-cross/musl-cross`).
+- Run `CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++ GOARCH=amd64 GOOS=linux CGO_ENABLED=1 go build -ldflags "-linkmode external -extldflags -static"`.
 
-Please refer to the project's [README](https://github.com/karalabe/xgo/blob/master/README.md) for further information.
+Please refer to the project's [README](https://github.com/FiloSottile/homebrew-musl-cross#readme) for further information.
 
 # Google Cloud Platform
 
