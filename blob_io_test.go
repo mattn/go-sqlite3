@@ -29,6 +29,7 @@ func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c drive
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
