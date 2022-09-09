@@ -128,9 +128,18 @@ func (s *SQLiteBlob) Seek(offset int64, whence int) (int64, error) {
 		return 0, errors.New("sqlite.SQLiteBlob.Seek: negative position")
 	}
 
+	if abs > math.MaxInt32 {
+		return 0, errors.New("sqlite3.SQLiteBlob.Seek: overflow position")
+	}
+
 	s.offset = int(abs)
 
 	return abs, nil
+}
+
+// Size returns the size of the blob.
+func (s *SQLiteBlob) Size() int {
+	return s.size
 }
 
 // Close implements the io.Closer interface.
