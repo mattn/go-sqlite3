@@ -2,6 +2,15 @@
 
 package sqlite3
 
+/*
+#cgo CFLAGS: -DSQLITE_OMIT_DESERIALIZE
+*/
+import "C"
+
+import (
+	"fmt"
+)
+
 func (c *SQLiteConn) Serialize(schema string) []byte {
 	return nil
 }
