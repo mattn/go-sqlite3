@@ -93,7 +93,7 @@ jobs:
         shell: msys2 {0}
 
       - name: 'Tags: libsqlite3'
-        run: go build -race -v -tags "libsqlite3"
+        run: go build -race -v -tags "libsqlite3 sqlite_omit_deserialize"
         shell: msys2 {0}
 
       - name: 'Tags: full'
