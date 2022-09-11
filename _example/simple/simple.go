@@ -37,12 +37,15 @@ func main() {
 	}
 	defer stmt.Close()
 	for i := 0; i < 100; i++ {
-		_, err = stmt.Exec(i, fmt.Sprintf("こんにちわ世界%03d", i))
+		_, err = stmt.Exec(i, fmt.Sprintf("こんにちは世界%03d", i))
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	rows, err := db.Query("select id, name from foo")
 	if err != nil {
