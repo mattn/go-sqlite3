@@ -1,10 +1,11 @@
+//go:build !sqlite_omit_deserialize
 // +build !sqlite_omit_deserialize
 
 package sqlite3
 
 import (
 	"database/sql"
-        "database/sql/driver"
+	"database/sql/driver"
 	"os"
 	"testing"
 )
