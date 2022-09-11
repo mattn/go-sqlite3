@@ -1,4 +1,3 @@
-//go:build !sqlite_omit_deserialize
 // +build !sqlite_omit_deserialize
 
 package sqlite3
