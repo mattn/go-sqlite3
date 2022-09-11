@@ -25,12 +25,28 @@ var _ io.Closer = &SQLiteBlob{}
 type driverConnCallback func(*testing.T, *SQLiteConn)
 
 func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c driverConnCallback) error {
-	db, err := sql.Open("sqlite3", "file:"+dbname+"?mode=memory&cache=shared")
+	db, err := sql.Open("sqlite3", "file:/"+dbname+"?vfs=memdb")
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
+	// Test data
+	query := `
+		CREATE TABLE data (
+			value BLOB
+		);
+
+		INSERT INTO data (_rowid_, value)
+			VALUES (:rowid, :value);
+	`
+
+	_, err = db.Exec(query, sql.Named("rowid", rowid), sql.Named("value", blob))
+	if err != nil {
+		return err
+	}
+
+	// Get raw connection
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		return err
@@ -46,20 +62,6 @@ func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c drive
 		return err
 	}
 	defer driverConn.Close()
-
-	query := `
-		CREATE TABLE data (
-			value BLOB
-		);
-
-		INSERT INTO data (_rowid_, value)
-			VALUES (:rowid, :value);
-	`
-
-	_, err = db.Exec(query, sql.Named("rowid", rowid), sql.Named("value", blob))
-	if err != nil {
-		return err
-	}
 
 	c(t, driverConn)
 
