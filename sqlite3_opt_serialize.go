@@ -8,8 +8,15 @@ package sqlite3
 #else
 #include <sqlite3.h>
 #endif
+#include <stdlib.h>
+#include <stdint.h>
 */
 import "C"
+
+import (
+	"fmt"
+	"unsafe"
+)
 
 // Serialize returns a byte slice that is a serialization of the database.
 // If the database fails to serialize, a nil slice will be returned.

@@ -2,7 +2,12 @@
 
 package sqlite3
 
-import "testing"
+import (
+	"database/sql"
+        "database/sql/driver"
+	"os"
+	"testing"
+)
 
 func TestSerialize(t *testing.T) {
 	d := SQLiteDriver{}
@@ -26,7 +31,7 @@ func TestSerialize(t *testing.T) {
 	// Serialize the database to a file
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
-	if err := ioutil.WriteFile(tempFilename, sqlite3conn.Serialize(""), 0644); err != nil {
+	if err := os.WriteFile(tempFilename, sqlite3conn.Serialize(""), 0644); err != nil {
 		t.Fatalf("failed to write serialized database to disk")
 	}
 
@@ -76,7 +81,7 @@ func TestDeserialize(t *testing.T) {
 	conn.Close()
 
 	// Read database file bytes from disk.
-	b, err := ioutil.ReadFile(tempFilename)
+	b, err := os.ReadFile(tempFilename)
 	if err != nil {
 		t.Fatal("failed to read database file on disk", err)
 	}
