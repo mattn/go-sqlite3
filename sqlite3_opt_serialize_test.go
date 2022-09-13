@@ -106,6 +106,7 @@ func TestDeserialize(t *testing.T) {
 	if err != nil {
 		t.Fatal("failed to query database:", err)
 	}
+	defer rows.Close()
 	if len(rows.Columns()) != 1 {
 		t.Fatal("incorrect number of columns returned:", len(rows.Columns()))
 	}
