@@ -15,6 +15,7 @@ import "C"
 
 import (
 	"fmt"
+	"reflect"
 	"unsafe"
 )
 
@@ -35,18 +36,29 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 		return nil, fmt.Errorf("serialize failed")
 	}
 	defer C.sqlite3_free(unsafe.Pointer(ptr))
-	return C.GoBytes(unsafe.Pointer(ptr), C.int(sz)), nil
+
+	if C.sizeof_int < 64 {
+		maxSize := C.sqlite3_int64(1)<<C.sizeof_int - 1
+		if sz > maxSize {
+			return nil, fmt.Errorf("sqlite3: serialized database is too large (%d bytes)", maxSize)
+		}
+	}
+
+	cBuf := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(ptr)),
+		Len:  int(sz),
+		Cap:  int(sz),
+	}))
+
+	res := make([]byte, int(sz))
+	copy(res, cBuf)
+	return res, nil
 }
 
 // Deserialize causes the connection to disconnect from the current database
 // and then re-open as an in-memory database based on the contents of the
 // byte slice. If deserelization fails, error will contain the return code
 // of the underlying SQLite API call.
-//
-// When this function returns, the connection is referencing database
-// data in Go space, so the connection and associated database must be copied
-// immediately if it is to be used further. SQLiteConn.Backup() can be used
-// to perform this copy.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
@@ -57,11 +69,18 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	zSchema = C.CString(schema)
 	defer C.free(unsafe.Pointer(zSchema))
 
-	rc := C.sqlite3_deserialize(c.db, zSchema,
-		(*C.uint8_t)(unsafe.Pointer(&b[0])),
-		C.sqlite3_int64(len(b)), C.sqlite3_int64(len(b)), 0)
+	tmpBuf := (*C.uchar)(C.sqlite3_malloc64(C.sqlite3_uint64(len(b))))
+	cBuf := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(tmpBuf)),
+		Len:  len(b),
+		Cap:  len(b),
+	}))
+	copy(cBuf, b)
+
+	rc := C.sqlite3_deserialize(c.db, zSchema, tmpBuf, C.sqlite3_int64(len(b)), 0, 0)
 	if rc != 0 {
 		return fmt.Errorf("deserialize failed with return %v", rc)
 	}
+
 	return nil
 }
