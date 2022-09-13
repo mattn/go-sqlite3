@@ -1,4 +1,4 @@
-// +build libsqlite3 !sqlite_omit_deserialize
+// +build !libsqlite3 !sqlite_omit_deserialize
 
 package sqlite3
 
@@ -19,10 +19,9 @@ import (
 )
 
 // Serialize returns a byte slice that is a serialization of the database.
-// If the database fails to serialize, a nil slice will be returned.
 //
 // See https://www.sqlite.org/c3ref/serialize.html
-func (c *SQLiteConn) Serialize(schema string) []byte {
+func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 	if schema == "" {
 		schema = "main"
 	}
@@ -33,10 +32,10 @@ func (c *SQLiteConn) Serialize(schema string) []byte {
 	var sz C.sqlite3_int64
 	ptr := C.sqlite3_serialize(c.db, zSchema, &sz, 0)
 	if ptr == nil {
-		return nil
+		return nil, fmt.Errorf("serialize failed")
 	}
 	defer C.sqlite3_free(unsafe.Pointer(ptr))
-	return C.GoBytes(unsafe.Pointer(ptr), C.int(sz))
+	return C.GoBytes(unsafe.Pointer(ptr), C.int(sz)), nil
 }
 
 // Deserialize causes the connection to disconnect from the current database

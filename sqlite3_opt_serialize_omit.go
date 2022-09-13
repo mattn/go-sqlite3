@@ -11,8 +11,8 @@ import (
 	"fmt"
 )
 
-func (c *SQLiteConn) Serialize(schema string) []byte {
-	return nil
+func (c *SQLiteConn) Serialize(schema string) ([]byte, error)  {
+	return nil, fmt.Errorf("serialize function not available")
 }
 
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {

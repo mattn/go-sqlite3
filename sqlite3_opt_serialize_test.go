@@ -31,7 +31,11 @@ func TestSerialize(t *testing.T) {
 	// Serialize the database to a file
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
-	if err := os.WriteFile(tempFilename, sqlite3conn.Serialize(""), 0644); err != nil {
+	b, err := sqlite3conn.Serialize("")
+	if err != nil {
+		t.Fatalf("failed to serialize database: %s", err)
+	}
+	if err := os.WriteFile(tempFilename, b, 0644); err != nil {
 		t.Fatalf("failed to write serialized database to disk")
 	}
 
