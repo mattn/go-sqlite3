@@ -81,6 +81,5 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	if rc != 0 {
 		return fmt.Errorf("deserialize failed with return %v", rc)
 	}
-
 	return nil
 }
