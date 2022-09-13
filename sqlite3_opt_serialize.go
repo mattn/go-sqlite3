@@ -15,8 +15,13 @@ import "C"
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"unsafe"
+)
+
+const (
+	SQLITEDeserializeFreeOnClose = 1
 )
 
 // Serialize returns a byte slice that is a serialization of the database.
@@ -37,11 +42,8 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 	}
 	defer C.sqlite3_free(unsafe.Pointer(ptr))
 
-	if C.sizeof_int < 64 {
-		maxSize := C.sqlite3_int64(1)<<C.sizeof_int - 1
-		if sz > maxSize {
-			return nil, fmt.Errorf("sqlite3: serialized database is too large (%d bytes)", maxSize)
-		}
+	if sz > C.sqlite3_int64(math.MaxInt) {
+		return nil, fmt.Errorf("serialized database is too large (%d bytes)", sz)
 	}
 
 	cBuf := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
@@ -77,7 +79,8 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	}))
 	copy(cBuf, b)
 
-	rc := C.sqlite3_deserialize(c.db, zSchema, tmpBuf, C.sqlite3_int64(len(b)), 0, 0)
+	rc := C.sqlite3_deserialize(c.db, zSchema, tmpBuf, C.sqlite3_int64(len(b)),
+		C.sqlite3_int64(len(b)), SQLITEDeserializeFreeOnClose)
 	if rc != 0 {
 		return fmt.Errorf("deserialize failed with return %v", rc)
 	}
