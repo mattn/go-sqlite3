@@ -7,10 +7,6 @@ package sqlite3
 */
 import "C"
 
-import (
-	"fmt"
-)
-
 func (c *SQLiteConn) Serialize(schema string) ([]byte, error)  {
 	return nil, errors.New("sqlite3: Serialize requires the sqlite_serialize build tag when using the libsqlite3 build tag")
 }
