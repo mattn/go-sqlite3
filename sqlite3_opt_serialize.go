@@ -20,10 +20,6 @@ import (
 	"unsafe"
 )
 
-const (
-	SQLITEDeserializeFreeOnClose = 1
-)
-
 // Serialize returns a byte slice that is a serialization of the database.
 //
 // See https://www.sqlite.org/c3ref/serialize.html
