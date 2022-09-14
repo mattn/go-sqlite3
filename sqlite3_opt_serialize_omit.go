@@ -13,7 +13,7 @@ import (
 )
 
 func (c *SQLiteConn) Serialize(schema string) ([]byte, error)  {
-	return nil, fmt.Errorf("serialize function not available")
+	return nil, errors.New("sqlite3: Serialize requires the sqlite_serialize build tag when using the libsqlite3 build tag")
 }
 
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
