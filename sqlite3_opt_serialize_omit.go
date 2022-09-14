@@ -16,5 +16,5 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error)  {
 }
 
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
-	return fmt.Errorf("deserialize function not available")
+	return nil, errors.New("sqlite3: Deserialize requires the sqlite_serialize build tag when using the libsqlite3 build tag")
 }
