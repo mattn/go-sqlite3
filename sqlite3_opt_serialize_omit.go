@@ -11,7 +11,7 @@ import (
 */
 import "C"
 
-func (c *SQLiteConn) Serialize(schema string) ([]byte, error)  {
+func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 	return nil, errors.New("sqlite3: Serialize requires the sqlite_serialize build tag when using the libsqlite3 build tag")
 }
 
