@@ -41,7 +41,7 @@ jobs:
         run: go-acc . -- -race -v -tags ""
 
       - name: 'Tags: libsqlite3'
-        run: go-acc . -- -race -v -tags "libsqlite3 sqlite_omit_deserialize"
+        run: go-acc . -- -race -v -tags "libsqlite3"
 
       - name: 'Tags: full'
         run: go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_os_trace sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_userauth sqlite_vacuum_incr sqlite_vtable sqlite_unlock_notify sqlite_column_metadata"
@@ -93,7 +93,7 @@ jobs:
         shell: msys2 {0}
 
       - name: 'Tags: libsqlite3'
-        run: go build -race -v -tags "libsqlite3 sqlite_omit_deserialize"
+        run: go build -race -v -tags "libsqlite3"
         shell: msys2 {0}
 
       - name: 'Tags: full'

@@ -80,7 +80,7 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	copy(cBuf, b)
 
 	rc := C.sqlite3_deserialize(c.db, zSchema, tmpBuf, C.sqlite3_int64(len(b)),
-		C.sqlite3_int64(len(b)), SQLITEDeserializeFreeOnClose)
+		C.sqlite3_int64(len(b)), C.SQLITE_DESERIALIZE_FREEONCLOSE)
 	if rc != 0 {
 		return fmt.Errorf("deserialize failed with return %v", rc)
 	}
