@@ -59,7 +59,7 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 
 // Deserialize causes the connection to disconnect from the current database
 // and then re-open as an in-memory database based on the contents of the
-// byte slice. If deserelization fails, error will contain the return code
+// byte slice. If deserialization fails, error will contain the return code
 // of the underlying SQLite API call.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
