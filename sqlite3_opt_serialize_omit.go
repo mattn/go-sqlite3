@@ -1,5 +1,4 @@
 // +build libsqlite3,!sqlite_serialize
-// +build !sqlite_serialize
 
 package sqlite3
 
