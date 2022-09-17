@@ -21,8 +21,9 @@ func TestMathFunctions(t *testing.T) {
 	}
 
 	for _, query := range queries {
-		if _, err := db.Query(query); err != nil {
-			t.Fatal("Failed to call math function:", err)
+		var result float64
+		if err := db.QueryRow(query).Scan(&result); err != nil {
+			t.Errorf("invoking math function query %q: %v", query, err)
 		}
 	}
 }
