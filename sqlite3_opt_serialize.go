@@ -55,8 +55,7 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 
 // Deserialize causes the connection to disconnect from the current database
 // and then re-open as an in-memory database based on the contents of the
-// byte slice. If deserialization fails, error will contain the return code
-// of the underlying SQLite API call.
+a// byte slice.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
@@ -77,7 +76,7 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 
 	rc := C.sqlite3_deserialize(c.db, zSchema, tmpBuf, C.sqlite3_int64(len(b)),
 		C.sqlite3_int64(len(b)), C.SQLITE_DESERIALIZE_FREEONCLOSE)
-	if rc != 0 {
+	if rc != C.SQLITE_OK {
 		return fmt.Errorf("deserialize failed with return %v", rc)
 	}
 	return nil
