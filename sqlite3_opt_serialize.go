@@ -53,9 +53,8 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 	return res, nil
 }
 
-// Deserialize causes the connection to disconnect from the current database
-// and then re-open as an in-memory database based on the contents of the
-a// byte slice.
+// Deserialize causes the connection to disconnect from the current database and
+// then re-open as an in-memory database based on the contents of the byte slice.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
