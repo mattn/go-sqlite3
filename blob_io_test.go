@@ -56,14 +56,13 @@ func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c drive
 	var driverConn *SQLiteConn
 	err = conn.Raw(func(conn interface{}) error {
 		driverConn = conn.(*SQLiteConn)
+		c(t, driverConn)
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 	defer driverConn.Close()
-
-	c(t, driverConn)
 
 	return nil
 }
@@ -162,12 +161,12 @@ func TestBlobWrite(t *testing.T) {
 			t.Errorf("Failed to write %d bytes", n2)
 		}
 
-		// EOF
+		// Insufficient space
 		b3 := make([]byte, 10)
 		n3, err := blob.Write(b3)
 
-		if err != io.EOF || n3 != 0 {
-			t.Error("Expected EOF", err)
+		if err.Error() != "sqlite3.SQLiteBlob.Write: insufficient space in 24-byte blob" || n3 != 0 {
+			t.Error("Expected insufficient space error", err, n3)
 		}
 
 		// Verify written data

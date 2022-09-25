@@ -87,12 +87,16 @@ func (s *SQLiteBlob) Read(b []byte) (n int, err error) {
 // Write implements the io.Writer interface.
 func (s *SQLiteBlob) Write(b []byte) (n int, err error) {
 	if s.offset >= s.size {
-		return 0, io.EOF
+		return 0, fmt.Errorf("sqlite3.SQLiteBlob.Write: insufficient space in %d-byte blob", s.size)
 	}
 
 	n = s.size - s.offset
 	if len(b) < n {
 		n = len(b)
+	}
+
+	if n != len(b) {
+		return n, fmt.Errorf("sqlite3.SQLiteBlob.Write: insufficient space in %d-byte blob", s.size)
 	}
 
 	p := &b[0]
