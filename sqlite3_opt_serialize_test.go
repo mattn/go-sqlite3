@@ -1,120 +1,102 @@
+//go:build !libsqlite3 || sqlite_serialize
 // +build !libsqlite3 sqlite_serialize
 
 package sqlite3
 
 import (
 	"database/sql"
-	"database/sql/driver"
 	"os"
 	"testing"
 )
 
-func TestSerialize(t *testing.T) {
-	d := SQLiteDriver{}
+func TestSerializeDeserialize(t *testing.T) {
+	// The driver's connection will be needed in order to serialization and deserialization
+	driverName := "TestSerializeDeserialize"
+	driverConns := []*SQLiteConn{}
+	sql.Register(driverName, &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			driverConns = append(driverConns, conn)
+			return nil
+		},
+	})
 
-	srcConn, err := d.Open(":memory:")
+	// Connect to the source database.
+	srcTempFilename := TempFilename(t)
+	defer os.Remove(srcTempFilename)
+	srcDb, err := sql.Open(driverName, srcTempFilename)
 	if err != nil {
-		t.Fatal("failed to get database connection:", err)
+		t.Fatal("Failed to open the source database:", err)
 	}
-	defer srcConn.Close()
-	sqlite3conn := srcConn.(*SQLiteConn)
-
-	_, err = sqlite3conn.Exec(`CREATE TABLE foo (name string)`, nil)
+	defer srcDb.Close()
+	err = srcDb.Ping()
 	if err != nil {
-		t.Fatal("failed to create table:", err)
-	}
-	_, err = sqlite3conn.Exec(`INSERT INTO foo(name) VALUES("alice")`, nil)
-	if err != nil {
-		t.Fatal("failed to insert record:", err)
-	}
-
-	// Serialize the database to a file
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-	b, err := sqlite3conn.Serialize("")
-	if err != nil {
-		t.Fatalf("failed to serialize database: %s", err)
-	}
-	if err := os.WriteFile(tempFilename, b, 0644); err != nil {
-		t.Fatalf("failed to write serialized database to disk")
+		t.Fatal("Failed to connect to the source database:", err)
 	}
 
-	// Open the SQLite3 file, and test that contents are as expected.
-	db, err := sql.Open("sqlite3", tempFilename)
+	// Connect to the destination database.
+	destTempFilename := TempFilename(t)
+	defer os.Remove(destTempFilename)
+	destDb, err := sql.Open(driverName, destTempFilename)
 	if err != nil {
-		t.Fatal("failed to open database:", err)
+		t.Fatal("Failed to open the destination database:", err)
 	}
-	defer db.Close()
-
-	rows, err := db.Query(`SELECT * FROM foo`)
+	defer destDb.Close()
+	err = destDb.Ping()
 	if err != nil {
-		t.Fatal("failed to query database:", err)
-	}
-	defer rows.Close()
-
-	rows.Next()
-
-	var name string
-	rows.Scan(&name)
-	if exp, got := name, "alice"; exp != got {
-		t.Errorf("Expected %s for fetched result, but got %s:", exp, got)
-	}
-}
-
-func TestDeserialize(t *testing.T) {
-	var sqlite3conn *SQLiteConn
-	d := SQLiteDriver{}
-	tempFilename := TempFilename(t)
-	defer os.Remove(tempFilename)
-
-	// Create source database on disk.
-	conn, err := d.Open(tempFilename)
-	if err != nil {
-		t.Fatal("failed to open on-disk database:", err)
-	}
-	defer conn.Close()
-	sqlite3conn = conn.(*SQLiteConn)
-	_, err = sqlite3conn.Exec(`CREATE TABLE foo (name string)`, nil)
-	if err != nil {
-		t.Fatal("failed to create table:", err)
-	}
-	_, err = sqlite3conn.Exec(`INSERT INTO foo(name) VALUES("alice")`, nil)
-	if err != nil {
-		t.Fatal("failed to insert record:", err)
-	}
-	conn.Close()
-
-	// Read database file bytes from disk.
-	b, err := os.ReadFile(tempFilename)
-	if err != nil {
-		t.Fatal("failed to read database file on disk", err)
+		t.Fatal("Failed to connect to the destination database:", err)
 	}
 
-	// Deserialize file contents into memory.
-	conn, err = d.Open(":memory:")
-	if err != nil {
-		t.Fatal("failed to open in-memory database:", err)
+	// Check the driver connections.
+	if len(driverConns) != 2 {
+		t.Fatalf("Expected 2 driver connections, but found %v.", len(driverConns))
 	}
-	sqlite3conn = conn.(*SQLiteConn)
-	defer conn.Close()
-	if err := sqlite3conn.Deserialize(b, ""); err != nil {
-		t.Fatal("failed to deserialize database", err)
+	srcDbDriverConn := driverConns[0]
+	if srcDbDriverConn == nil {
+		t.Fatal("The source database driver connection is nil.")
+	}
+	destDbDriverConn := driverConns[1]
+	if destDbDriverConn == nil {
+		t.Fatal("The destination database driver connection is nil.")
 	}
 
-	// Check database contents are as expected.
-	rows, err := sqlite3conn.Query(`SELECT * FROM foo`, nil)
+	// Write data to source database.
+	_, err = srcDb.Exec(`CREATE TABLE foo (name string)`)
 	if err != nil {
-		t.Fatal("failed to query database:", err)
+		t.Fatal("Failed to create table in source database:", err)
 	}
-	defer rows.Close()
-	if len(rows.Columns()) != 1 {
-		t.Fatal("incorrect number of columns returned:", len(rows.Columns()))
+	_, err = srcDb.Exec(`INSERT INTO foo(name) VALUES("alice")`)
+	if err != nil {
+		t.Fatal("Failed to insert data into source database", err)
 	}
-	values := make([]driver.Value, 1)
-	rows.Next(values)
-	if v, ok := values[0].(string); !ok {
-		t.Fatalf("wrong type for value: %T", v)
-	} else if v != "alice" {
-		t.Fatal("wrong value returned", v)
+
+	// Serialize source database
+	b, err := srcDbDriverConn.Serialize("")
+	if err != nil {
+		t.Fatalf("Failed to serialize source database: %s", err)
+	}
+
+	// Confirm that the destination database is initially empty.
+	var destTableCount int
+	err = destDb.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'").Scan(&destTableCount)
+	if err != nil {
+		t.Fatal("Failed to check the destination table count:", err)
+	}
+	if destTableCount != 0 {
+		t.Fatalf("The destination database is not empty; %v table(s) found.", destTableCount)
+	}
+
+	// Deserialize to destination database
+	if err := destDbDriverConn.Deserialize(b, ""); err != nil {
+		t.Fatal("Failed to deserialize to destination database", err)
+	}
+
+	// Confirm that destination database has been loaded correctly.
+	var destRowCount int
+	err = destDb.QueryRow(`SELECT COUNT(*) FROM foo`).Scan(&destRowCount)
+	if err != nil {
+		t.Fatal("Failed to count rows in destination database table", err)
+	}
+	if destRowCount != 1 {
+		t.Fatalf("Destination table does not have the expected records")
 	}
 }
