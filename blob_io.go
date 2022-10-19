@@ -113,7 +113,7 @@ func (s *SQLiteBlob) Write(b []byte) (n int, err error) {
 // Seek implements the io.Seeker interface.
 func (s *SQLiteBlob) Seek(offset int64, whence int) (int64, error) {
 	if offset > math.MaxInt32 {
-		return 0, errors.New("sqlite3.SQLiteBlob.Seek: invalid position")
+		return 0, fmt.Errorf("sqlite3.SQLiteBlob.Seek: invalid offset %d", offset)
 	}
 
 	var abs int64
