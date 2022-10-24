@@ -248,6 +248,43 @@ func TestForeignKeys(t *testing.T) {
 	}
 }
 
+func TestDeferredForeignKey(t *testing.T) {
+	fname := TempFilename(t)
+	uri := "file:" + fname + "?_foreign_keys=1"
+	db, err := sql.Open("sqlite3", uri)
+	if err != nil {
+		os.Remove(fname)
+		t.Errorf("sql.Open(\"sqlite3\", %q): %v", uri, err)
+	}
+	_, err = db.Exec("CREATE TABLE bar (id INTEGER PRIMARY KEY)")
+	if err != nil {
+		t.Errorf("failed creating tables: %v", err)
+	}
+	_, err = db.Exec("CREATE TABLE foo (bar_id INTEGER, FOREIGN KEY(bar_id) REFERENCES bar(id) DEFERRABLE INITIALLY DEFERRED)")
+	if err != nil {
+		t.Errorf("failed creating tables: %v", err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Errorf("Failed to begin transaction: %v", err)
+	}
+	_, err = tx.Exec("INSERT INTO foo (bar_id) VALUES (123)")
+	if err != nil {
+		t.Errorf("Failed to insert row: %v", err)
+	}
+	err = tx.Commit()
+	if err == nil {
+		t.Errorf("Expected an error: %v", err)
+	}
+	_, err = db.Begin()
+	if err != nil {
+		t.Errorf("Failed to begin transaction: %v", err)
+	}
+
+	db.Close()
+	os.Remove(fname)
+}
+
 func TestRecursiveTriggers(t *testing.T) {
 	cases := map[string]bool{
 		"?_recursive_triggers=1": true,
@@ -1063,34 +1100,44 @@ func TestQueryer(t *testing.T) {
 	defer db.Close()
 
 	_, err = db.Exec(`
-	create table foo (id integer);
+		create table foo (id integer);
 	`)
 	if err != nil {
 		t.Error("Failed to call db.Query:", err)
 	}
 
-	rows, err := db.Query(`
-	insert into foo(id) values(?);
-	insert into foo(id) values(?);
-	insert into foo(id) values(?);
-	select id from foo order by id;
+	_, err = db.Exec(`
+		insert into foo(id) values(?);
+		insert into foo(id) values(?);
+		insert into foo(id) values(?);
 	`, 3, 2, 1)
+	if err != nil {
+		t.Error("Failed to call db.Exec:", err)
+	}
+	rows, err := db.Query(`
+		select id from foo order by id;
+	`)
 	if err != nil {
 		t.Error("Failed to call db.Query:", err)
 	}
 	defer rows.Close()
-	n := 1
-	if rows != nil {
-		for rows.Next() {
-			var id int
-			err = rows.Scan(&id)
-			if err != nil {
-				t.Error("Failed to db.Query:", err)
-			}
-			if id != n {
-				t.Error("Failed to db.Query: not matched results")
-			}
+	n := 0
+	for rows.Next() {
+		var id int
+		err = rows.Scan(&id)
+		if err != nil {
+			t.Error("Failed to db.Query:", err)
 		}
+		if id != n + 1 {
+			t.Error("Failed to db.Query: not matched results")
+		}
+		n = n + 1
+	}
+	if err := rows.Err(); err != nil {
+		t.Errorf("Post-scan failed: %v\n", err)
+	}
+	if n != 3 {
+		t.Errorf("Expected 3 rows but retrieved %v", n)
 	}
 }
 
