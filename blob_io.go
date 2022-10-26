@@ -96,7 +96,7 @@ func (s *SQLiteBlob) Write(b []byte) (n int, err error) {
 	}
 
 	if n != len(b) {
-		return n, fmt.Errorf("sqlite3.SQLiteBlob.Write: insufficient space in %d-byte blob", s.size)
+		return 0, fmt.Errorf("sqlite3.SQLiteBlob.Write: insufficient space in %d-byte blob", s.size)
 	}
 
 	p := &b[0]
@@ -132,7 +132,7 @@ func (s *SQLiteBlob) Seek(offset int64, whence int) (int64, error) {
 		return 0, errors.New("sqlite.SQLiteBlob.Seek: negative position")
 	}
 
-	if abs > math.MaxInt32 {
+	if abs > math.MaxInt32 || abs > int64(s.size) {
 		return 0, errors.New("sqlite3.SQLiteBlob.Seek: overflow position")
 	}
 

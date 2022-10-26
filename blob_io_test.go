@@ -24,10 +24,10 @@ var _ io.Closer = &SQLiteBlob{}
 
 type driverConnCallback func(*testing.T, *SQLiteConn)
 
-func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c driverConnCallback) error {
+func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c driverConnCallback) {
 	db, err := sql.Open("sqlite3", "file:/"+dbname+"?vfs=memdb")
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 	defer db.Close()
 
@@ -43,13 +43,13 @@ func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c drive
 
 	_, err = db.Exec(query, sql.Named("rowid", rowid), sql.Named("value", blob))
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 
 	// Get raw connection
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 	defer conn.Close()
 
@@ -60,18 +60,16 @@ func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c drive
 		return nil
 	})
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 	defer driverConn.Close()
-
-	return nil
 }
 
 func TestBlobRead(t *testing.T) {
 	rowid := int64(6581)
 	expected := []byte("I ❤️ SQLite in \x00\x01\x02…")
 
-	err := blobTestData(t, "testblobread", rowid, expected, func(t *testing.T, driverConn *SQLiteConn) {
+	blobTestData(t, "testblobread", rowid, expected, func(t *testing.T, driverConn *SQLiteConn) {
 
 		// Open blob
 		blob, err := driverConn.Blob("main", "data", "value", rowid, 0)
@@ -117,10 +115,6 @@ func TestBlobRead(t *testing.T) {
 			t.Error("Expected EOF", err)
 		}
 	})
-
-	if err != nil {
-		t.Fatal("Failed to get raw connection:", err)
-	}
 }
 
 func TestBlobWrite(t *testing.T) {
@@ -133,7 +127,7 @@ func TestBlobWrite(t *testing.T) {
 
 	// Allocate a zero blob
 	data := make([]byte, len(expected))
-	err := blobTestData(t, "testblobwrite", rowid, data, func(t *testing.T, driverConn *SQLiteConn) {
+	blobTestData(t, "testblobwrite", rowid, data, func(t *testing.T, driverConn *SQLiteConn) {
 
 		// Open blob for read/write
 		blob, err := driverConn.Blob("main", "data", "value", rowid, 1)
@@ -187,16 +181,13 @@ func TestBlobWrite(t *testing.T) {
 		}
 
 	})
-	if err != nil {
-		t.Fatal("Failed to get raw connection:", err)
-	}
 }
 
 func TestBlobSeek(t *testing.T) {
 	rowid := int64(6510)
 	data := make([]byte, 1000)
 
-	err := blobTestData(t, "testblobseek", rowid, data, func(t *testing.T, driverConn *SQLiteConn) {
+	blobTestData(t, "testblobseek", rowid, data, func(t *testing.T, driverConn *SQLiteConn) {
 
 		// Open blob
 		blob, err := driverConn.Blob("main", "data", "value", rowid, 0)
@@ -229,7 +220,6 @@ func TestBlobSeek(t *testing.T) {
 			{offset: -2, whence: io.SeekEnd, expected: end - 1},
 			{offset: -1, whence: io.SeekEnd, expected: end},
 			{offset: 0, whence: io.SeekEnd, expected: eof},
-			{offset: 1, whence: io.SeekEnd, expected: eof + 1},
 			{offset: -eof, whence: io.SeekEnd, expected: begin},
 		}
 
@@ -252,8 +242,4 @@ func TestBlobSeek(t *testing.T) {
 		}
 
 	})
-
-	if err != nil {
-		t.Fatal("Failed to get raw connection:", err)
-	}
 }
