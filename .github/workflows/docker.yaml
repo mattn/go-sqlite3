@@ -1,0 +1,22 @@
+name: dockerfile
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  dockerfile:
+    name: Run Dockerfiles in examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Run example - simple
+        run: |
+          cd ./_example/simple
+          docker build -t simple .
+          docker run simple | grep 99\ こんにちは世界099

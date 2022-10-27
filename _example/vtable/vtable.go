@@ -63,7 +63,12 @@ func (v *ghRepoTable) Open() (sqlite3.VTabCursor, error) {
 }
 
 func (v *ghRepoTable) BestIndex(cst []sqlite3.InfoConstraint, ob []sqlite3.InfoOrderBy) (*sqlite3.IndexResult, error) {
-	return &sqlite3.IndexResult{}, nil
+	used := make([]bool, len(csts))
+	return &sqlite3.IndexResult{
+		IdxNum: 0,
+		IdxStr: "default",
+		Used:   used,
+	}, nil
 }
 
 func (v *ghRepoTable) Disconnect() error { return nil }
