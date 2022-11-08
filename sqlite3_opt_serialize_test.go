@@ -3,6 +3,7 @@
 package sqlite3
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"testing"
@@ -55,11 +56,12 @@ func TestSerializeDeserialize(t *testing.T) {
 	var serialized []byte
 	if err := srcConn.Raw(func(raw interface{}) error {
 		var err error
-		serialized, err = raw.(*sqlite3.SQLiteConn).Serialize("")
+		serialized, err = raw.(*SQLiteConn).Serialize("")
 		return err
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatal("Failed to serialize source database:", err)
 	}
+	srcConn.Close()
 
 	// Confirm that the destination database is initially empty.
 	var destTableCount int
@@ -79,10 +81,11 @@ func TestSerializeDeserialize(t *testing.T) {
 	defer destConn.Close()
 
 	if err := destConn.Raw(func(raw interface{}) error {
-		return raw.(*sqlite3.SQLiteConn).Deserialize(serialized, "")
+		return raw.(*SQLiteConn).Deserialize(serialized, "")
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatal("Failed to deserialize source database:", err)
 	}
+	destConn.Close()
 
 	// Confirm that destination database has been loaded correctly.
 	var destRowCount int
