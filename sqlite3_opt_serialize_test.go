@@ -9,16 +9,6 @@ import (
 )
 
 func TestSerializeDeserialize(t *testing.T) {
-	// The driver's connection will be needed in order to serialization and deserialization
-	driverName := "TestSerializeDeserialize"
-	driverConns := []*SQLiteConn{}
-	sql.Register(driverName, &SQLiteDriver{
-		ConnectHook: func(conn *SQLiteConn) error {
-			driverConns = append(driverConns, conn)
-			return nil
-		},
-	})
-
 	// Connect to the source database.
 	srcTempFilename := TempFilename(t)
 	defer os.Remove(srcTempFilename)
@@ -45,19 +35,6 @@ func TestSerializeDeserialize(t *testing.T) {
 		t.Fatal("Failed to connect to the destination database:", err)
 	}
 
-	// Check the driver connections.
-	if len(driverConns) != 2 {
-		t.Fatalf("Expected 2 driver connections, but found %v.", len(driverConns))
-	}
-	srcDbDriverConn := driverConns[0]
-	if srcDbDriverConn == nil {
-		t.Fatal("The source database driver connection is nil.")
-	}
-	destDbDriverConn := driverConns[1]
-	if destDbDriverConn == nil {
-		t.Fatal("The destination database driver connection is nil.")
-	}
-
 	// Write data to source database.
 	_, err = srcDb.Exec(`CREATE TABLE foo (name string)`)
 	if err != nil {
@@ -68,10 +45,20 @@ func TestSerializeDeserialize(t *testing.T) {
 		t.Fatal("Failed to insert data into source database", err)
 	}
 
-	// Serialize source database
-	b, err := srcDbDriverConn.Serialize("")
+	// Serialize the source database
+	srcConn, err := srcDb.Conn(context.Background())
 	if err != nil {
-		t.Fatalf("Failed to serialize source database: %s", err)
+		t.Fatal("Failed to get connection to source database:", err)
+	}
+	defer srcConn.Close()
+
+	var serialized []byte
+	if err := srcConn.Raw(func(raw interface{}) error {
+		var err error
+		serialized, err = raw.(*sqlite3.SQLiteConn).Serialize("")
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Confirm that the destination database is initially empty.
@@ -85,8 +72,16 @@ func TestSerializeDeserialize(t *testing.T) {
 	}
 
 	// Deserialize to destination database
-	if err := destDbDriverConn.Deserialize(b, ""); err != nil {
-		t.Fatal("Failed to deserialize to destination database", err)
+	destConn, err := destDb.Conn(context.Background())
+	if err != nil {
+		t.Fatal("Failed to get connection to destination database:", err)
+	}
+	defer destConn.Close()
+
+	if err := destConn.Raw(func(raw interface{}) error {
+		return raw.(*sqlite3.SQLiteConn).Deserialize(serialized, "")
+	}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Confirm that destination database has been loaded correctly.
