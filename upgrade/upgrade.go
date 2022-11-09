@@ -82,11 +82,6 @@ func mergeFile(src string, dst string) error {
 		return err
 	}
 
-	// Add Additional newline
-	if _, err := fdst.WriteString("\n"); err != nil {
-		return err
-	}
-
 	fmt.Printf("Merging: %s into %s\n", src, dst)
 	if _, err = fdst.Write(content); err != nil {
 		return err
@@ -134,12 +129,18 @@ func main() {
 	// Extract Amalgamation
 	for _, zf := range rAmalgamation.File {
 		var f *os.File
+		ext := false
+		header := "#if !defined(USE_LIBSQLITE3) && !defined(USE_LIBSQLCIPHER) && !defined(USE_SQLCIPHER)\n"
+		footer := "#endif // !USE_LIBSQLITE3 && !USE_LIBSQLCIPHER && !USE_SQLCIPHER\n"
 		switch path.Base(zf.Name) {
 		case "sqlite3.c":
 			f, err = os.Create("../sqlite3-binding.c")
 		case "sqlite3.h":
 			f, err = os.Create("../sqlite3-binding.h")
 		case "sqlite3ext.h":
+			ext = true
+			header = "#if !defined(USE_LIBSQLITE3) && !defined(USE_LIBSQLCIPHER)\n"
+			footer = "#endif // !USE_LIBSQLITE3 && !USE_LIBSQLCIPHER\n"
 			f, err = os.Create("../sqlite3ext.h")
 		default:
 			continue
@@ -152,34 +153,42 @@ func main() {
 			log.Fatal(err)
 		}
 
-		_, err = io.WriteString(f, "#ifndef USE_LIBSQLITE3\n")
+		_, err = io.WriteString(f, header)
 		if err != nil {
 			zr.Close()
 			f.Close()
 			log.Fatal(err)
 		}
-		scanner := bufio.NewScanner(zr)
-		for scanner.Scan() {
-			text := scanner.Text()
-			if text == `#include "sqlite3.h"` {
-				text = `#include "sqlite3-binding.h"
+		if ext {
+			scanner := bufio.NewScanner(zr)
+			for scanner.Scan() {
+				text := scanner.Text()
+				if text == `#include "sqlite3.h"` {
+					text = `#ifdef USE_SQLCIPHER
+#include "sqlcipher-binding.h"
+#else
+#include "sqlite3-binding.h"
+#endif				
 #ifdef __clang__
 #define assert(condition) ((void)0)
 #endif
 `
+				}
+				_, err = fmt.Fprintln(f, text)
+				if err != nil {
+					break
+				}
 			}
-			_, err = fmt.Fprintln(f, text)
-			if err != nil {
-				break
-			}
+			err = scanner.Err()
+		} else {
+			_, err = io.Copy(f, zr)
 		}
-		err = scanner.Err()
 		if err != nil {
 			zr.Close()
 			f.Close()
 			log.Fatal(err)
 		}
-		_, err = io.WriteString(f, "#else // USE_LIBSQLITE3\n // If users really want to link against the system sqlite3 we\n// need to make this file a noop.\n #endif")
+		_, err = io.WriteString(f, footer)
 		if err != nil {
 			zr.Close()
 			f.Close()
@@ -209,8 +218,24 @@ func main() {
 			log.Fatal(err)
 		}
 
+		_, err = io.WriteString(f, "#if !defined(USE_LIBSQLITE3) && !defined(USE_LIBSQLCIPHER) && !defined(USE_SQLCIPHER)\n")
+		if err != nil {
+			zr.Close()
+			f.Close()
+			log.Fatal(err)
+		}
+
 		_, err = io.Copy(f, zr)
 		if err != nil {
+			zr.Close()
+			f.Close()
+			log.Fatal(err)
+		}
+
+		_, err = io.WriteString(f, "#endif // !USE_LIBSQLITE3 && !USE_LIBSQLCIPHER && !USE_SQLCIPHER\n")
+		if err != nil {
+			zr.Close()
+			f.Close()
 			log.Fatal(err)
 		}
 

@@ -12,10 +12,14 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_ENABLE_PREUPDATE_HOOK
 #cgo LDFLAGS: -lm
 
-#ifndef USE_LIBSQLITE3
-#include "sqlite3-binding.h"
-#else
+#if defined(USE_LIBSQLITE3)
 #include <sqlite3.h>
+#elif defined(USE_LIBSQLCIPHER)
+#include <sqlcipher/sqlite3.h>
+#elif defined(USE_SQLCIPHER)
+#include "sqlcipher-binding.h"
+#else
+#include "sqlite3-binding.h"
 #endif
 #include <stdlib.h>
 #include <string.h>

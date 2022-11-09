@@ -12,7 +12,11 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_ENABLE_UNLOCK_NOTIFY
 
 #include <stdlib.h>
+#ifdef USE_SQLCIPHER
+#include "sqlcipher-binding.h"
+#else
 #include "sqlite3-binding.h"
+#endif
 
 extern void unlock_notify_callback(void *arg, int argc);
 */

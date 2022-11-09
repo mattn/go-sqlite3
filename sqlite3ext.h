@@ -1,4 +1,4 @@
-#ifndef USE_LIBSQLITE3
+#if !defined(USE_LIBSQLITE3) && !defined(USE_LIBSQLCIPHER)
 /*
 ** 2006 June 7
 **
@@ -18,7 +18,11 @@
 */
 #ifndef SQLITE3EXT_H
 #define SQLITE3EXT_H
+#ifdef USE_SQLCIPHER
+#include "sqlcipher-binding.h"
+#else
 #include "sqlite3-binding.h"
+#endif				
 #ifdef __clang__
 #define assert(condition) ((void)0)
 #endif
@@ -704,7 +708,4 @@ typedef int (*sqlite3_loadext_entry)(
 #endif
 
 #endif /* SQLITE3EXT_H */
-#else // USE_LIBSQLITE3
- // If users really want to link against the system sqlite3 we
-// need to make this file a noop.
- #endif
+#endif // !USE_LIBSQLITE3 && !USE_LIBSQLCIPHER

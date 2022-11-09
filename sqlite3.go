@@ -24,10 +24,14 @@ package sqlite3
 #cgo linux,!android CFLAGS: -DHAVE_PREAD64=1 -DHAVE_PWRITE64=1
 #cgo openbsd CFLAGS: -I/usr/local/include
 #cgo openbsd LDFLAGS: -L/usr/local/lib
-#ifndef USE_LIBSQLITE3
-#include "sqlite3-binding.h"
-#else
+#if defined(USE_LIBSQLITE3)
 #include <sqlite3.h>
+#elif defined(USE_LIBSQLCIPHER)
+#include <sqlcipher/sqlite3.h>
+#elif defined(USE_SQLCIPHER)
+#include "sqlcipher-binding.h"
+#else
+#include "sqlite3-binding.h"
 #endif
 #include <stdlib.h>
 #include <string.h>
@@ -1029,6 +1033,28 @@ func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
 //     Default or disabled the LIKE operation is case-insensitive.
 //     When enabling this options behaviour of LIKE will become case-sensitive.
 //
+//   _cipher_compatibility=X
+//     Sets the major version number to use for opening a legacy SQLCipher database.
+//     https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_compatibility
+//
+//   _cipher_migrate
+//     Migrate a legacy SQLCipher database to the newest format.
+//     https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_migrate
+//
+//   _cipher_page_size=X
+//     Adjusts the page size for the encrypted database.
+//     https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_page_size
+//
+//   _cipher_plaintext_header_size=X
+//     Allocates a portion of the database header which will not be encrypted to allow
+//     identification as an SQLite database.
+//     https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_plaintext_header_size
+//
+//   _cipher_use_hmac=X
+//     Disable the HMAC functionality to provide backward compatibility with
+//     SQLCipher 1.1.x databases.
+//     https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_use_hmac
+//
 //   _defer_foreign_keys=Boolean | _defer_fk=Boolean
 //     Defer Foreign Keys until outermost transaction is committed.
 //
@@ -1042,6 +1068,10 @@ func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
 //   _journal_mode=MODE | _journal=MODE
 //     Set journal mode for the databases associated with the current connection.
 //     https://www.sqlite.org/pragma.html#pragma_journal_mode
+//
+//   _key=X
+//     Sets the database encryption key.
+//     https://www.zetetic.net/sqlcipher/sqlcipher-api/#PRAGMA_key
 //
 //   _locking_mode=X | _locking=X
 //     Sets the database connection locking-mode.
@@ -1089,10 +1119,16 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	autoVacuum := -1
 	busyTimeout := 5000
 	caseSensitiveLike := -1
+	cipherCompatibility := -1
+	cipherMigrate := false
+	cipherPageSize := -1
+	cipherPlaintextHeaderSize := -1
+	cipherUseHmac := -1
 	deferForeignKeys := -1
 	foreignKeys := -1
 	ignoreCheckConstraints := -1
 	var journalMode string
+	var key string
 	lockingMode := "NORMAL"
 	queryOnly := -1
 	recursiveTriggers := -1
@@ -1230,6 +1266,65 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// Cipher Compatibility (_cipher_compatibility)
+		//
+		// https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_compatibility
+		//
+		if val := params.Get("_cipher_compatibility"); val != "" {
+			iv, err := strconv.ParseInt(val, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid _cipher_compatibility: %v: %v", val, err)
+			}
+			cipherCompatibility = int(iv)
+		}
+
+		// Cipher Migrate (_cipher_migrate)
+		//
+		// https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_migrate
+		//
+		if params.Has("_cipher_migrate") {
+			cipherMigrate = true
+		}
+
+		// Cipher Page Size (_cipher_page_size)
+		//
+		// https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_page_size
+		//
+		if val := params.Get("_cipher_page_size"); val != "" {
+			iv, err := strconv.ParseInt(val, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid _cipher_page_size: %v: %v", val, err)
+			}
+			cipherPageSize = int(iv)
+		}
+
+		// Cipher Plaintext Header Size (_cipher_plaintext_header_size)
+		//
+		// https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_plaintext_header_size
+		//
+		if val := params.Get("_cipher_plaintext_header_size"); val != "" {
+			iv, err := strconv.ParseInt(val, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid _cipher_plaintext_header_size: %v: %v", val, err)
+			}
+			cipherPlaintextHeaderSize = int(iv)
+		}
+
+		// Cipher Use HMAC (_cipher_use_hmac)
+		//
+		// https://www.zetetic.net/sqlcipher/sqlcipher-api/#pragma_cipher_use_hmac
+		//
+		if val := params.Get("_cipher_use_hmac"); val != "" {
+			switch strings.ToLower(val) {
+			case "0", "no", "false", "off":
+				cipherUseHmac = 0
+			case "1", "yes", "true", "on":
+				cipherUseHmac = 1
+			default:
+				return nil, fmt.Errorf("Invalid _cipher_use_hmac: %v, expecting boolean value of '0 1 false true no yes off on'", val)
+			}
+		}
+
 		// Defer Foreign Keys (_defer_foreign_keys | _defer_fk)
 		//
 		// https://www.sqlite.org/pragma.html#pragma_defer_foreign_keys
@@ -1313,6 +1408,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			default:
 				return nil, fmt.Errorf("Invalid _journal: %v, expecting value of 'DELETE TRUNCATE PERSIST MEMORY WAL OFF'", val)
 			}
+		}
+
+		// Encryption Key (_key)
+		//
+		// https://www.zetetic.net/sqlcipher/sqlcipher-api/#PRAGMA_key
+		//
+		if val := params.Get("_key"); val != "" {
+			key = val
 		}
 
 		// Locking Mode (_locking)
@@ -1477,6 +1580,54 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return lastError(db)
 		}
 		return nil
+	}
+
+	// Encryption key
+	if key != "" {
+		if err := exec(fmt.Sprintf("PRAGMA key = %s;", key)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Cipher Compatibility
+	if cipherCompatibility > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA cipher_compatibility = %d;", cipherCompatibility)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Cipher Migrate
+	if cipherMigrate {
+		if err := exec("PRAGMA cipher_migrate;"); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Cipher Page Size
+	if cipherPageSize > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA cipher_page_size = %d;", cipherPageSize)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Cipher Plaintext Header Size
+	if cipherPlaintextHeaderSize > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA cipher_plaintext_header_size = %d;", cipherPlaintextHeaderSize)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Cipher Use HMAC
+	if cipherUseHmac > -1 {
+		if err := exec(fmt.Sprintf("PRAGMA cipher_use_hmac = %d;", cipherUseHmac)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// Busy timeout
