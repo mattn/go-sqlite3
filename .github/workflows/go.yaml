@@ -21,7 +21,14 @@ jobs:
       GO: ${{ matrix.go }}
     steps:
       - if: startsWith(matrix.os, 'macos')
-        run: brew update
+        run: |
+          brew update
+          brew install sqlcipher
+
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libsqlcipher-dev
 
       - uses: actions/setup-go@v2
         with:
@@ -43,8 +50,17 @@ jobs:
       - name: 'Tags: libsqlite3'
         run: go-acc . -- -race -v -tags "libsqlite3"
 
+      - name: 'Tags: sqlcipher'
+        run: go-acc . -- -race -v -tags "sqlcipher"
+
+      - name: 'Tags: libsqlcipher'
+        run: go-acc . -- -race -v -tags "libsqlcipher"
+
       - name: 'Tags: full'
         run: go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_column_metadata sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_math_functions sqlite_os_trace sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_unlock_notify sqlite_userauth sqlite_vacuum_incr sqlite_vtable"
+
+      - name: 'Tags: sqlcipher+full'
+        run: go-acc . -- -race -v -tags "sqlcipher sqlite_allow_uri_authority sqlite_app_armor sqlite_column_metadata sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_math_functions sqlite_os_trace sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_unlock_notify sqlite_userauth sqlite_vacuum_incr sqlite_vtable"
 
       - name: 'Tags: vacuum'
         run: go-acc . -- -race -v -tags "sqlite_vacuum_full"
@@ -73,7 +89,7 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           update: true
-          install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-sqlite3
+          install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-sqlite3 mingw-w64-x86_64-sqlcipher
           msystem: MINGW64
           path-type: inherit
 
@@ -96,10 +112,24 @@ jobs:
         run: go build -race -v -tags "libsqlite3"
         shell: msys2 {0}
 
+      - name: 'Tags: sqlcipher'
+        run: go build -race -v -tags "sqlcipher"
+        shell: msys2 {0}
+
+      - name: 'Tags: libsqlcipher'
+        run: go build -race -v -tags "libsqlcipher"
+        shell: msys2 {0}
+
       - name: 'Tags: full'
         run: |
           echo 'skip this test'
           echo go build -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_column_metadata sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_math_functions sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_unlock_notify sqlite_userauth sqlite_vacuum_incr sqlite_vtable"
+        shell: msys2 {0}
+
+      - name: 'Tags: sqlcipher+full'
+        run: |
+          echo 'skip this test'
+          echo go build -race -v -tags "sqlcipher sqlite_allow_uri_authority sqlite_app_armor sqlite_column_metadata sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_math_functions sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_unlock_notify sqlite_userauth sqlite_vacuum_incr sqlite_vtable"
         shell: msys2 {0}
 
       - name: 'Tags: vacuum'
