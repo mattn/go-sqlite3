@@ -7,6 +7,8 @@ import (
 )
 
 func Test_TableCreationInMemoryLoadRaw(t *testing.T) {
+
+	// Create distinct ro and rw connections to the database.
 	rwDSN := "file:/mydb?mode=rw&vfs=memdb&_txlock=immediate&_fk=false"
 	roDSN := "file:/mydb?mode=ro&vfs=memdb&_txlock=deferred&_fk=false"
 
@@ -30,11 +32,13 @@ func Test_TableCreationInMemoryLoadRaw(t *testing.T) {
 	}
 	defer roConn.Close()
 
+	// Create the table for the records.
 	_, err = rwConn.ExecContext(context.Background(), `CREATE TABLE logs (entry TEXT)`, nil)
 	if err != nil {
 		t.Fatalf("failed to create table: %s", err)
 	}
 
+	// Insert some records continually, as fast as possible. Do it from a goroutine.
 	go func() {
 		for {
 			var err error
@@ -45,6 +49,7 @@ func Test_TableCreationInMemoryLoadRaw(t *testing.T) {
 		}
 	}()
 
+	// Get the count over and over again.
 	n := 0
 	for {
 		n++
