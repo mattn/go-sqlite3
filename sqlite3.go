@@ -1415,7 +1415,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		// https://www.zetetic.net/sqlcipher/sqlcipher-api/#PRAGMA_key
 		//
 		if val := params.Get("_key"); val != "" {
-			key = val
+			switch {
+			case strings.Contains(val, `'`) && strings.Contains(val, `"`):
+				return nil, errors.New("Invalid key provided, cannot contain both ' and \"")
+			case strings.Contains(val, `'`):
+				key = fmt.Sprintf(`"%s"`, val)
+			default:
+				key = fmt.Sprintf(`'%s'`, val)
+			}
 		}
 
 		// Locking Mode (_locking)

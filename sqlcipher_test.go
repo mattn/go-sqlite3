@@ -20,10 +20,12 @@ func TestCipher(t *testing.T) {
 	keys := []string{
 		// Passphrase with Key Derivation
 		"passphrase",
+		// Passphrase with Key Derivation starting with a digit
+		"1passphrase",
 		// Raw Key Data (Without Key Derivation)
-		`"x'2DD29CA851E7B56E4697B0E1F08507293D761A05CE4D1B628663F411A8086D99'"`,
+		"x'2DD29CA851E7B56E4697B0E1F08507293D761A05CE4D1B628663F411A8086D99'",
 		// Raw Key Data with Explicit Salt (Without Key Derivation)
-		`"x'98483C6EB40B6C31A448C22A66DED3B5E5E8D5119CAC8327B655C8B5C483648101010101010101010101010101010101'"`,
+		"x'98483C6EB40B6C31A448C22A66DED3B5E5E8D5119CAC8327B655C8B5C483648101010101010101010101010101010101'",
 	}
 	for _, key := range keys {
 		fname := TempFilename(t)
