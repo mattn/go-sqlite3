@@ -2223,7 +2223,10 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 				dest[i] = val
 			}
 		case C.SQLITE_FLOAT:
-			dest[i] = float64(C.sqlite3_column_double(rc.s.s, C.int(i)))
+			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
+			s := C.GoStringN((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))), C.int(n))
+			f, _ := strconv.ParseFloat(s,64)
+			dest[i] = f
 		case C.SQLITE_BLOB:
 			p := C.sqlite3_column_blob(rc.s.s, C.int(i))
 			if p == nil {
