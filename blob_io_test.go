@@ -25,11 +25,18 @@ var _ io.Closer = &SQLiteBlob{}
 type driverConnCallback func(*testing.T, *SQLiteConn)
 
 func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c driverConnCallback) {
-	db, err := sql.Open("sqlite3", "file:/"+dbname+"?vfs=memdb")
+
+	// TODO use :memory: for compatibility with SQLite versions < 3.37.0.
+	// Use memdb vfs for more recent versions.
+
+	// db, err := sql.Open("sqlite3", "file:/"+dbname+"?vfs=memdb")
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
+
+	db.SetMaxOpenConns(1)
 
 	// Test data
 	query := `
