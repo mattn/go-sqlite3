@@ -213,7 +213,8 @@ import (
 // SQLiteTimestampFormats is timestamp formats understood by both this module
 // and SQLite.  The first format in the slice will be used when saving time
 // values into the database. When parsing a string from a timestamp or datetime
-// column, the formats are tried in order.
+// column, the formats are tried in order. If the string ends with "Z", that
+// suffix is trimmed before trying the formats.
 var SQLiteTimestampFormats = []string{
 	// By default, store timestamps with whatever timezone they come with.
 	// When parsed, they will be returned with the same timezone.
