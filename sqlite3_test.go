@@ -2111,6 +2111,8 @@ var benchmarks = []testing.InternalBenchmark{
 	{Name: "BenchmarkStmt", F: benchmarkStmt},
 	{Name: "BenchmarkRows", F: benchmarkRows},
 	{Name: "BenchmarkStmtRows", F: benchmarkStmtRows},
+	{Name: "BenchmarkExecStep", F: benchmarkExecStep},
+	{Name: "BenchmarkQueryStep", F: benchmarkQueryStep},
 }
 
 func (db *TestDB) mustExec(sql string, args ...any) sql.Result {
@@ -2565,6 +2567,25 @@ func benchmarkStmtRows(b *testing.B) {
 		}
 		if err = r.Err(); err != nil {
 			panic(err)
+		}
+	}
+}
+
+var largeSelectStmt = strings.Repeat("select 1;\n", 1_000)
+
+func benchmarkExecStep(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		if _, err := db.Exec(largeSelectStmt); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func benchmarkQueryStep(b *testing.B) {
+	var i int
+	for n := 0; n < b.N; n++ {
+		if err := db.QueryRow(largeSelectStmt).Scan(&i); err != nil {
+			b.Fatal(err)
 		}
 	}
 }

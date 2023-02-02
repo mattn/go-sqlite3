@@ -30,6 +30,7 @@ package sqlite3
 #endif
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #ifdef __CYGWIN__
 # include <errno.h>
@@ -90,6 +91,16 @@ _sqlite3_exec(sqlite3* db, const char* pcmd, long long* rowid, long long* change
   return rv;
 }
 
+static const char *
+_trim_leading_spaces(const char *str) {
+  if (str) {
+    while (isspace(*str)) {
+      str++;
+    }
+  }
+  return str;
+}
+
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
 extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
 extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
@@ -110,7 +121,11 @@ _sqlite3_step_row_internal(sqlite3_stmt* stmt, long long* rowid, long long* chan
 static int
 _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
 {
-  return _sqlite3_prepare_v2_blocking(db, zSql, nBytes, ppStmt, pzTail);
+  int rv = _sqlite3_prepare_v2_blocking(db, zSql, nBytes, ppStmt, pzTail);
+  if (pzTail) {
+    *pzTail = _trim_leading_spaces(*pzTail);
+  }
+  return rv;
 }
 
 #else
@@ -133,7 +148,11 @@ _sqlite3_step_row_internal(sqlite3_stmt* stmt, long long* rowid, long long* chan
 static int
 _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
 {
-  return sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
+  int rv = sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
+  if (pzTail) {
+    *pzTail = _trim_leading_spaces(*pzTail);
+  }
+  return rv;
 }
 #endif
 
@@ -858,25 +877,34 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 }
 
 func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	pquery := C.CString(query)
+	op := pquery // original pointer
+	defer C.free(unsafe.Pointer(op))
+
+	var stmtArgs []driver.NamedValue
+	var tail *C.char
+	s := new(SQLiteStmt) // escapes to the heap so reuse it
+	defer s.finalize()
 	start := 0
 	for {
-		s, err := c.prepare(ctx, query)
-		if err != nil {
-			return nil, err
+		*s = SQLiteStmt{c: c} // reset
+		rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(-1), &s.s, &tail)
+		if rv != C.SQLITE_OK {
+			return nil, c.lastError()
 		}
+
 		var res driver.Result
-		if s.(*SQLiteStmt).s != nil {
-			stmtArgs := make([]driver.NamedValue, 0, len(args))
+		if s.s != nil {
 			na := s.NumInput()
 			if len(args)-start < na {
-				s.Close()
+				s.finalize()
 				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args))
 			}
 			// consume the number of arguments used in the current
 			// statement and append all named arguments not
 			// contained therein
 			if len(args[start:start+na]) > 0 {
-				stmtArgs = append(stmtArgs, args[start:start+na]...)
+				stmtArgs = append(stmtArgs[:0], args[start:start+na]...)
 				for i := range args {
 					if (i < start || i >= na) && args[i].Name != "" {
 						stmtArgs = append(stmtArgs, args[i])
@@ -886,23 +914,23 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 					stmtArgs[i].Ordinal = i + 1
 				}
 			}
-			res, err = s.(*SQLiteStmt).exec(ctx, stmtArgs)
+			var err error
+			res, err = s.exec(ctx, stmtArgs)
 			if err != nil && err != driver.ErrSkip {
-				s.Close()
+				s.finalize()
 				return nil, err
 			}
 			start += na
 		}
-		tail := s.(*SQLiteStmt).t
-		s.Close()
-		if tail == "" {
+		s.finalize()
+		if tail == nil || *tail == '\000' {
 			if res == nil {
 				// https://github.com/mattn/go-sqlite3/issues/963
 				res = &SQLiteResult{0, 0}
 			}
 			return res, nil
 		}
-		query = tail
+		pquery = tail
 	}
 }
 
@@ -919,14 +947,21 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 }
 
 func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	pquery := C.CString(query)
+	op := pquery // original pointer
+	defer C.free(unsafe.Pointer(op))
+
+	var stmtArgs []driver.NamedValue
+	var tail *C.char
+	s := new(SQLiteStmt) // escapes to the heap so reuse it
 	start := 0
 	for {
-		stmtArgs := make([]driver.NamedValue, 0, len(args))
-		s, err := c.prepare(ctx, query)
-		if err != nil {
-			return nil, err
+		*s = SQLiteStmt{c: c, cls: true} // reset
+		rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(-1), &s.s, &tail)
+		if rv != C.SQLITE_OK {
+			return nil, c.lastError()
 		}
-		s.(*SQLiteStmt).cls = true
+
 		na := s.NumInput()
 		if len(args)-start < na {
 			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args)-start)
@@ -934,7 +969,7 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 		// consume the number of arguments used in the current
 		// statement and append all named arguments not contained
 		// therein
-		stmtArgs = append(stmtArgs, args[start:start+na]...)
+		stmtArgs = append(stmtArgs[:0], args[start:start+na]...)
 		for i := range args {
 			if (i < start || i >= na) && args[i].Name != "" {
 				stmtArgs = append(stmtArgs, args[i])
@@ -943,19 +978,18 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 		for i := range stmtArgs {
 			stmtArgs[i].Ordinal = i + 1
 		}
-		rows, err := s.(*SQLiteStmt).query(ctx, stmtArgs)
+		rows, err := s.query(ctx, stmtArgs)
 		if err != nil && err != driver.ErrSkip {
-			s.Close()
+			s.finalize()
 			return rows, err
 		}
 		start += na
-		tail := s.(*SQLiteStmt).t
-		if tail == "" {
+		if tail == nil || *tail == '\000' {
 			return rows, nil
 		}
 		rows.Close()
-		s.Close()
-		query = tail
+		s.finalize()
+		pquery = tail
 	}
 }
 
@@ -1818,8 +1852,11 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 		return nil, c.lastError()
 	}
 	var t string
-	if tail != nil && *tail != '\000' {
-		t = strings.TrimSpace(C.GoString(tail))
+	if tail != nil && *tail != 0 {
+		n := int(uintptr(unsafe.Pointer(tail))) - int(uintptr(unsafe.Pointer(pquery)))
+		if 0 <= n && n < len(query) {
+			t = strings.TrimSpace(query[n:])
+		}
 	}
 	ss := &SQLiteStmt{c: c, s: s, t: t}
 	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
@@ -1911,6 +1948,13 @@ func (s *SQLiteStmt) Close() error {
 	s.c = nil
 	runtime.SetFinalizer(s, nil)
 	return nil
+}
+
+func (s *SQLiteStmt) finalize() {
+	if s.s != nil {
+		C.sqlite3_finalize(s.s)
+		s.s = nil
+	}
 }
 
 // NumInput return a number of parameters.
