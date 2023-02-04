@@ -1128,7 +1128,7 @@ func TestQueryer(t *testing.T) {
 		if err != nil {
 			t.Error("Failed to db.Query:", err)
 		}
-		if id != n + 1 {
+		if id != n+1 {
 			t.Error("Failed to db.Query: not matched results")
 		}
 		n = n + 1
@@ -1497,28 +1497,28 @@ func TestAggregatorRegistration(t *testing.T) {
 }
 
 type mode struct {
-        counts   map[interface{}]int
-        top      interface{}
-        topCount int
+	counts   map[interface{}]int
+	top      interface{}
+	topCount int
 }
 
 func newMode() *mode {
-        return &mode{
-                counts: map[interface{}]int{},
-        }
+	return &mode{
+		counts: map[interface{}]int{},
+	}
 }
 
 func (m *mode) Step(x interface{}) {
-        m.counts[x]++
-        c := m.counts[x]
-        if c > m.topCount {
-                m.top = x
-                m.topCount = c
-        }
+	m.counts[x]++
+	c := m.counts[x]
+	if c > m.topCount {
+		m.top = x
+		m.topCount = c
+	}
 }
 
 func (m *mode) Done() interface{} {
-        return m.top
+	return m.top
 }
 
 func TestAggregatorRegistration_GenericReturn(t *testing.T) {
@@ -1534,19 +1534,19 @@ func TestAggregatorRegistration_GenericReturn(t *testing.T) {
 	defer db.Close()
 
 	_, err = db.Exec("create table foo (department integer, profits integer)")
-        if err != nil {
-                t.Fatal("Failed to create table:", err)
-        }
-        _, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
-        if err != nil {
-                t.Fatal("Failed to insert records:", err)
-        }
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	_, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
 
 	var mode int
-        err = db.QueryRow("select mode(profits) from foo").Scan(&mode)
-        if err != nil {
-                t.Fatal("MODE query error:", err)
-        }
+	err = db.QueryRow("select mode(profits) from foo").Scan(&mode)
+	if err != nil {
+		t.Fatal("MODE query error:", err)
+	}
 
 	if mode != 20 {
 		t.Fatal("Got incorrect mode. Wanted 20, got: ", mode)
