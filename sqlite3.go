@@ -1148,6 +1148,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		// _txlock
 		if val := params.Get("_txlock"); val != "" {
 			switch strings.ToLower(val) {
+			case "concurrent":
+				txlock = "BEGIN CONCURRENT"
 			case "immediate":
 				txlock = "BEGIN IMMEDIATE"
 			case "exclusive":
