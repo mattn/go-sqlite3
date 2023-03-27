@@ -15,9 +15,13 @@ import "C"
 
 import (
 	"fmt"
-	"math"
 	"reflect"
 	"unsafe"
+)
+
+const (
+	intSize = 32 << (^uint(0) >> 63) // 32 or 64
+	MaxInt  = 1<<(intSize-1) - 1
 )
 
 // Serialize returns a byte slice that is a serialization of the database.
@@ -37,8 +41,8 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 		return nil, fmt.Errorf("serialize failed")
 	}
 	defer C.sqlite3_free(unsafe.Pointer(ptr))
-
-	if sz > C.sqlite3_int64(math.MaxInt) {
+	// 为了使用go 1.13版本， 参考go 1.17版本的写法在此处做个兼容
+	if sz > C.sqlite3_int64(MaxInt) {
 		return nil, fmt.Errorf("serialized database is too large (%d bytes)", sz)
 	}
 
