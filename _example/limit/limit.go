@@ -17,7 +17,7 @@ func createBulkInsertQuery(n int, start int) (query string, args []interface{}) 
 	for i := 0; i < n; i++ {
 		values[i] = "(?, ?)"
 		args[pos] = start + i
-		args[pos+1] = fmt.Sprintf("こんにちわ世界%03d", i)
+		args[pos+1] = fmt.Sprintf("こんにちは世界%03d", i)
 		pos += 2
 	}
 	query = fmt.Sprintf(

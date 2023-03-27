@@ -494,10 +494,12 @@ func (ai *aggInfo) Done(ctx *C.sqlite3_context) {
 // Commit transaction.
 func (tx *SQLiteTx) Commit() error {
 	_, err := tx.c.exec(context.Background(), "COMMIT", nil)
-	if err != nil && err.(Error).Code == C.SQLITE_BUSY {
-		// sqlite3 will leave the transaction open in this scenario.
+	if err != nil {
+		// sqlite3 may leave the transaction open in this scenario.
 		// However, database/sql considers the transaction complete once we
 		// return from Commit() - we must clean up to honour its semantics.
+		// We don't know if the ROLLBACK is strictly necessary, but according
+		// to sqlite's docs, there is no harm in calling ROLLBACK unnecessarily.
 		tx.c.exec(context.Background(), "ROLLBACK", nil)
 	}
 	return err
@@ -835,9 +837,9 @@ func lastError(db *C.sqlite3) error {
 
 // Exec implements Execer.
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	list := make([]namedValue, len(args))
+	list := make([]driver.NamedValue, len(args))
 	for i, v := range args {
-		list[i] = namedValue{
+		list[i] = driver.NamedValue{
 			Ordinal: i + 1,
 			Value:   v,
 		}
@@ -845,7 +847,7 @@ func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, err
 	return c.exec(context.Background(), query, list)
 }
 
-func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) (driver.Result, error) {
+func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	start := 0
 	for {
 		s, err := c.prepare(ctx, query)
@@ -854,7 +856,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) 
 		}
 		var res driver.Result
 		if s.(*SQLiteStmt).s != nil {
-			stmtArgs := make([]namedValue, 0, len(args))
+			stmtArgs := make([]driver.NamedValue, 0, len(args))
 			na := s.NumInput()
 			if len(args)-start < na {
 				s.Close()
@@ -892,17 +894,11 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []namedValue) 
 	}
 }
 
-type namedValue struct {
-	Name    string
-	Ordinal int
-	Value   driver.Value
-}
-
 // Query implements Queryer.
 func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	list := make([]namedValue, len(args))
+	list := make([]driver.NamedValue, len(args))
 	for i, v := range args {
-		list[i] = namedValue{
+		list[i] = driver.NamedValue{
 			Ordinal: i + 1,
 			Value:   v,
 		}
@@ -910,10 +906,10 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 	return c.query(context.Background(), query, list)
 }
 
-func (c *SQLiteConn) query(ctx context.Context, query string, args []namedValue) (driver.Rows, error) {
+func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	start := 0
 	for {
-		stmtArgs := make([]namedValue, 0, len(args))
+		stmtArgs := make([]driver.NamedValue, 0, len(args))
 		s, err := c.prepare(ctx, query)
 		if err != nil {
 			return nil, err
@@ -1910,7 +1906,7 @@ func (s *SQLiteStmt) NumInput() int {
 
 var placeHolder = []byte{0}
 
-func (s *SQLiteStmt) bind(args []namedValue) error {
+func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 	rv := C.sqlite3_reset(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return s.c.lastError()
@@ -1980,9 +1976,9 @@ func (s *SQLiteStmt) bind(args []namedValue) error {
 
 // Query the statement with arguments. Return records.
 func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
-	list := make([]namedValue, len(args))
+	list := make([]driver.NamedValue, len(args))
 	for i, v := range args {
-		list[i] = namedValue{
+		list[i] = driver.NamedValue{
 			Ordinal: i + 1,
 			Value:   v,
 		}
@@ -1990,7 +1986,7 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	return s.query(context.Background(), list)
 }
 
-func (s *SQLiteStmt) query(ctx context.Context, args []namedValue) (driver.Rows, error) {
+func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
@@ -2020,9 +2016,9 @@ func (r *SQLiteResult) RowsAffected() (int64, error) {
 
 // Exec execute the statement with arguments. Return result object.
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
-	list := make([]namedValue, len(args))
+	list := make([]driver.NamedValue, len(args))
 	for i, v := range args {
-		list[i] = namedValue{
+		list[i] = driver.NamedValue{
 			Ordinal: i + 1,
 			Value:   v,
 		}
@@ -2039,7 +2035,7 @@ func isInterruptErr(err error) bool {
 }
 
 // exec executes a query that doesn't return rows. Attempts to honor context timeout.
-func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result, error) {
+func (s *SQLiteStmt) exec(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	if ctx.Done() == nil {
 		return s.execSync(args)
 	}
@@ -2071,7 +2067,7 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []namedValue) (driver.Result
 	return rv.r, rv.err
 }
 
-func (s *SQLiteStmt) execSync(args []namedValue) (driver.Result, error) {
+func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
 		C.sqlite3_reset(s.s)
 		C.sqlite3_clear_bindings(s.s)
