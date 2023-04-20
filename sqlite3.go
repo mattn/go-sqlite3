@@ -30,7 +30,6 @@ package sqlite3
 #endif
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 
 #ifdef __CYGWIN__
 # include <errno.h>
@@ -91,16 +90,6 @@ _sqlite3_exec(sqlite3* db, const char* pcmd, long long* rowid, long long* change
   return rv;
 }
 
-static const char *
-_trim_leading_spaces(const char *str) {
-  if (str) {
-    while (isspace(*str)) {
-      str++;
-    }
-  }
-  return str;
-}
-
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
 extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
 extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
@@ -121,11 +110,7 @@ _sqlite3_step_row_internal(sqlite3_stmt* stmt, long long* rowid, long long* chan
 static int
 _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
 {
-  int rv = _sqlite3_prepare_v2_blocking(db, zSql, nBytes, ppStmt, pzTail);
-  if (pzTail) {
-    *pzTail = _trim_leading_spaces(*pzTail);
-  }
-  return rv;
+  return _sqlite3_prepare_v2_blocking(db, zSql, nBytes, ppStmt, pzTail);
 }
 
 #else
@@ -148,12 +133,9 @@ _sqlite3_step_row_internal(sqlite3_stmt* stmt, long long* rowid, long long* chan
 static int
 _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
 {
-  int rv = sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
-  if (pzTail) {
-    *pzTail = _trim_leading_spaces(*pzTail);
-  }
-  return rv;
+  return sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
 }
+
 #endif
 
 void _sqlite3_result_text(sqlite3_context* ctx, const char* s) {
@@ -951,46 +933,44 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 	op := pquery // original pointer
 	defer C.free(unsafe.Pointer(op))
 
-	var stmtArgs []driver.NamedValue
 	var tail *C.char
-	s := new(SQLiteStmt) // escapes to the heap so reuse it
-	start := 0
-	for {
-		*s = SQLiteStmt{c: c, cls: true} // reset
-		rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(-1), &s.s, &tail)
+	s := &SQLiteStmt{c: c, cls: true}
+	rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(-1), &s.s, &tail)
+	if rv != C.SQLITE_OK {
+		return nil, c.lastError()
+	}
+	if s.s == nil {
+		return &SQLiteRows{s: &SQLiteStmt{closed: true}, closed: true}, nil
+	}
+	na := s.NumInput()
+	if n := len(args); n != na {
+		s.finalize()
+		if n < na {
+			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args))
+		}
+		return nil, fmt.Errorf("too many args to execute query: want %d got %d", na, len(args))
+	}
+	rows, err := s.query(ctx, args)
+	if err != nil && err != driver.ErrSkip {
+		s.finalize()
+		return rows, err
+	}
+
+	// Consume the rest of the query
+	for pquery = tail; pquery != nil && *pquery != 0; pquery = tail {
+		var stmt *C.sqlite3_stmt
+		rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(-1), &stmt, &tail)
 		if rv != C.SQLITE_OK {
+			rows.Close()
 			return nil, c.lastError()
 		}
-
-		na := s.NumInput()
-		if len(args)-start < na {
-			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args)-start)
+		if stmt != nil {
+			rows.Close()
+			return nil, errors.New("cannot insert multiple commands into a prepared statement") // WARN
 		}
-		// consume the number of arguments used in the current
-		// statement and append all named arguments not contained
-		// therein
-		stmtArgs = append(stmtArgs[:0], args[start:start+na]...)
-		for i := range args {
-			if (i < start || i >= na) && args[i].Name != "" {
-				stmtArgs = append(stmtArgs, args[i])
-			}
-		}
-		for i := range stmtArgs {
-			stmtArgs[i].Ordinal = i + 1
-		}
-		rows, err := s.query(ctx, stmtArgs)
-		if err != nil && err != driver.ErrSkip {
-			s.finalize()
-			return rows, err
-		}
-		start += na
-		if tail == nil || *tail == '\000' {
-			return rows, nil
-		}
-		rows.Close()
-		s.finalize()
-		pquery = tail
 	}
+
+	return rows, nil
 }
 
 // Begin transaction.
@@ -2044,7 +2024,7 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 	return s.query(context.Background(), list)
 }
 
-func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (*SQLiteRows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
