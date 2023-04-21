@@ -1977,7 +1977,8 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 					rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(&v[0]), C.int(ln))
 				}
 			case time.Time:
-				b := []byte(v.Format(SQLiteTimestampFormats[0]))
+				b := make([]byte, 0, 35) // 35 == len(SQLiteTimestampFormats[0])
+				b = v.AppendFormat(b, SQLiteTimestampFormats[0])
 				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 			}
 			if rv != C.SQLITE_OK {
