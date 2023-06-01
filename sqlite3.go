@@ -354,6 +354,7 @@ type SQLiteConn struct {
 	db          *C.sqlite3
 	loc         *time.Location
 	txlock      string
+	txro        bool
 	funcs       []*functionInfo
 	aggregators []*aggInfo
 }
@@ -949,13 +950,19 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
-	return c.begin(context.Background())
+	return c.begin(context.Background(), false)
 }
 
-func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
-	if _, err := c.exec(ctx, c.txlock, nil); err != nil {
+func (c *SQLiteConn) begin(ctx context.Context, readOnly bool) (driver.Tx, error) {
+	txlock := c.txlock
+	if readOnly && c.txro {
+		txlock = "BEGIN"
+	}
+
+	if _, err := c.exec(ctx, txlock, nil); err != nil {
 		return nil, err
 	}
+
 	return &SQLiteTx{c}, nil
 }
 
@@ -1008,7 +1015,7 @@ func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
 //
 //   _txlock=XXX
 //     Specify locking behavior for transactions.  XXX can be "immediate",
-//     "deferred", "exclusive".
+//     "immediate-deferred", "deferred", "exclusive", "exclusive-deferred".
 //
 //   _auto_vacuum=X | _vacuum=X
 //     0 | none - Auto Vacuum disabled
@@ -1078,6 +1085,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	authSalt := ""
 	mutex := C.int(C.SQLITE_OPEN_FULLMUTEX)
 	txlock := "BEGIN"
+	txro := false
 
 	// PRAGMA's
 	autoVacuum := -1
@@ -1150,8 +1158,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			switch strings.ToLower(val) {
 			case "immediate":
 				txlock = "BEGIN IMMEDIATE"
+			case "immediate-deferred":
+				txlock = "BEGIN IMMEDIATE"
+				txro = true
 			case "exclusive":
 				txlock = "BEGIN EXCLUSIVE"
+			case "exclusive-deferred":
+				txlock = "BEGIN EXCLUSIVE"
+				txro = true
 			case "deferred":
 				txlock = "BEGIN"
 			default:
@@ -1502,7 +1516,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	//
 
 	// Create connection to SQLite
-	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
+	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock, txro: txro}
 
 	// Password Cipher has to be registered before authentication
 	if len(authCrypt) > 0 {
