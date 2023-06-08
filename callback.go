@@ -360,11 +360,11 @@ func callbackRetGeneric(ctx *C.sqlite3_context, v reflect.Value) error {
 	}
 
 	cb, err := callbackRet(v.Elem().Type())
-        if err != nil {
-                return err
-        }
+	if err != nil {
+		return err
+	}
 
-        return cb(ctx, v.Elem())
+	return cb(ctx, v.Elem())
 }
 
 func callbackRet(typ reflect.Type) (callbackRetConverter, error) {
@@ -408,4 +408,10 @@ func callbackSyntheticForTests(v reflect.Value, err error) callbackArgConverter 
 	return func(*C.sqlite3_value) (reflect.Value, error) {
 		return v, err
 	}
+}
+
+// NULL is passed into custom functions as a nil byte slice.
+func IsNullCallbackArg(arg interface{}) bool {
+	val, ok := arg.([]byte)
+	return ok && val == nil
 }
