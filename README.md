@@ -484,6 +484,10 @@ extension-functions.c is available as an extension to SQLite, and provides the f
 
 For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/dinedal/go-sqlite3-extension-functions).
 
+## go-sqlite3-stdlib
+
+As an alternative to compiling C extensions like [extension-functions.c](https://www.sqlite.org/contrib) and [sqlean](https://github.com/nalgeon/sqlean) into [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3), this package implements many of these functions (and more from PostgreSQL) in Go.
+
 # FAQ
 
 - Getting insert error while query is opened.
