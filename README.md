@@ -488,6 +488,8 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
 As an alternative to compiling C extensions like [extension-functions.c](https://www.sqlite.org/contrib) and [sqlean](https://github.com/nalgeon/sqlean) into [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3), this package implements many of these functions (and more from PostgreSQL) in Go.
 
+See [multiprocessio/go-sqlite3-stdlib](https://github.com/multiprocessio/go-sqlite3-stdlib) for details.
+
 # FAQ
 
 - Getting insert error while query is opened.
