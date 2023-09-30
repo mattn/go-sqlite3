@@ -1247,6 +1247,56 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestErrorLog(t *testing.T) {
+	var errorLogged bool
+	var capturedErr Error
+	var capturedMsg string
+	err := SetErrorLog(func(err Error, msg string) {
+		errorLogged = true
+		capturedErr = err
+		capturedMsg = msg
+	})
+	if err != nil {
+		t.Fatal("Failed to set error logger:", err)
+	}
+	t.Cleanup(func() {
+		if err := SetErrorLog(nil); err != nil {
+			t.Error("Failed to clear error logger:", err)
+		}
+	})
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(`SELECT "foo"`); err != nil {
+		t.Fatal("SELECT failed:", err)
+	}
+
+	if !errorLogged {
+		t.Fatal("No error was logged")
+	}
+	if capturedErr.Code != SQLITE_WARNING {
+		t.Errorf("Unexpected error log code: %d", capturedErr.Code)
+	}
+	if !strings.Contains(capturedMsg, "double-quoted string literal") {
+		t.Errorf("Unexpected error log message: '%s'", capturedMsg)
+	}
+
+	if err := SetErrorLog(nil); err != nil {
+		t.Fatal("Failed to clear error logger:", err)
+	}
+	errorLogged = false
+	if _, err := db.Exec(`SELECT "bar"`); err != nil {
+		t.Fatal("SELECT after clearing error logger failed:", err)
+	}
+	if errorLogged {
+		t.Error("Error was logged after clearing the logger")
+	}
+}
+
 func TestStringContainingZero(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
