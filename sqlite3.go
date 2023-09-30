@@ -59,6 +59,13 @@ package sqlite3
 # define USE_PWRITE64 1
 #endif
 
+void errorLogTrampoline(void *userPtr, int errCode, const char *msg);
+
+static int
+_sqlite3_config_log() {
+  return sqlite3_config(SQLITE_CONFIG_LOG, &errorLogTrampoline, NULL);
+}
+
 static int
 _sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
 #ifdef SQLITE_OPEN_URI
@@ -263,14 +270,35 @@ func Version() (libVersion string, libVersionNumber int, sourceID string) {
 	return libVersion, libVersionNumber, sourceID
 }
 
+// SetErrorLog registers the given callback to be invoked with a message whenever SQLite detects an
+// anomaly. It is good practice to redirect such messages to the application log. See
+// https://sqlite.org/errlog.html.
+// The provided callback function receives an SQLite error object, denoting the broad category of
+// error, and a message string. It must not call any SQLite functions; in fact, the SQLite docs
+// recommend treating the callback function like a signal handler, minimizing the work done in it.
+// SetErrorLog must not be called while any other goroutine is running that might be calling into
+// the SQLite library.
+func SetErrorLog(callback func(err Error, msg string)) error {
+	errorLogCallback.Store(callback)
+	if rc := C._sqlite3_config_log(); rc == 0 {
+		return nil
+	} else {
+		return errorFromCode(rc)
+	}
+}
+
 const (
+	// some common return codes
+	SQLITE_OK      = C.SQLITE_OK
+	SQLITE_NOTICE  = C.SQLITE_NOTICE
+	SQLITE_WARNING = C.SQLITE_WARNING
+
 	// used by authorizer and pre_update_hook
 	SQLITE_DELETE = C.SQLITE_DELETE
 	SQLITE_INSERT = C.SQLITE_INSERT
 	SQLITE_UPDATE = C.SQLITE_UPDATE
 
-	// used by authorzier - as return value
-	SQLITE_OK     = C.SQLITE_OK
+	// used by authorizer as return value, in addition to SQLITE_OK
 	SQLITE_IGNORE = C.SQLITE_IGNORE
 	SQLITE_DENY   = C.SQLITE_DENY
 
@@ -842,6 +870,13 @@ func lastError(db *C.sqlite3) error {
 		ExtendedCode: ErrNoExtended(extrv),
 		SystemErrno:  systemErrno,
 		err:          errStr,
+	}
+}
+
+func errorFromCode(rc C.int) Error {
+	return Error{
+		Code:         ErrNo(rc & ErrNoMask),
+		ExtendedCode: ErrNoExtended(rc),
 	}
 }
 
