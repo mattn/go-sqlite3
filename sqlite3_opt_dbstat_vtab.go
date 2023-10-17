@@ -1,3 +1,4 @@
+//go:build sqlite_dbstat_vtab || dbstat_vtab
 // +build sqlite_dbstat_vtab dbstat_vtab
 
 package sqlite3
