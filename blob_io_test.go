@@ -26,8 +26,8 @@ type driverConnCallback func(*testing.T, *SQLiteConn)
 
 func blobTestData(t *testing.T, dbname string, rowid int64, blob []byte, c driverConnCallback) {
 
-	// TODO use :memory: for compatibility with SQLite versions < 3.37.0.
-	// Use memdb vfs for more recent versions.
+	// This test uses :memory: for compatibility with SQLite versions < 3.37.0.
+	// Using memdb vfs is the right way to do this for more recent versions.
 
 	// db, err := sql.Open("sqlite3", "file:/"+dbname+"?vfs=memdb")
 	db, err := sql.Open("sqlite3", ":memory:")
