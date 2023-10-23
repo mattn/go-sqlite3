@@ -2083,6 +2083,12 @@ func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 		return nil, err
 	}
 
+	rv = C.sqlite3_reset(s.s)
+	if rv != C.SQLITE_OK {
+		err := s.c.lastError()
+		C.sqlite3_clear_bindings(s.s)
+		return nil, err
+	}
 	return &SQLiteResult{id: int64(rowid), changes: int64(changes)}, nil
 }
 
