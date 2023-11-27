@@ -94,6 +94,6 @@ func TestSerializeDeserialize(t *testing.T) {
 		t.Fatal("Failed to count rows in destination database table", err)
 	}
 	if destRowCount != 1 {
-		t.Fatalf("Destination table does not have the expected records")
+		t.Fatal("Destination table does not have the expected records")
 	}
 }
