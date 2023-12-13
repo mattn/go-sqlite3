@@ -9,7 +9,7 @@
 # -----------------------------------------------------------------------------
 #  Build Stage
 # -----------------------------------------------------------------------------
-FROM golang:alpine AS build
+FROM golang:alpine3.18 AS build
 
 # Important:
 #   Because this is a CGO enabled package, you are required to set it as 1.
