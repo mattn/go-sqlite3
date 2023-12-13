@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"encoding/csv"
 	"encoding/hex"
 	"errors"
 	"flag"
@@ -15,19 +16,30 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/net/html"
 )
 
 var (
 	cFlags  = "-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT=1"
 	cleanup = true
+
+	errNotFound = errors.New("records not found")
+)
+
+const (
+	sqliteAddress = "https://www.sqlite.org"
+	downloadPage  = "download.html"
+
+	sqliteDownloadDataTag = "Download product data for scripts to read"
+	urlColumnName         = "RELATIVE-URL"
+	hashColumnName        = "SHA3-HASH"
 )
 
 func main() {
@@ -88,65 +100,89 @@ func main() {
 	}
 }
 
-func download(prefix string) (content, hash []byte, err error) {
-	year := time.Now().Year()
+func findAddress(n *html.Node, prefix string) (string, string, error) {
+	if n.Type == html.CommentNode && strings.Contains(n.Data, sqliteDownloadDataTag) {
+		data := strings.TrimSpace(n.Data[strings.Index(n.Data, "\n")+1:])
+		r := csv.NewReader(strings.NewReader(data))
+		records, err := r.ReadAll()
+		if err != nil {
+			return "", "", err
+		}
 
-	site := "https://www.sqlite.org/download.html"
-	//fmt.Printf("scraping %v\n", site)
-	doc, err := goquery.NewDocument(site)
+		for i, r := range records {
+			if len(r) != 5 {
+				return "", "", fmt.Errorf("expected record of length 5, got: %v", r)
+			}
+			if i == 0 && (r[2] != urlColumnName || r[4] != hashColumnName) {
+				return "", "", fmt.Errorf("unexpected columns: %v", r)
+			}
+			if strings.Contains(r[2], prefix) {
+				return r[2], r[4], nil
+			}
+		}
+	}
+
+	mainErr := errNotFound
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		path, hash, err := findAddress(c, prefix)
+		if err == nil {
+			return path, hash, nil
+		}
+		if err != errNotFound {
+			mainErr = err
+		}
+	}
+	return "", "", mainErr
+}
+
+func download(prefix string) (content, hash []byte, err error) {
+	u, err := url.Parse(sqliteAddress)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	url, hashString := "", ""
-	doc.Find("tr").EachWithBreak(func(_ int, s *goquery.Selection) bool {
-		found := false
-		s.Find("a").Each(func(_ int, s *goquery.Selection) {
-			if strings.HasPrefix(s.Text(), prefix) {
-				found = true
-				url = fmt.Sprintf("https://www.sqlite.org/%d/", year) + s.Text()
-			}
-		})
-		if found {
-			s.Find("td").Each(func(_ int, s *goquery.Selection) {
-				text := s.Text()
-				split := strings.Split(text, "(sha3: ")
-				if len(split) < 2 {
-					return
-				}
-				text = split[1]
-				hashString = strings.Split(text, ")")[0]
-			})
-		}
-		return !found
-	})
+	dwnldPage, err := http.Get(u.JoinPath(downloadPage).String())
+	if err != nil {
+		return nil, nil, err
+	}
+	defer dwnldPage.Body.Close()
+	node, err := html.Parse(dwnldPage.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	relPath, hashString, err := findAddress(node, prefix)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to find download info in the document: %w", err)
+	}
 
 	targetHash, err := hex.DecodeString(hashString)
 	if err != nil || len(targetHash) != 32 {
-		return nil, nil, fmt.Errorf("unable to find valid sha3-256 hash on sqlite.org: %q", hashString)
+		return nil, nil, fmt.Errorf("unable to find valid sha3-256 hash on download page: %q", hashString)
 	}
 
-	if url == "" {
-		return nil, nil, fmt.Errorf("unable to find prefix '%s' on sqlite.org", prefix)
+	if relPath == "" {
+		return nil, nil, fmt.Errorf("unable to find prefix '%s' on download page", prefix)
 	}
 
-	fmt.Printf("Downloading %v\n", url)
-	resp, err := http.Get(url)
+	src := u.JoinPath(relPath).String()
+	fmt.Printf("Downloading %v\n", src)
+	resp, err := http.Get(src)
 	if err != nil {
 		return nil, nil, err
 	}
+	defer resp.Body.Close()
 
 	// Ready Body Content
 	shasum := sha3.New256()
 	content, err = ioutil.ReadAll(io.TeeReader(resp.Body, shasum))
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, nil, err
 	}
 
 	computedHash := shasum.Sum(nil)
 	if !bytes.Equal(targetHash, computedHash) {
-		return nil, nil, fmt.Errorf("invalid hash of file downloaded from %q: got %x instead of %x", url, computedHash, targetHash)
+		return nil, nil, fmt.Errorf("invalid hash of file downloaded from %q: got %x instead of %x", src, computedHash, targetHash)
 	}
 
 	return content, computedHash, nil
