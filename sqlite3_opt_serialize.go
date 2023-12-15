@@ -1,12 +1,16 @@
-// +build !libsqlite3 sqlite_serialize
+// +build !libsqlite3,!libsqlcipher sqlite_serialize
 
 package sqlite3
 
 /*
-#ifndef USE_LIBSQLITE3
-#include <sqlite3-binding.h>
-#else
+#if defined(USE_LIBSQLITE3)
 #include <sqlite3.h>
+#elif defined(USE_LIBSQLCIPHER)
+#include <sqlcipher/sqlite3.h>
+#elif defined(USE_SQLCIPHER)
+#include "sqlcipher-binding.h"
+#else
+#include "sqlite3-binding.h"
 #endif
 #include <stdlib.h>
 #include <stdint.h>
