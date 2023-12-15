@@ -1128,7 +1128,7 @@ func TestQueryer(t *testing.T) {
 		if err != nil {
 			t.Error("Failed to db.Query:", err)
 		}
-		if id != n + 1 {
+		if id != n+1 {
 			t.Error("Failed to db.Query: not matched results")
 		}
 		n = n + 1
@@ -1439,6 +1439,70 @@ func TestFunctionRegistration(t *testing.T) {
 	}
 }
 
+func TestNullCallbackArg(t *testing.T) {
+	sql.Register("sqlite3_NullCallbackArg", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			return conn.RegisterFunc("isNullArg", IsNullCallbackArg, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_NullCallbackArg", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE test (id integer not null primary key, col_int int, col_float float, col_blob blob, col_bool bool)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = db.Exec("insert into test values (1, NULL, NULL, NULL, NULL), (2, ?, ?, ?, ?)", 1, 1.5, []byte("blob"), false)
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
+	_, err = db.Exec("insert into test values (3, NULL, ?, NULL, ?)", 1.5, true)
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
+	_, err = db.Exec("insert into test values (4, NULL, NULL, ?, NULL)", []byte{})
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
+
+	tests := []struct {
+		id        int64
+		nullInt   bool
+		nullFloat bool
+		nullBlob  bool
+		nullBool  bool
+	}{
+		{1, true, true, true, true},
+		{2, false, false, false, false},
+		{3, true, false, true, false},
+		{4, true, true, false, true},
+	}
+
+	for _, test := range tests {
+		var retInt, retFloat, retBlob, retBool bool
+		err = db.QueryRow("select isNullArg(col_int), isNullArg(col_float), isNullArg(col_blob), isNullArg(col_bool) from test where id = $1", test.id).Scan(&retInt, &retFloat, &retBlob, &retBool)
+		if err != nil {
+			t.Fatal("Query failed:", err)
+		}
+		if retInt != test.nullInt {
+			t.Fatalf("isNullArg returned wrong value for col_int, got %v, want %v", retInt, test.nullInt)
+		}
+		if retFloat != test.nullFloat {
+			t.Fatalf("isNullArg returned wrong value for col_float, got %v, want %v", retFloat, test.nullFloat)
+		}
+		if retBlob != test.nullBlob {
+			t.Fatalf("isNullArg returned wrong value for col_blob, got %v, want %v", retBlob, test.nullBlob)
+		}
+		if retBool != test.nullBool {
+			t.Fatalf("isNullArg returned wrong value for col_bool, got %v, want %v", retBool, test.nullBlob)
+		}
+	}
+}
+
 type sumAggregator int64
 
 func (s *sumAggregator) Step(x int64) {
@@ -1497,28 +1561,28 @@ func TestAggregatorRegistration(t *testing.T) {
 }
 
 type mode struct {
-        counts   map[interface{}]int
-        top      interface{}
-        topCount int
+	counts   map[interface{}]int
+	top      interface{}
+	topCount int
 }
 
 func newMode() *mode {
-        return &mode{
-                counts: map[interface{}]int{},
-        }
+	return &mode{
+		counts: map[interface{}]int{},
+	}
 }
 
 func (m *mode) Step(x interface{}) {
-        m.counts[x]++
-        c := m.counts[x]
-        if c > m.topCount {
-                m.top = x
-                m.topCount = c
-        }
+	m.counts[x]++
+	c := m.counts[x]
+	if c > m.topCount {
+		m.top = x
+		m.topCount = c
+	}
 }
 
 func (m *mode) Done() interface{} {
-        return m.top
+	return m.top
 }
 
 func TestAggregatorRegistration_GenericReturn(t *testing.T) {
@@ -1534,19 +1598,19 @@ func TestAggregatorRegistration_GenericReturn(t *testing.T) {
 	defer db.Close()
 
 	_, err = db.Exec("create table foo (department integer, profits integer)")
-        if err != nil {
-                t.Fatal("Failed to create table:", err)
-        }
-        _, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
-        if err != nil {
-                t.Fatal("Failed to insert records:", err)
-        }
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	_, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
 
 	var mode int
-        err = db.QueryRow("select mode(profits) from foo").Scan(&mode)
-        if err != nil {
-                t.Fatal("MODE query error:", err)
-        }
+	err = db.QueryRow("select mode(profits) from foo").Scan(&mode)
+	if err != nil {
+		t.Fatal("MODE query error:", err)
+	}
 
 	if mode != 20 {
 		t.Fatal("Got incorrect mode. Wanted 20, got: ", mode)
