@@ -1,4 +1,5 @@
 #include <pcre.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 #include <sqlite3ext.h>
@@ -6,6 +7,7 @@
 SQLITE_EXTENSION_INIT1
 static void regexp_func(sqlite3_context *context, int argc, sqlite3_value **argv) {
   if (argc >= 2) {
+    uint8_t res = 1;
     const char *target  = (const char *)sqlite3_value_text(argv[1]);
     const char *pattern = (const char *)sqlite3_value_text(argv[0]);
     const char* errstr = NULL;
@@ -17,12 +19,12 @@ static void regexp_func(sqlite3_context *context, int argc, sqlite3_value **argv
       sqlite3_result_error(context, errstr, 0);
       return;
     }
-    rc = pcre_exec(re, NULL, target, strlen(target), 0, 0, vec, 500); 
+    rc = pcre_exec(re, NULL, target, strlen(target), 0, 0, vec, 500);
     if (rc <= 0) {
-      sqlite3_result_int(context, 0);
-      return;
+      res = 0;
     }
-    sqlite3_result_int(context, 1);
+    sqlite3_result_int(context, res);
+    pcre_free(re);
   }
 }
 
