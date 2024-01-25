@@ -45,7 +45,7 @@ func TestBeginTxCancel(t *testing.T) {
 				}
 			}()
 
-			err = conn.Raw(func(driverConn interface{}) error {
+			err = conn.Raw(func(driverConn any) error {
 				d, ok := driverConn.(driver.ConnBeginTx)
 				if !ok {
 					t.Fatal("unexpected: wrong type")
@@ -96,7 +96,7 @@ func TestStmtReadonly(t *testing.T) {
 		}
 
 		var ro bool
-		c.Raw(func(dc interface{}) error {
+		c.Raw(func(dc any) error {
 			stmt, err := dc.(*SQLiteConn).Prepare(query)
 			if err != nil {
 				return err

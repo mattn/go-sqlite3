@@ -18,8 +18,8 @@ type preUpdateHookDataForTest struct {
 	tableName    string
 	count        int
 	op           int
-	oldRow       []interface{}
-	newRow       []interface{}
+	oldRow       []any
+	newRow       []any
 }
 
 func TestPreUpdateHook(t *testing.T) {
@@ -29,7 +29,7 @@ func TestPreUpdateHook(t *testing.T) {
 		ConnectHook: func(conn *SQLiteConn) error {
 			conn.RegisterPreUpdateHook(func(data SQLitePreUpdateData) {
 				eval := -1
-				oldRow := []interface{}{eval}
+				oldRow := []any{eval}
 				if data.Op != SQLITE_INSERT {
 					err := data.Old(oldRow...)
 					if err != nil {
@@ -38,7 +38,7 @@ func TestPreUpdateHook(t *testing.T) {
 				}
 
 				eval2 := -1
-				newRow := []interface{}{eval2}
+				newRow := []any{eval2}
 				if data.Op != SQLITE_DELETE {
 					err := data.New(newRow...)
 					if err != nil {
@@ -47,7 +47,7 @@ func TestPreUpdateHook(t *testing.T) {
 				}
 
 				// tests dest bound checks in loop
-				var tooSmallRow []interface{}
+				var tooSmallRow []any
 				if data.Op != SQLITE_INSERT {
 					err := data.Old(tooSmallRow...)
 					if err != nil {

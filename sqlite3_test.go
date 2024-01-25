@@ -625,7 +625,7 @@ func TestTimestamp(t *testing.T) {
 	timestamp3 := time.Date(2012, time.November, 4, 0, 0, 0, 0, time.UTC)
 	tzTest := time.FixedZone("TEST", -9*3600-13*60)
 	tests := []struct {
-		value    interface{}
+		value    any
 		expected time.Time
 	}{
 		{"nonsense", time.Time{}},
@@ -827,7 +827,7 @@ func TestFloat32(t *testing.T) {
 		t.Fatal("Unable to query results:", err)
 	}
 
-	var id interface{}
+	var id any
 	if err := rows.Scan(&id); err != nil {
 		t.Fatal("Unable to scan results:", err)
 	}
@@ -854,7 +854,7 @@ func TestNull(t *testing.T) {
 		t.Fatal("Unable to query results:", err)
 	}
 
-	var v interface{}
+	var v any
 	if err := rows.Scan(&v); err != nil {
 		t.Fatal("Unable to scan results:", err)
 	}
@@ -998,7 +998,7 @@ func TestTimezoneConversion(t *testing.T) {
 		timestamp2 := time.Date(2006, time.January, 2, 15, 4, 5, 123456789, time.UTC)
 		timestamp3 := time.Date(2012, time.November, 4, 0, 0, 0, 0, time.UTC)
 		tests := []struct {
-			value    interface{}
+			value    any
 			expected time.Time
 		}{
 			{"nonsense", time.Time{}.In(loc)},
@@ -1291,7 +1291,7 @@ const CurrentTimeStamp = "2006-01-02 15:04:05"
 
 type TimeStamp struct{ *time.Time }
 
-func (t TimeStamp) Scan(value interface{}) error {
+func (t TimeStamp) Scan(value any) error {
 	var err error
 	switch v := value.(type) {
 	case string:
@@ -1335,7 +1335,7 @@ func TestFunctionRegistration(t *testing.T) {
 	regex := func(re, s string) (bool, error) {
 		return regexp.MatchString(re, s)
 	}
-	generic := func(a interface{}) int64 {
+	generic := func(a any) int64 {
 		switch a.(type) {
 		case int64:
 			return 1
@@ -1356,7 +1356,7 @@ func TestFunctionRegistration(t *testing.T) {
 		}
 		return ret
 	}
-	variadicGeneric := func(a ...interface{}) int64 {
+	variadicGeneric := func(a ...any) int64 {
 		return int64(len(a))
 	}
 
@@ -1406,7 +1406,7 @@ func TestFunctionRegistration(t *testing.T) {
 
 	ops := []struct {
 		query    string
-		expected interface{}
+		expected any
 	}{
 		{"SELECT addi8_16_32(1,2)", int32(3)},
 		{"SELECT addi64(1,2)", int64(3)},
@@ -1497,18 +1497,18 @@ func TestAggregatorRegistration(t *testing.T) {
 }
 
 type mode struct {
-        counts   map[interface{}]int
-        top      interface{}
+        counts   map[any]int
+        top      any
         topCount int
 }
 
 func newMode() *mode {
         return &mode{
-                counts: map[interface{}]int{},
+                counts: map[any]int{},
         }
 }
 
-func (m *mode) Step(x interface{}) {
+func (m *mode) Step(x any) {
         m.counts[x]++
         c := m.counts[x]
         if c > m.topCount {
@@ -1517,7 +1517,7 @@ func (m *mode) Step(x interface{}) {
         }
 }
 
-func (m *mode) Done() interface{} {
+func (m *mode) Done() any {
         return m.top
 }
 
@@ -1871,7 +1871,7 @@ func TestNonColumnString(t *testing.T) {
 	}
 	defer db.Close()
 
-	var x interface{}
+	var x any
 	if err := db.QueryRow("SELECT 'hello'").Scan(&x); err != nil {
 		t.Fatal(err)
 	}
@@ -2113,7 +2113,7 @@ var benchmarks = []testing.InternalBenchmark{
 	{Name: "BenchmarkStmtRows", F: benchmarkStmtRows},
 }
 
-func (db *TestDB) mustExec(sql string, args ...interface{}) sql.Result {
+func (db *TestDB) mustExec(sql string, args ...any) sql.Result {
 	res, err := db.Exec(sql, args...)
 	if err != nil {
 		db.Fatalf("Error running %q: %v", sql, err)

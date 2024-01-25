@@ -29,7 +29,7 @@ func TestCryptEncoders(t *testing.T) {
 	}
 
 	for _, e := range tests {
-		var fn func(pass []byte, hash interface{}) []byte
+		var fn func(pass []byte, hash any) []byte
 		switch e.enc {
 		case "sha1":
 			fn = CryptEncoderSHA1
