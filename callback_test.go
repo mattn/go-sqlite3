@@ -3,6 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+//go:build cgo
 // +build cgo
 
 package sqlite3
@@ -53,7 +54,7 @@ func TestCallbackArgCast(t *testing.T) {
 
 func TestCallbackConverters(t *testing.T) {
 	tests := []struct {
-		v   interface{}
+		v   any
 		err bool
 	}{
 		// Unfortunately, we can't tell which converter was returned,
@@ -104,7 +105,7 @@ func TestCallbackConverters(t *testing.T) {
 }
 
 func TestCallbackReturnAny(t *testing.T) {
-	udf := func() interface{} {
+	udf := func() any {
 		return 1
 	}
 

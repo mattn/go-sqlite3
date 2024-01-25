@@ -3,6 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+//go:build go1.13 && cgo
 // +build go1.13,cgo
 
 package sqlite3
@@ -45,7 +46,7 @@ func TestBeginTxCancel(t *testing.T) {
 				}
 			}()
 
-			err = conn.Raw(func(driverConn interface{}) error {
+			err = conn.Raw(func(driverConn any) error {
 				d, ok := driverConn.(driver.ConnBeginTx)
 				if !ok {
 					t.Fatal("unexpected: wrong type")
@@ -96,7 +97,7 @@ func TestStmtReadonly(t *testing.T) {
 		}
 
 		var ro bool
-		c.Raw(func(dc interface{}) error {
+		c.Raw(func(dc any) error {
 			stmt, err := dc.(*SQLiteConn).Prepare(query)
 			if err != nil {
 				return err
