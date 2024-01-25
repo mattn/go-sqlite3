@@ -607,10 +607,9 @@ func (c *SQLiteConn) RegisterAuthorizer(callback func(int, string, string, strin
 // RegisterFunc makes a Go function available as a SQLite function.
 //
 // The Go function can have arguments of the following types: any
-// numeric type except complex, bool, []byte, string and
-// interface{}. interface{} arguments are given the direct translation
-// of the SQLite data type: int64 for INTEGER, float64 for FLOAT,
-// []byte for BLOB, string for TEXT.
+// numeric type except complex, bool, []byte, string and any.
+// any arguments are given the direct translation of the SQLite data type:
+// int64 for INTEGER, float64 for FLOAT, []byte for BLOB, string for TEXT.
 //
 // The function can additionally be variadic, as long as the type of
 // the variadic argument is one of the above.
@@ -620,7 +619,7 @@ func (c *SQLiteConn) RegisterAuthorizer(callback func(int, string, string, strin
 // optimizations in its queries.
 //
 // See _example/go_custom_funcs for a detailed example.
-func (c *SQLiteConn) RegisterFunc(name string, impl interface{}, pure bool) error {
+func (c *SQLiteConn) RegisterFunc(name string, impl any, pure bool) error {
 	var fi functionInfo
 	fi.f = reflect.ValueOf(impl)
 	t := fi.f.Type()
@@ -702,7 +701,7 @@ func sqlite3CreateFunction(db *C.sqlite3, zFunctionName *C.char, nArg C.int, eTe
 // return an error in addition to their other return values.
 //
 // See _example/go_custom_funcs for a detailed example.
-func (c *SQLiteConn) RegisterAggregator(name string, impl interface{}, pure bool) error {
+func (c *SQLiteConn) RegisterAggregator(name string, impl any, pure bool) error {
 	var ai aggInfo
 	ai.constructor = reflect.ValueOf(impl)
 	t := ai.constructor.Type()

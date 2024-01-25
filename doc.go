@@ -95,7 +95,7 @@ You can also use database/sql.Conn.Raw (Go >= 1.13):
 	conn, err := db.Conn(context.Background())
 	// if err != nil { ... }
 	defer conn.Close()
-	err = conn.Raw(func (driverConn interface{}) error {
+	err = conn.Raw(func (driverConn any) error {
 		sqliteConn := driverConn.(*sqlite3.SQLiteConn)
 		// ... use sqliteConn
 	})

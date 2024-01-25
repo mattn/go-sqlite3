@@ -54,10 +54,10 @@ func (d *SQLitePreUpdateData) Count() int {
 	return int(C.sqlite3_preupdate_count(d.Conn.db))
 }
 
-func (d *SQLitePreUpdateData) row(dest []interface{}, new bool) error {
+func (d *SQLitePreUpdateData) row(dest []any, new bool) error {
 	for i := 0; i < d.Count() && i < len(dest); i++ {
 		var val *C.sqlite3_value
-		var src interface{}
+		var src any
 
 		// Initially I tried making this just a function pointer argument, but
 		// it's absurdly complicated to pass C function pointers.
@@ -95,7 +95,7 @@ func (d *SQLitePreUpdateData) row(dest []interface{}, new bool) error {
 
 // Old populates dest with the row data to be replaced. This works similar to
 // database/sql's Rows.Scan()
-func (d *SQLitePreUpdateData) Old(dest ...interface{}) error {
+func (d *SQLitePreUpdateData) Old(dest ...any) error {
 	if d.Op == SQLITE_INSERT {
 		return errors.New("There is no old row for INSERT operations")
 	}
@@ -104,7 +104,7 @@ func (d *SQLitePreUpdateData) Old(dest ...interface{}) error {
 
 // New populates dest with the replacement row data. This works similar to
 // database/sql's Rows.Scan()
-func (d *SQLitePreUpdateData) New(dest ...interface{}) error {
+func (d *SQLitePreUpdateData) New(dest ...any) error {
 	if d.Op == SQLITE_DELETE {
 		return errors.New("There is no new row for DELETE operations")
 	}

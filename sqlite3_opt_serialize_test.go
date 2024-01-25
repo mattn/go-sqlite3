@@ -54,7 +54,7 @@ func TestSerializeDeserialize(t *testing.T) {
 	defer srcConn.Close()
 
 	var serialized []byte
-	if err := srcConn.Raw(func(raw interface{}) error {
+	if err := srcConn.Raw(func(raw any) error {
 		var err error
 		serialized, err = raw.(*SQLiteConn).Serialize("")
 		return err
@@ -80,7 +80,7 @@ func TestSerializeDeserialize(t *testing.T) {
 	}
 	defer destConn.Close()
 
-	if err := destConn.Raw(func(raw interface{}) error {
+	if err := destConn.Raw(func(raw any) error {
 		return raw.(*SQLiteConn).Deserialize(serialized, "")
 	}); err != nil {
 		t.Fatal("Failed to deserialize source database:", err)

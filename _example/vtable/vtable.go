@@ -93,7 +93,7 @@ func (vc *ghRepoCursor) Column(c *sqlite3.SQLiteContext, col int) error {
 	return nil
 }
 
-func (vc *ghRepoCursor) Filter(idxNum int, idxStr string, vals []interface{}) error {
+func (vc *ghRepoCursor) Filter(idxNum int, idxStr string, vals []any) error {
 	vc.index = 0
 	return nil
 }
