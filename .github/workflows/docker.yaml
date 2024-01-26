@@ -17,6 +17,5 @@ jobs:
 
       - name: Run example - simple
         run: |
-          cd ./_example/simple
-          docker build -t simple .
+          docker build -t simple -f ./_example/simple/Dockerfile .
           docker run simple | grep 99\ こんにちは世界099
