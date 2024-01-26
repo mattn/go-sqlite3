@@ -1,0 +1,115 @@
+name: Go
+
+on: [push, pull_request]
+
+jobs:
+
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go: ['1.19', '1.20', '1.21']
+      fail-fast: false
+    env:
+      OS: ${{ matrix.os }}
+      GO: ${{ matrix.go }}
+    steps:
+      - if: startsWith(matrix.os, 'macos')
+        run: brew update
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Get Build Tools
+        run: |
+          GO111MODULE=on go install github.com/ory/go-acc@latest
+
+      - name: Add $GOPATH/bin to $PATH
+        run: |
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/checkout@v2
+
+      - name: 'Tags: default'
+        run: go-acc . -- -race -v -tags ""
+
+      - name: 'Tags: libsqlite3'
+        run: go-acc . -- -race -v -tags "libsqlite3"
+
+      - name: 'Tags: full'
+        run: go-acc . -- -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_column_metadata sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_math_functions sqlite_os_trace sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_unlock_notify sqlite_userauth sqlite_vacuum_incr sqlite_vtable"
+
+      - name: 'Tags: vacuum'
+        run: go-acc . -- -race -v -tags "sqlite_vacuum_full"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          env_vars: OS,GO
+          file: coverage.txt
+
+  test-windows:
+    name: Test for Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      matrix:
+        go: ['1.19', '1.20', '1.21']
+      fail-fast: false
+    env:
+      OS: windows-latest
+      GO: ${{ matrix.go }}
+    steps:
+      - uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-sqlite3
+          msystem: MINGW64
+          path-type: inherit
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Add $GOPATH/bin to $PATH
+        run: |
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        shell: msys2 {0}
+
+      - uses: actions/checkout@v2
+
+      - name: 'Tags: default'
+        run: go build -race -v -tags ""
+        shell: msys2 {0}
+
+      - name: 'Tags: libsqlite3'
+        run: go build -race -v -tags "libsqlite3"
+        shell: msys2 {0}
+
+      - name: 'Tags: full'
+        run: |
+          echo 'skip this test'
+          echo go build -race -v -tags "sqlite_allow_uri_authority sqlite_app_armor sqlite_column_metadata sqlite_foreign_keys sqlite_fts5 sqlite_icu sqlite_introspect sqlite_json sqlite_math_functions sqlite_preupdate_hook sqlite_secure_delete sqlite_see sqlite_stat4 sqlite_trace sqlite_unlock_notify sqlite_userauth sqlite_vacuum_incr sqlite_vtable"
+        shell: msys2 {0}
+
+      - name: 'Tags: vacuum'
+        run: go build -race -v -tags "sqlite_vacuum_full"
+        shell: msys2 {0}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          env_vars: OS,GO
+          file: coverage.txt
+
+# based on: github.com/koron-go/_skeleton/.github/workflows/go.yml
