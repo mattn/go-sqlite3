@@ -1553,6 +1553,140 @@ func TestAggregatorRegistration_GenericReturn(t *testing.T) {
 	}
 }
 
+type sumInt struct {
+	values []int64
+	sum    int64
+}
+
+func newSumInt() *sumInt {
+	return &sumInt{
+		sum: int64(0),
+	}
+}
+
+func (sumInt *sumInt) Step(x int64) {
+	sumInt.sum += x
+}
+
+func (sumInt *sumInt) Inverse(x int64) {
+	sumInt.sum -= x
+}
+
+func (sumInt *sumInt) Value() int64 {
+	return sumInt.sum
+}
+
+func (sumInt *sumInt) Done() int64 {
+	return sumInt.sum
+}
+
+func TestWindowAggregatorRegistration_GenericReturn(t *testing.T) {
+	sql.Register("sqlite3_WindowAggregatorRegistration_GenericReturn", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			return conn.RegisterWindowAggregator("sumInt", newSumInt, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_WindowAggregatorRegistration_GenericReturn", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("create table foo (department integer, profits integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	_, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
+
+	rows, err := db.Query("select department, sumInt(profits) over (partition by department) from foo")
+	if err != nil {
+		t.Fatal("sumInt query error:", err)
+	}
+
+	for rows.Next() {
+		var department int64
+		var sum int64
+		if err = rows.Scan(&department, &sum); err != nil {
+			t.Fatalf("Reading row failed for: %s", err)
+		}
+		if department != 1 && department != 2 {
+			t.Fatalf("Found unexpected department: [%d]", department)
+		}
+		if department == 1 && sum != 75 {
+			t.Fatalf("Got incorrect sum. Wanted 55 got: [%d]", sum)
+		}
+		if department == 2 && sum != 177 {
+			t.Fatalf("Got incorrect sum. Wanted 177 got: [%d]", sum)
+		}
+	}
+}
+
+type lead struct {
+	values []int64
+	next   int64
+}
+
+func newlead() *lead {
+	return &lead{
+		values: []int64{},
+	}
+}
+
+func (lead *lead) Step(x int64) {
+	lead.values = append(lead.values, x)
+}
+
+func (lead *lead) Inverse(x int64) {
+	lead.values = lead.values[:len(lead.values)-1]
+}
+
+func (lead *lead) Value() int64 {
+	return lead.values[len(lead.values)-1]
+}
+
+func (lead *lead) Done() int64 {
+	return lead.values[len(lead.values)-1]
+}
+
+func TestWindowAggregatorRegistration_GenericReturnLead(t *testing.T) {
+	sql.Register("sqlite3_WindowAggregatorRegistration_GenericReturn", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			return conn.RegisterWindowAggregator("test_lead", newlead, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_WindowAggregatorRegistration_GenericReturn", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("create table foo (department integer, profits integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	_, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
+
+	rows, err := db.Query("select department, profits, test_lead(profits) over (partition by department order by profits asc rows between current row and 1 following) from foo")
+	if err != nil {
+		t.Fatal("sumInt query error:", err)
+	}
+
+	for rows.Next() {
+		var department int64
+		var profits int64
+		var sum int64
+		if err = rows.Scan(&department, &profits, &sum); err != nil {
+			t.Fatalf("Reading row failed for: %s", err)
+		}
+		fmt.Println(department, profits, sum)
+	}
+}
 func rot13(r rune) rune {
 	switch {
 	case r >= 'A' && r <= 'Z':
