@@ -4,8 +4,9 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-//go:build sqlite_preupdate_hook
-// +build sqlite_preupdate_hook
+// Segment patch: Removed build tags here that only compiled this file in the
+// presence of a sqlite_preupdate_hook command. This ensures backward
+// compatibility with Rick Branson's 2018 patch.
 
 package sqlite3
 

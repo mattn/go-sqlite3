@@ -3,13 +3,27 @@ go-sqlite3
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/mattn/go-sqlite3.svg)](https://pkg.go.dev/github.com/mattn/go-sqlite3)
 [![GitHub Actions](https://github.com/mattn/go-sqlite3/workflows/Go/badge.svg)](https://github.com/mattn/go-sqlite3/actions?query=workflow%3AGo)
-[![Financial Contributors on Open Collective](https://opencollective.com/mattn-go-sqlite3/all/badge.svg?label=financial+contributors)](https://opencollective.com/mattn-go-sqlite3) 
+[![Financial Contributors on Open Collective](https://opencollective.com/mattn-go-sqlite3/all/badge.svg?label=financial+contributors)](https://opencollective.com/mattn-go-sqlite3)
 [![codecov](https://codecov.io/gh/mattn/go-sqlite3/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-sqlite3)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
 
 Latest stable version is v1.14 or later, not v2.
 
 ~~**NOTE:** The increase to v2 was an accident. There were no major changes or features.~~
+
+## Patch status
+
+This is Segment's fork of mattn/go-sqlite3. Prior to February 2024, this fork
+contained several changes:
+
+- Fix to a race condition; this was added in 2018 and merged upstream.
+- Add a pre-update hook; this was merged _behind a build tag_
+- Various changes to update the build infrastructure or the sqlite version.
+
+As of February 2024, _the only change from upstream removes the build tag_ from
+the pre-update hook. This is to preserve backward compatibility, and to allow us
+to update our Segment internal code without needing to add a Go build tag to
+every project that includes this library.
 
 # Description
 
@@ -166,7 +180,7 @@ go build -tags "icu json1 fts5 secure_delete"
 | App Armor | sqlite_app_armor | When defined, this C-preprocessor macro activates extra code that attempts to detect misuse of the SQLite API, such as passing in NULL pointers to required parameters or using objects after they have been destroyed. <br><br>App Armor is not available under `Windows`. |
 | Disable Load Extensions | sqlite_omit_load_extension | Loading of external extensions is enabled by default.<br><br>To disable extension loading add the build tag `sqlite_omit_load_extension`. |
 | Enable Serialization with `libsqlite3` | sqlite_serialize | Serialization and deserialization of a SQLite database is available by default, unless the build tag `libsqlite3` is set.<br><br>To enable this functionality even if `libsqlite3` is set, add the build tag `sqlite_serialize`. |
-| Foreign Keys | sqlite_foreign_keys | This macro determines whether enforcement of foreign key constraints is enabled or disabled by default for new database connections.<br><br>Each database connection can always turn enforcement of foreign key constraints on and off and run-time using the foreign_keys pragma.<br><br>Enforcement of foreign key constraints is normally off by default, but if this compile-time parameter is set to 1, enforcement of foreign key constraints will be on by default | 
+| Foreign Keys | sqlite_foreign_keys | This macro determines whether enforcement of foreign key constraints is enabled or disabled by default for new database connections.<br><br>Each database connection can always turn enforcement of foreign key constraints on and off and run-time using the foreign_keys pragma.<br><br>Enforcement of foreign key constraints is normally off by default, but if this compile-time parameter is set to 1, enforcement of foreign key constraints will be on by default |
 | Full Auto Vacuum | sqlite_vacuum_full | Set the default auto vacuum to full |
 | Incremental Auto Vacuum | sqlite_vacuum_incr | Set the default auto vacuum to incremental |
 | Full Text Search Engine | sqlite_fts5 | When this option is defined in the amalgamation, versions 5 of the full-text search engine (fts5) is added to the build automatically |
@@ -206,7 +220,7 @@ To compile for `ARM` use the following environment:
 ```bash
 env CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++ \
     CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 \
-    go build -v 
+    go build -v
 ```
 
 Additional information:
@@ -303,7 +317,7 @@ go build -tags "darwin arm64"
 If you wish to link directly to libsqlite3, use the `libsqlite3` build tag:
 
 ```
-# x86 
+# x86
 go build -tags "libsqlite3 darwin amd64"
 # ARM
 go build -tags "libsqlite3 darwin arm64"
@@ -513,9 +527,9 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
     specified `":memory:"`, that connection will see a brand new database. A
     workaround is to use `"file::memory:?cache=shared"` (or `"file:foobar?mode=memory&cache=shared"`). Every
     connection to this string will point to the same in-memory database.
-    
+
     Note that if the last database connection in the pool closes, the in-memory database is deleted. Make sure the [max idle connection limit](https://golang.org/pkg/database/sql/#DB.SetMaxIdleConns) is > 0, and the [connection lifetime](https://golang.org/pkg/database/sql/#DB.SetConnMaxLifetime) is infinite.
-    
+
     For more information see:
     * [#204](https://github.com/mattn/go-sqlite3/issues/204)
     * [#511](https://github.com/mattn/go-sqlite3/issues/511)
@@ -549,7 +563,7 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
     ```
 
     Next, please set the database connections of the SQL package to 1:
-    
+
     ```go
     db.SetMaxOpenConns(1)
     ```
