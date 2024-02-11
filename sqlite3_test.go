@@ -1651,12 +1651,12 @@ func (lead *lead) Done() interface{} {
 }
 
 func TestWindowAggregatorRegistration_GenericReturnLead(t *testing.T) {
-	sql.Register("sqlite3_WindowAggregatorRegistration_GenericReturn", &SQLiteDriver{
+	sql.Register("sqlite3_WindowAggregatorRegistration_GenericReturnLead", &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
 			return conn.RegisterAggregator("test_lead", newlead, true)
 		},
 	})
-	db, err := sql.Open("sqlite3_WindowAggregatorRegistration_GenericReturn", ":memory:")
+	db, err := sql.Open("sqlite3_WindowAggregatorRegistration_GenericReturnLead", ":memory:")
 	if err != nil {
 		t.Fatal("Failed to open database:", err)
 	}
