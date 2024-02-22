@@ -212,6 +212,7 @@ import (
 	"io"
 	"net/url"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -2145,11 +2146,14 @@ func (rc *SQLiteRows) Columns() []string {
 	return rc.cols
 }
 
+var lengthSuffixRegexp = regexp.MustCompile(`\(\d+\)\z`)
+
 func (rc *SQLiteRows) declTypes() []string {
 	if rc.s.s != nil && rc.decltype == nil {
 		rc.decltype = make([]string, rc.nc)
 		for i := 0; i < rc.nc; i++ {
 			rc.decltype[i] = strings.ToLower(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
+			rc.decltype[i] = lengthSuffixRegexp.ReplaceAllString(rc.decltype[i], "")
 		}
 	}
 	return rc.decltype
