@@ -84,6 +84,12 @@ _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
   return sqlite3_bind_blob(stmt, n, p, np, SQLITE_TRANSIENT);
 }
 
+static int
+_sqlite3_db_config_no_ckpt_on_close(sqlite3 *db) {
+	int v;
+    return sqlite3_db_config(db, SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, 1, &v);
+}
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -1892,6 +1898,16 @@ func (c *SQLiteConn) SetFileControlInt(dbName string, op int, arg int) error {
 
 	cArg := C.int(arg)
 	rv := C.sqlite3_file_control(c.db, cDBName, C.int(op), unsafe.Pointer(&cArg))
+	if rv != C.SQLITE_OK {
+		return c.lastError()
+	}
+	return nil
+}
+
+// DBConfigNoCkptOnClose disables checkpointing on database close.
+// See http://sqlite.org/c3ref/db_config.html
+func (c *SQLiteConn) DBConfigNoCkptOnClose() error {
+	rv := C._sqlite3_db_config_no_ckpt_on_close(c.db)
 	if rv != C.SQLITE_OK {
 		return c.lastError()
 	}

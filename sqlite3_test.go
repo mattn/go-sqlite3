@@ -10,6 +10,7 @@ package sqlite3
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -1862,6 +1863,92 @@ func TestSetFileControlInt(t *testing.T) {
 			t.Fatal("Expected WAL file to be persisted after close", err)
 		}
 	})
+}
+
+func TestDBConfigNoCkptOnClose(t *testing.T) {
+	fname := TempFilename(t)
+	defer os.Remove(fname)
+	db, err := sql.Open("sqlite3", fname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Enable WAL mode.
+	if _, err := db.Exec(`PRAGMA journal_mode = wal`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write some data.
+	_, err = db.Exec("create table foo (department integer, profits integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	// Confirm WAL file exists.
+	if _, err := os.Stat(fname + "-wal"); err != nil {
+		t.Fatal("Expected WAL file to exist", err)
+	}
+
+	// Close the database, and confirm WAL file is removed.
+	if err := db.Close(); err != nil {
+		t.Fatal("Failed to close database", err)
+	}
+	if _, err := os.Stat(fname + "-wal"); err == nil {
+		t.Fatal("Expected WAL file to be removed after close")
+	}
+
+	// Now do it again, but with the DBConfig option set.
+	db, err = sql.Open("sqlite3", fname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Insert a record, confirm a WAL file appears.
+	if _, err := db.Exec(`insert into foo values (1, 2)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(fname + "-wal"); err != nil {
+		t.Fatal("Expected WAL file to exist", err)
+	}
+
+	// Disable checkpoint-on-close.
+	f := func(driverConn interface{}) error {
+		c := driverConn.(*SQLiteConn)
+		return c.DBConfigNoCkptOnClose()
+	}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Raw(f); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the SQLite file into a byte slice for comparison later.
+	bufPre, err := os.ReadFile(fname)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Close the database, and confirm WAL file is still present.
+	if err := db.Close(); err != nil {
+		t.Fatal("Failed to close database", err)
+	}
+	if _, err := os.Stat(fname + "-wal"); err != nil {
+		t.Fatal("Expected WAL file to be present after close", err)
+	}
+
+	// Confirm the SQLite file is the same as before since no checkpoint
+	// was performed.
+	bufPost, err := os.ReadFile(fname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(bufPre, bufPost) {
+		t.Fatal("Expected SQLite file to be unchanged after close")
+	}
 }
 
 func TestNonColumnString(t *testing.T) {
