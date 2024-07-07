@@ -93,7 +93,7 @@ _sqlite3_exec(sqlite3* db, const char* pcmd, long long* rowid, long long* change
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
 extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
 extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
-extern int _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail);
+extern int _sqlite3_prepare_v3_blocking(sqlite3 *db, const char *zSql, int nBytes, unsigned int prepFlags, sqlite3_stmt **ppStmt, const char **pzTail);
 
 static int
 _sqlite3_step_internal(sqlite3_stmt *stmt)
@@ -108,9 +108,9 @@ _sqlite3_step_row_internal(sqlite3_stmt* stmt, long long* rowid, long long* chan
 }
 
 static int
-_sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
+_sqlite3_prepare_v3_internal(sqlite3 *db, const char *zSql, int nBytes, unsigned int prepFlags, sqlite3_stmt **ppStmt, const char **pzTail)
 {
-  return _sqlite3_prepare_v2_blocking(db, zSql, nBytes, ppStmt, pzTail);
+  return _sqlite3_prepare_v3_blocking(db, zSql, nBytes, prepFags ppStmt, pzTail);
 }
 
 #else
@@ -131,9 +131,9 @@ _sqlite3_step_row_internal(sqlite3_stmt* stmt, long long* rowid, long long* chan
 }
 
 static int
-_sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
+_sqlite3_prepare_v3_internal(sqlite3 *db, const char *zSql, int nBytes, unsigned int prepFlags, sqlite3_stmt **ppStmt, const char **pzTail)
 {
-  return sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
+  return sqlite3_prepare_v3(db, zSql, nBytes, prepFlags, ppStmt, pzTail);
 }
 #endif
 
@@ -894,7 +894,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 			start += na
 		}
 		tail := s.(*SQLiteStmt).t
-		s.Close()
+		s.(*SQLiteStmt).Close()
 		if tail == "" {
 			if res == nil {
 				// https://github.com/mattn/go-sqlite3/issues/963
@@ -1477,9 +1477,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	exec := func(s string) error {
+		var errmsg *C.char
 		cs := C.CString(s)
-		rv := C.sqlite3_exec(db, cs, nil, nil, nil)
+		rv := C.sqlite3_exec(db, cs, nil, nil, &errmsg)
 		C.free(unsafe.Pointer(cs))
+		C.sqlite3_free(unsafe.Pointer(errmsg))
 		if rv != C.SQLITE_OK {
 			return lastError(db)
 		}
@@ -1487,9 +1489,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	// Busy timeout
-	if err := exec(fmt.Sprintf("PRAGMA busy_timeout = %d;", busyTimeout)); err != nil {
-		C.sqlite3_close_v2(db)
-		return nil, err
+	if busyTimeout != 5000 {
+		if err := exec(fmt.Sprintf("PRAGMA busy_timeout = %d;", busyTimeout)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// USER AUTHENTICATION
@@ -1706,9 +1710,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Locking Mode
 	// Because the default is NORMAL and this is not changed in this package
 	// by using the compile time SQLITE_DEFAULT_LOCKING_MODE this PRAGMA can always be executed
-	if err := exec(fmt.Sprintf("PRAGMA locking_mode = %s;", lockingMode)); err != nil {
-		C.sqlite3_close_v2(db)
-		return nil, err
+	if lockingMode != "NORMAL" {
+		if err := exec(fmt.Sprintf("PRAGMA locking_mode = %s;", lockingMode)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// Query Only
@@ -1742,9 +1748,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Synchronous Mode
 	//
 	// Because default is NORMAL this statement is always executed
-	if err := exec(fmt.Sprintf("PRAGMA synchronous = %s;", synchronousMode)); err != nil {
-		conn.Close()
-		return nil, err
+	if synchronousMode != "NORMAL" {
+		if err := exec(fmt.Sprintf("PRAGMA synchronous = %s;", synchronousMode)); err != nil {
+			conn.Close()
+			return nil, err
+		}
 	}
 
 	// Writable Schema
@@ -1782,16 +1790,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 // Close the connection.
 func (c *SQLiteConn) Close() error {
+	var err error
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		err = c.lastError()
 	}
+	C.sqlite3_db_release_memory(c.db)
 	deleteHandles(c)
 	c.mu.Lock()
 	c.db = nil
 	c.mu.Unlock()
 	runtime.SetFinalizer(c, nil)
-	return nil
+	return err
 }
 
 func (c *SQLiteConn) dbConnOpen() bool {
@@ -1813,7 +1823,7 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 	defer C.free(unsafe.Pointer(pquery))
 	var s *C.sqlite3_stmt
 	var tail *C.char
-	rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(-1), &s, &tail)
+	rv := C._sqlite3_prepare_v3_internal(c.db, pquery, C.int(-1), C.SQLITE_PREPARE_PERSISTENT, &s, &tail)
 	if rv != C.SQLITE_OK {
 		return nil, c.lastError()
 	}
@@ -1903,14 +1913,17 @@ func (s *SQLiteStmt) Close() error {
 	if !s.c.dbConnOpen() {
 		return errors.New("sqlite statement with already closed database connection")
 	}
-	rv := C.sqlite3_finalize(s.s)
-	s.s = nil
-	if rv != C.SQLITE_OK {
-		return s.c.lastError()
+	var err error
+	if s.s != nil {
+		rv := C.sqlite3_finalize(s.s)
+		s.s = nil
+		if rv != C.SQLITE_OK {
+			err = s.c.lastError()
+		}
 	}
 	s.c = nil
 	runtime.SetFinalizer(s, nil)
-	return nil
+	return err
 }
 
 // NumInput return a number of parameters.

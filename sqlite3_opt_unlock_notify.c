@@ -62,12 +62,12 @@ _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* chan
 }
 
 int
-_sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
+_sqlite3_prepare_v3_blocking(sqlite3 *db, const char *zSql, int nBytes, unsigned int prepFlags, sqlite3_stmt **ppStmt, const char **pzTail)
 {
   int rv;
 
   for (;;) {
-    rv = sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
+    rv = sqlite3_prepare_v3(db, zSql, nBytes, prepFlags, ppStmt, pzTail);
     if (rv!=SQLITE_LOCKED) {
       break;
     }
