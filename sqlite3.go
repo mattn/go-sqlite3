@@ -959,6 +959,41 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 	}
 }
 
+type SqliteStatus64Option int
+
+const (
+	SQLITE_STATUS_MEMORY_USED        SqliteStatus64Option = 0
+	SQLITE_STATUS_PAGECACHE_USED     SqliteStatus64Option = 1
+	SQLITE_STATUS_PAGECACHE_OVERFLOW SqliteStatus64Option = 2
+	SQLITE_STATUS_MALLOC_SIZE        SqliteStatus64Option = 5
+	SQLITE_STATUS_PARSER_STACK       SqliteStatus64Option = 6
+	SQLITE_STATUS_PAGECACHE_SIZE     SqliteStatus64Option = 7
+	SQLITE_STATUS_MALLOC_COUNT       SqliteStatus64Option = 9
+)
+
+// GetStatus64 retrieves runtime status information about the performance of SQLite,
+// and optionally resets various high-water marks.
+func GetStatus64(op SqliteStatus64Option, resetFlag bool) (current, highWater int64, err error) {
+	var curr C.sqlite_int64
+	var hiwtr C.sqlite_int64
+
+	reset := C.int(0)
+	if resetFlag {
+		reset = C.int(1)
+	}
+
+	rv := C.sqlite3_status64(C.int(op), &curr, &hiwtr, reset)
+	if rv != C.SQLITE_OK {
+		errStr := C.GoString(C.sqlite3_errstr(rv))
+		return 0, 0, Error{
+			Code: ErrNo(rv),
+			err:  errStr,
+		}
+	}
+
+	return int64(curr), int64(hiwtr), nil
+}
+
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
 	return c.begin(context.Background())

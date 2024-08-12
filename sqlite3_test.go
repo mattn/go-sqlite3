@@ -1997,6 +1997,12 @@ func TestNamedParam(t *testing.T) {
 	}
 }
 
+func TestStatus64(t *testing.T) {
+	if _, _, err := GetStatus64(SQLITE_STATUS_MEMORY_USED, false); err != nil {
+		t.Fatal("Failed to get status64:", err)
+	}
+}
+
 var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
