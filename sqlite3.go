@@ -26,6 +26,7 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_ENABLE_JSON1
 #cgo CFLAGS: -DSQLITE_ENABLE_DBSTAT_VTAB
 #cgo CFLAGS: -DSQLITE_MEMDB_DEFAULT_MAXSIZE=2147483648
+#cgo CFLAGS: -DSQLITE_ENABLE_GEOPOLY=1
 #cgo CFLAGS: -Wno-deprecated-declarations
 #cgo openbsd CFLAGS: -I/usr/local/include
 #cgo openbsd LDFLAGS: -L/usr/local/lib
