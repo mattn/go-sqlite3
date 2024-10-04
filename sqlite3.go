@@ -929,6 +929,7 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 		s.(*SQLiteStmt).cls = true
 		na := s.NumInput()
 		if len(args)-start < na {
+			s.Close()
 			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args)-start)
 		}
 		// consume the number of arguments used in the current
