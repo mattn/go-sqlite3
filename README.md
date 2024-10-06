@@ -35,6 +35,8 @@ This package follows the official [Golang Release Policy](https://golang.org/doc
   - [Android](#android)
 - [ARM](#arm)
 - [Cross Compile](#cross-compile)
+  - [Cross Compiling from macOS](#cross-compiling-from-macos)
+  - [Cross Compile for specific libc version](#cross-compile-for-specific-libc-version)
 - [Google Cloud Platform](#google-cloud-platform)
   - [Linux](#linux)
     - [Alpine](#alpine)
@@ -227,6 +229,48 @@ Steps:
 - Run `CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++ GOARCH=amd64 GOOS=linux CGO_ENABLED=1 go build -ldflags "-linkmode external -extldflags -static"`.
 
 Please refer to the project's [README](https://github.com/FiloSottile/homebrew-musl-cross#readme) for further information.
+
+## Cross Compile for specific libc version
+
+If you need to cross compile and the remote machine uses an older libc version, then you can use a simple Dockerfile (see below) to create a matching image and compile using docker
+
+```dockerfile
+# Dockerfile to compile your go application 
+# with the libc version 2.31-13 as used by debian:bullseye or on Raspbian (Raspberry 4 bullseye)
+
+# check your libs version using `ldd --version` and download the matching golang image if needed
+FROM golang:1.23-bullseye AS build
+
+RUN echo $(ldd --version)
+
+# Install cross-compilation tools
+RUN apt-get update && apt-get install -y \
+    gcc-arm-linux-gnueabihf \
+    g++-arm-linux-gnueabihf \
+    libc6-dev-arm64-cross \
+    libsqlite3-dev \
+    sqlite3
+
+# Set environment variables for cross-compilation
+ENV GOARM=7
+ENV GOARCH=arm
+ENV GOOS=linux
+ENV CGO_ENABLED=1
+ENV CC=arm-linux-gnueabihf-gcc
+ENV CXX=arm-linux-gnueabihf-g++
+
+# Set the working directory
+WORKDIR /app
+
+# Default command: compile the file specified by the argument
+ENTRYPOINT ["sh", "-c", "go build -buildvcs=false -o myapp"]
+
+# build image using
+# docker build -t myapp-arm64 .
+
+# compile your go code with
+# docker run --rm -v $(pwd):/app myapp-arm64
+```
 
 # Google Cloud Platform
 
