@@ -16,6 +16,7 @@ import "C"
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"unsafe"
@@ -52,6 +53,68 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 	res := make([]byte, int(sz))
 	copy(res, cBuf)
 	return res, nil
+}
+
+type rawPointerReadCloser struct {
+	data    unsafe.Pointer
+	buf     []byte
+	padding int
+	sz      int
+}
+
+func (rc *rawPointerReadCloser) Read(p []byte) (n int, err error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if rc.padding == rc.sz {
+		return 0, io.EOF
+	}
+	n = copy(p, rc.buf[rc.padding:])
+	rc.padding += n
+	return n, nil
+}
+
+func (rc *rawPointerReadCloser) Close() error {
+	C.sqlite3_free(rc.data)
+	return nil
+}
+
+func newRawPointerReadCloser(ptr unsafe.Pointer, sz int) *rawPointerReadCloser {
+	cBuf := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+		Data: uintptr(ptr),
+		Len:  sz,
+		Cap:  sz,
+	}))
+	return &rawPointerReadCloser{
+		data:    ptr,
+		sz:      sz,
+		buf:     cBuf,
+		padding: 0,
+	}
+}
+
+// SerializeReader returns an io.ReadCloser of serialization of the database.
+//
+// See https://www.sqlite.org/c3ref/serialize.html
+func (c *SQLiteConn) SerializeReader(schema string) (io.ReadCloser, error) {
+	if schema == "" {
+		schema = "main"
+	}
+	var zSchema *C.char
+	zSchema = C.CString(schema)
+	defer C.free(unsafe.Pointer(zSchema))
+
+	var sz C.sqlite3_int64
+	ptr := C.sqlite3_serialize(c.db, zSchema, &sz, 0)
+	if ptr == nil {
+		return nil, fmt.Errorf("serialize failed: %s", C.GoString(C.sqlite3_errmsg(c.db)))
+	}
+
+	if sz > C.sqlite3_int64(math.MaxInt) {
+		return nil, fmt.Errorf("serialized database is too large (%d bytes)", sz)
+	}
+
+	return newRawPointerReadCloser(unsafe.Pointer(ptr), int(sz)), nil
 }
 
 // Deserialize causes the connection to disconnect from the current database and
