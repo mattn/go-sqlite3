@@ -2206,7 +2206,7 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 		if rv != C.SQLITE_OK {
 			return rc.s.c.lastError()
 		}
-		return nil
+		return io.EOF
 	}
 
 	rc.declTypes()
