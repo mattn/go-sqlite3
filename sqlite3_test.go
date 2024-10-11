@@ -1997,6 +1997,34 @@ func TestNamedParam(t *testing.T) {
 	}
 }
 
+func TestEmptyQuery(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	queries := []string{
+		"",
+		";",
+		" -- comment ",
+	}
+
+	for _, q := range queries {
+		t.Run(fmt.Sprintf("query:%q", q), func(t *testing.T) {
+			rows, err := db.Query(q)
+			if err != nil {
+				t.Fatal("Failed to run empty query:", err)
+			}
+			defer rows.Close()
+
+			if rows.Next() != false {
+				t.Fatal("Expected no rows")
+			}
+		})
+	}
+}
+
 var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
