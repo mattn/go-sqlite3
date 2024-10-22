@@ -53,10 +53,10 @@ package sqlite3
 # define USE_PREAD64 1
 # define USE_PWRITE64 1
 #elif defined(HAVE_PREAD) && defined(HAVE_PWRITE)
-# undef USE_PREAD
-# undef USE_PWRITE
-# define USE_PREAD64 1
-# define USE_PWRITE64 1
+# undef USE_PREAD64
+# undef USE_PWRITE64
+# define USE_PREAD 1
+# define USE_PWRITE 1
 #endif
 
 static int
