@@ -21,7 +21,11 @@ jobs:
       GO: ${{ matrix.go }}
     steps:
       - if: startsWith(matrix.os, 'macos')
-        run: brew update
+        run: |
+          brew update
+          # Handle issues with the upgrade to icu4c v76.
+          [[ -e "$(brew --prefix)/opt/icu4c" ]] || \
+            brew reinstall icu4c
 
       - uses: actions/setup-go@v2
         with:
