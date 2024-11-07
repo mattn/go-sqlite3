@@ -11,10 +11,12 @@ package sqlite3
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -264,6 +266,151 @@ func TestQueryRowContextCancelParallel(t *testing.T) {
 
 		if err := row.Scan(&keyID); err != nil {
 			t.Fatal(i, err)
+		}
+	}
+}
+
+// Test that we can successfully interrupt a long running query when
+// the context is canceled. The previous two QueryRowContext tests
+// only test that we handle a previously cancelled context and thus
+// do not call sqlite3_interrupt.
+func TestQueryRowContextCancelInterrupt(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Test that we have the unixepoch function and if not skip the test.
+	if _, err := db.Exec(`SELECT unixepoch(datetime(100000, 'unixepoch', 'localtime'))`); err != nil {
+		libVersion, libVersionNumber, sourceID := Version()
+		if strings.Contains(err.Error(), "no such function: unixepoch") {
+			t.Skip("Skipping the 'unixepoch' function is not implemented in "+
+				"this version of sqlite3:", libVersion, libVersionNumber, sourceID)
+		}
+		t.Fatal(err)
+	}
+
+	const createTableStmt = `
+	CREATE TABLE timestamps (
+		ts TIMESTAMP NOT NULL
+	);`
+	if _, err := db.Exec(createTableStmt); err != nil {
+		t.Fatal(err)
+	}
+
+	stmt, err := db.Prepare(`INSERT INTO timestamps VALUES (?);`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stmt.Close()
+
+	// Computationally expensive query that consumes many rows. This is needed
+	// to test cancellation because queries are not interrupted immediately.
+	// Instead, queries are only halted at certain checkpoints where the
+	// sqlite3.isInterrupted is checked and true.
+	queryStmt := `
+	SELECT
+		SUM(unixepoch(datetime(ts + 10, 'unixepoch', 'localtime'))) AS c1,
+		SUM(unixepoch(datetime(ts + 20, 'unixepoch', 'localtime'))) AS c2,
+		SUM(unixepoch(datetime(ts + 30, 'unixepoch', 'localtime'))) AS c3,
+		SUM(unixepoch(datetime(ts + 40, 'unixepoch', 'localtime'))) AS c4
+	FROM
+		timestamps
+	WHERE datetime(ts, 'unixepoch', 'localtime')
+	LIKE
+		?;`
+
+	query := func(t *testing.T, timeout time.Duration) (int, error) {
+		// Create a complicated pattern to match timestamps
+		const pattern = "%2%0%2%4%-%-%:%:%"
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		rows, err := db.QueryContext(ctx, queryStmt, pattern)
+		if err != nil {
+			return 0, err
+		}
+		var count int
+		for rows.Next() {
+			var n int64
+			if err := rows.Scan(&n, &n, &n, &n); err != nil {
+				return count, err
+			}
+			count++
+		}
+		return count, rows.Err()
+	}
+
+	average := func(n int, fn func()) time.Duration {
+		start := time.Now()
+		for i := 0; i < n; i++ {
+			fn()
+		}
+		return time.Since(start) / time.Duration(n)
+	}
+
+	createRows := func(n int) {
+		t.Logf("Creating %d rows", n)
+		if _, err := db.Exec(`DELETE FROM timestamps; VACUUM;`); err != nil {
+			t.Fatal(err)
+		}
+		ts := time.Date(2024, 6, 6, 8, 9, 10, 12345, time.UTC).Unix()
+		rr := rand.New(rand.NewSource(1234))
+		for i := 0; i < n; i++ {
+			if _, err := stmt.Exec(ts + rr.Int63n(10_000) - 5_000); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	const TargetRuntime = 200 * time.Millisecond
+	const N = 5_000 // Number of rows to insert at a time
+
+	// Create enough rows that the query takes ~200ms to run.
+	start := time.Now()
+	createRows(N)
+	baseAvg := average(4, func() {
+		if _, err := query(t, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Log("Base average:", baseAvg)
+	rowCount := N * (int(TargetRuntime/baseAvg) + 1)
+	createRows(rowCount)
+	t.Log("Table setup time:", time.Since(start))
+
+	// Set the timeout to 1/10 of the average query time.
+	avg := average(2, func() {
+		n, err := query(t, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n == 0 {
+			t.Fatal("scanned zero rows")
+		}
+	})
+	// Guard against the timeout being too short to reliably test.
+	if avg < TargetRuntime/2 {
+		t.Fatalf("Average query runtime should be around %s got: %s ",
+			TargetRuntime, avg)
+	}
+	timeout := (avg / 10).Round(100 * time.Microsecond)
+	t.Logf("Average: %s Timeout: %s", avg, timeout)
+
+	for i := 0; i < 10; i++ {
+		tt := time.Now()
+		n, err := query(t, timeout)
+		if !errors.Is(err, context.DeadlineExceeded) {
+			fn := t.Errorf
+			if err != nil {
+				fn = t.Fatalf
+			}
+			fn("expected error %v got %v", context.DeadlineExceeded, err)
+		}
+		d := time.Since(tt)
+		t.Logf("%d: rows: %d duration: %s", i, n, d)
+		if d > timeout*4 {
+			t.Errorf("query was cancelled after %s but did not abort until: %s", timeout, d)
 		}
 	}
 }
