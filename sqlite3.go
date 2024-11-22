@@ -1876,6 +1876,9 @@ func (c *SQLiteConn) SetLimit(id int, newVal int) int {
 // This method is not thread-safe as the returned error code can be changed by
 // another call if invoked concurrently.
 //
+// Use SetFileControlInt64 instead if the argument for the opcode is documented
+// as a pointer to a sqlite3_int64.
+//
 // See: sqlite3_file_control, https://www.sqlite.org/c3ref/file_control.html
 func (c *SQLiteConn) SetFileControlInt(dbName string, op int, arg int) error {
 	if dbName == "" {
@@ -1901,8 +1904,8 @@ func (c *SQLiteConn) SetFileControlInt(dbName string, op int, arg int) error {
 // This method is not thread-safe as the returned error code can be changed by
 // another call if invoked concurrently.
 //
-// Prefer this method over SetFileControlInt when the argument to the underlying
-// SQLite function is an int64.
+// Only use this method if the argument for the opcode is documented as a pointer
+// to a sqlite3_int64.
 //
 // See: sqlite3_file_control, https://www.sqlite.org/c3ref/file_control.html
 func (c *SQLiteConn) SetFileControlInt64(dbName string, op int, arg int64) error {
