@@ -1882,9 +1882,6 @@ func TestSetFileControlInt64(t *testing.T) {
 		if err != nil {
 			t.Fatal("Failed to open database:", err)
 		}
-		if err != nil {
-			t.Fatal("Failed to open", err)
-		}
 		err = db.Ping()
 		if err != nil {
 			t.Fatal("Failed to ping", err)
