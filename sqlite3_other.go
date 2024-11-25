@@ -10,9 +10,15 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -I.
-#cgo linux LDFLAGS: -ldl
-#cgo linux,ppc LDFLAGS: -lpthread
-#cgo linux,ppc64 LDFLAGS: -lpthread
-#cgo linux,ppc64le LDFLAGS: -lpthread
+#cgo linux LDFLAGS: -ldl -lcrypto -lsqlcipher
+#cgo linux,ppc LDFLAGS: -lpthread -lcrypto -lsqlcipher
+#cgo linux,ppc64 LDFLAGS: -lpthread -lcrypto -lsqlcipher
+#cgo linux,ppc64le LDFLAGS: -lpthread -lcrypto -lsqlcipher
+
+#ifndef USE_LIBSQLITE3
+#include "sqlite3-binding.h" // Use amalgamation if enabled
+#else
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
+#endif
 */
 import "C"

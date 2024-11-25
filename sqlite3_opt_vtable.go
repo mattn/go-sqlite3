@@ -18,11 +18,12 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_TRACE_SIZE_LIMIT=15
 #cgo CFLAGS: -DSQLITE_ENABLE_COLUMN_METADATA=1
 #cgo CFLAGS: -Wno-deprecated-declarations
+#cgo LDFLAGS: -lcrypto -lsqlcipher
 
 #ifndef USE_LIBSQLITE3
-#include "sqlite3-binding.h"
+#include "sqlite3-binding.h" // Use amalgamation if enabled
 #else
-#include <sqlite3.h>
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
 #endif
 #include <stdlib.h>
 #include <stdint.h>

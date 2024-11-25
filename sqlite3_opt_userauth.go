@@ -10,11 +10,11 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -DSQLITE_USER_AUTHENTICATION
-#cgo LDFLAGS: -lm
+#cgo LDFLAGS: -lcrypto -lsqlcipher
 #ifndef USE_LIBSQLITE3
-#include "sqlite3-binding.h"
+#include "sqlite3-binding.h" // Use amalgamation if enabled
 #else
-#include <sqlite3.h>
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
 #endif
 #include <stdlib.h>
 
@@ -45,21 +45,22 @@ _sqlite3_user_delete(sqlite3* db, const char* zUsername)
 static int
 _sqlite3_auth_enabled(sqlite3* db)
 {
-	int exists = -1;
+  int exists = -1;
 
-	sqlite3_stmt *stmt;
-	sqlite3_prepare_v2(db, "select count(type) from sqlite_master WHERE type='table' and name='sqlite_user';", -1, &stmt, NULL);
+  sqlite3_stmt *stmt;
+  sqlite3_prepare_v2(db, "select count(type) from sqlite_master WHERE type='table' and name='sqlite_user';", -1, &stmt, NULL);
 
-	while ( sqlite3_step(stmt) == SQLITE_ROW) {
-		exists = sqlite3_column_int(stmt, 0);
-	}
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+    exists = sqlite3_column_int(stmt, 0);
+  }
 
-	sqlite3_finalize(stmt);
+  sqlite3_finalize(stmt);
 
-	return exists;
+  return exists;
 }
 */
 import "C"
+
 import (
 	"errors"
 	"unsafe"
