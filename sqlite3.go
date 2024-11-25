@@ -21,13 +21,17 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1
 #cgo CFLAGS: -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
 #cgo CFLAGS: -Wno-deprecated-declarations
+#cgo CFLAGS: -DSQLITE_HAS_CODEC
+#cgo LDFLAGS: -lcrypto -lsqlcipher
 #cgo openbsd CFLAGS: -I/usr/local/include
 #cgo openbsd LDFLAGS: -L/usr/local/lib
+
 #ifndef USE_LIBSQLITE3
-#include "sqlite3-binding.h"
+#include "sqlite3-binding.h" // Use amalgamation if enabled
 #else
-#include <sqlite3.h>
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
 #endif
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -145,7 +149,6 @@ void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l) {
   sqlite3_result_blob(ctx, b, l, SQLITE_TRANSIENT);
 }
 
-
 int _sqlite3_create_function(
   sqlite3 *db,
   const char *zFunctionName,
@@ -203,6 +206,7 @@ static int sqlite3_system_errno(sqlite3 *db) {
 #endif
 */
 import "C"
+
 import (
 	"context"
 	"database/sql"
@@ -1485,6 +1489,12 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return lastError(db)
 		}
 		return nil
+	}
+
+	// Set the encryption key
+	if err := exec("PRAGMA key = 'my_secret_key';"); err != nil {
+		C.sqlite3_close_v2(db)
+		return nil, err
 	}
 
 	// Busy timeout
