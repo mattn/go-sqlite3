@@ -1896,7 +1896,7 @@ func (c *SQLiteConn) SetFileControlInt(dbName string, op int, arg int) error {
 	return nil
 }
 
-// SetFileControlInt invokes the xFileControl method on a given database. The
+// SetFileControlInt64 invokes the xFileControl method on a given database. The
 // dbName is the name of the database. It will default to "main" if left blank.
 // The op is one of the opcodes prefixed by "SQLITE_FCNTL_". The arg argument
 // and return code are both opcode-specific. Please see the SQLite documentation.
