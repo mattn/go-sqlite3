@@ -1,4 +1,4 @@
-module github.com/mattn/go-sqlite3
+module github.com/fhir-fli/go-sqlite3-sqlcipher
 
 go 1.19
 
