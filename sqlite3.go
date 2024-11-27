@@ -1138,6 +1138,36 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		if val := params.Get("_auth_salt"); val != "" {
 			authSalt = val
 		}
+		if val := params.Get("_pragma_key"); val != "" {
+			encryptionKey = val
+		}
+		// Find the position of the `?` indicating the start of query parameters
+		pos := strings.IndexRune(dsn, '?')
+		if pos >= 1 {
+			// Extract the part of the DSN containing the query parameters
+			query := dsn[pos+1:]
+			params, err := url.ParseQuery(query)
+			if err != nil {
+				return nil, err
+			}
+
+			// Extract the `_pragma_key` if it exists
+			if val := params.Get("_pragma_key"); val != "" {
+				encryptionKey = val
+				// Remove `_pragma_key` from the parameters
+				params.Del("_pragma_key")
+			}
+
+			// Reconstruct the DSN without the `_pragma_key`
+			baseDSN := dsn[:pos]
+			if len(params) > 0 {
+				// Only append the remaining parameters if there are any left
+				dsn = fmt.Sprintf("%s?%s", baseDSN, params.Encode())
+			} else {
+				// If no parameters are left, just use the base DSN
+				dsn = baseDSN
+			}
+		}
 
 		// _loc
 		if val := params.Get("_loc"); val != "" {
@@ -1454,22 +1484,6 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 
 		if !strings.HasPrefix(dsn, "file:") {
-			dsn = dsn[:pos]
-		}
-
-		// Extract key from DSN
-		pos := strings.IndexRune(dsn, '?')
-		if pos >= 1 {
-			params, err := url.ParseQuery(dsn[pos+1:])
-			if err != nil {
-				return nil, err
-			}
-
-			if val := params.Get("_pragma_key"); val != "" {
-				encryptionKey = val
-			}
-
-			// Clean the DSN to remove the key from it before passing to SQLite.
 			dsn = dsn[:pos]
 		}
 	}
