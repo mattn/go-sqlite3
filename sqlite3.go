@@ -1113,6 +1113,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	writableSchema := -1
 	vfsName := ""
 	var cacheSize *int64
+	var encryptionKey string
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -1455,6 +1456,22 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
+
+		// Extract key from DSN
+		pos := strings.IndexRune(dsn, '?')
+		if pos >= 1 {
+			params, err := url.ParseQuery(dsn[pos+1:])
+			if err != nil {
+				return nil, err
+			}
+
+			if val := params.Get("_pragma_key"); val != "" {
+				encryptionKey = val
+			}
+
+			// Clean the DSN to remove the key from it before passing to SQLite.
+			dsn = dsn[:pos]
+		}
 	}
 
 	var db *C.sqlite3
@@ -1491,12 +1508,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil
 	}
 
-	// Set the encryption key
-	if err := exec("PRAGMA key = 'my_secret_key';"); err != nil {
-		C.sqlite3_close_v2(db)
-		return nil, err
+	// Set the encryption key after opening the database
+	if encryptionKey != "" {
+		if err := exec(fmt.Sprintf("PRAGMA key = '%s';", encryptionKey)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
-
 	// Busy timeout
 	if err := exec(fmt.Sprintf("PRAGMA busy_timeout = %d;", busyTimeout)); err != nil {
 		C.sqlite3_close_v2(db)
