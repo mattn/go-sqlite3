@@ -14,14 +14,18 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: ['1.19', '1.20', '1.21']
+        go: ['1.22', '1.23']
       fail-fast: false
     env:
       OS: ${{ matrix.os }}
       GO: ${{ matrix.go }}
     steps:
       - if: startsWith(matrix.os, 'macos')
-        run: brew update
+        run: |
+          brew update
+          # Handle issues with the upgrade to icu4c v76.
+          [[ -e "$(brew --prefix)/opt/icu4c" ]] || \
+            brew reinstall icu4c
 
       - uses: actions/setup-go@v2
         with:
@@ -64,7 +68,7 @@ jobs:
 
     strategy:
       matrix:
-        go: ['1.19', '1.20', '1.21']
+        go: ['1.22', '1.23']
       fail-fast: false
     env:
       OS: windows-latest

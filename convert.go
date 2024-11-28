@@ -6,6 +6,9 @@
 
 // Type conversions for Scan.
 
+//go:build sqlite_preupdate_hook
+// +build sqlite_preupdate_hook
+
 package sqlite3
 
 import (

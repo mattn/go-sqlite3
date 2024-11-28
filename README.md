@@ -1,11 +1,11 @@
 go-sqlite3
 ==========
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/mattn/go-sqlite3.svg)](https://pkg.go.dev/github.com/mattn/go-sqlite3)
-[![GitHub Actions](https://github.com/mattn/go-sqlite3/workflows/Go/badge.svg)](https://github.com/mattn/go-sqlite3/actions?query=workflow%3AGo)
+[![Go Reference](https://pkg.go.dev/badge/github.com/charlievieth/go-sqlite3.svg)](https://pkg.go.dev/github.com/charlievieth/go-sqlite3)
+[![GitHub Actions](https://github.com/charlievieth/go-sqlite3/workflows/Go/badge.svg)](https://github.com/charlievieth/go-sqlite3/actions?query=workflow%3AGo)
 [![Financial Contributors on Open Collective](https://opencollective.com/mattn-go-sqlite3/all/badge.svg?label=financial+contributors)](https://opencollective.com/mattn-go-sqlite3) 
 [![codecov](https://codecov.io/gh/mattn/go-sqlite3/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-sqlite3)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
+[![Go Report Card](https://goreportcard.com/badge/github.com/charlievieth/go-sqlite3)](https://goreportcard.com/report/github.com/charlievieth/go-sqlite3)
 
 Latest stable version is v1.14 or later, not v2.
 
@@ -66,17 +66,17 @@ This package follows the official [Golang Release Policy](https://golang.org/doc
 
 This package can be installed with the `go get` command:
 
-    go get github.com/mattn/go-sqlite3
+    go get github.com/charlievieth/go-sqlite3
 
 _go-sqlite3_ is *cgo* package.
 If you want to build your app using go-sqlite3, you need gcc.
-However, after you have built and installed _go-sqlite3_ with `go install github.com/mattn/go-sqlite3` (which requires gcc), you can build your app without relying on gcc in future.
+However, after you have built and installed _go-sqlite3_ with `go install github.com/charlievieth/go-sqlite3` (which requires gcc), you can build your app without relying on gcc in future.
 
 ***Important: because this is a `CGO` enabled package, you are required to set the environment variable `CGO_ENABLED=1` and have a `gcc` compiler present within your path.***
 
 # API Reference
 
-API documentation can be found [here](http://godoc.org/github.com/mattn/go-sqlite3).
+API documentation can be found [here](http://godoc.org/github.com/charlievieth/go-sqlite3).
 
 Examples can be found under the [examples](./_example) directory.
 
@@ -180,7 +180,7 @@ go build -tags "icu json1 fts5 secure_delete"
 | Secure Delete (FAST) | sqlite_secure_delete_fast | For more information see [PRAGMA secure_delete](https://www.sqlite.org/pragma.html#pragma_secure_delete) |
 | Tracing / Debug | sqlite_trace | Activate trace functions |
 | User Authentication | sqlite_userauth | SQLite User Authentication see [User Authentication](#user-authentication) for more information. |
-| Virtual Tables | sqlite_vtable | SQLite Virtual Tables see [SQLite Official VTABLE Documentation](https://www.sqlite.org/vtab.html) for more information, and a [full example here](https://github.com/mattn/go-sqlite3/tree/master/_example/vtable) |
+| Virtual Tables | sqlite_vtable | SQLite Virtual Tables see [SQLite Official VTABLE Documentation](https://www.sqlite.org/vtab.html) for more information, and a [full example here](https://github.com/charlievieth/go-sqlite3/tree/master/_example/vtable) |
 
 # Compilation
 
@@ -344,14 +344,14 @@ For example the TDM-GCC Toolchain can be found [here](https://jmeubank.github.io
     > Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit.
     > See: [#27](https://github.com/mattn/go-sqlite3/issues/27)
 
-- `go get github.com/mattn/go-sqlite3` throws compilation error.
+- `go get github.com/charlievieth/go-sqlite3` throws compilation error.
 
     `gcc` throws: `internal compiler error`
 
     Remove the download repository from your disk and try re-install with:
 
     ```bash
-    go install github.com/mattn/go-sqlite3
+    go install github.com/charlievieth/go-sqlite3
     ```
 
 # User Authentication
@@ -560,31 +560,14 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
 ### Code Contributors
 
-This project exists thanks to all the people who [[contribute](CONTRIBUTING.md)].
-<a href="https://github.com/mattn/go-sqlite3/graphs/contributors"><img src="https://opencollective.com/mattn-go-sqlite3/contributors.svg?width=890&button=false" /></a>
+This project is a fork of mattn/go-sqlite3 and is only possible thanks to the
+work of @mattn and other contributors. A full list of the original contributors
+can be found [here](https://github.com/mattn/go-sqlite3/?tab=readme-ov-file#contributors).
 
 ### Financial Contributors
 
-Become a financial contributor and help us sustain our community. [[Contribute here](https://opencollective.com/mattn-go-sqlite3/contribute)].
-
-#### Individuals
-
-<a href="https://opencollective.com/mattn-go-sqlite3"><img src="https://opencollective.com/mattn-go-sqlite3/individuals.svg?width=890"></a>
-
-#### Organizations
-
-Support this project with your organization. Your logo will show up here with a link to your website. [[Contribute](https://opencollective.com/mattn-go-sqlite3/contribute)]
-
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/0/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/0/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/1/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/1/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/2/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/2/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/3/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/3/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/4/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/4/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/5/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/5/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/6/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/6/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/7/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/7/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/8/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/8/avatar.svg"></a>
-<a href="https://opencollective.com/mattn-go-sqlite3/organization/9/website"><img src="https://opencollective.com/mattn-go-sqlite3/organization/9/avatar.svg"></a>
+This project is a fork of mattn/go-sqlite3. A list of it's financial contributors
+can be found [here](https://github.com/mattn/go-sqlite3/?tab=readme-ov-file#financial-contributors).
 
 # License
 
@@ -601,3 +584,5 @@ In this repository, those files are an amalgamation of code that was copied from
 Yasuhiro Matsumoto (a.k.a mattn)
 
 G.J.R. Timmer
+
+Charlie Vieth (fork maintainer)

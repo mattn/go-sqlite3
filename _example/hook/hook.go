@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/mattn/go-sqlite3"
+	"github.com/charlievieth/go-sqlite3"
 )
 
 func main() {

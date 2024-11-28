@@ -10,6 +10,7 @@ package sqlite3
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -1090,6 +1092,67 @@ func TestExecer(t *testing.T) {
 	}
 }
 
+func TestExecDriverResult(t *testing.T) {
+	setup := func(t *testing.T) *sql.DB {
+		db, err := sql.Open("sqlite3", t.TempDir()+"/test.sqlite3")
+		if err != nil {
+			t.Fatal("Failed to open database:", err)
+		}
+		if _, err := db.Exec(`CREATE TABLE foo (id INTEGER PRIMARY KEY);`); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { db.Close() })
+		return db
+	}
+
+	test := func(t *testing.T, execStmt string, args ...any) {
+		db := setup(t)
+		res, err := db.Exec(execStmt, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			t.Fatal(err)
+		}
+		// We only return the changes from the last statement.
+		if rows != 1 {
+			t.Errorf("RowsAffected got: %d want: %d", rows, 1)
+		}
+		id, err := res.LastInsertId()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id != 3 {
+			t.Errorf("LastInsertId got: %d want: %d", id, 3)
+		}
+		var count int64
+		err = db.QueryRow(`SELECT COUNT(*) FROM foo WHERE id IN (1, 2, 3);`).Scan(&count)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count != 3 {
+			t.Errorf("Expected count to be %d got: %d", 3, count)
+		}
+	}
+
+	t.Run("NoArgs", func(t *testing.T) {
+		const stmt = `
+		INSERT INTO foo(id) VALUES(1);
+		INSERT INTO foo(id) VALUES(2);
+		INSERT INTO foo(id) VALUES(3);`
+		test(t, stmt)
+	})
+
+	t.Run("WithArgs", func(t *testing.T) {
+		const stmt = `
+		INSERT INTO foo(id) VALUES(?);
+		INSERT INTO foo(id) VALUES(?);
+		INSERT INTO foo(id) VALUES(?);`
+		test(t, stmt, 1, 2, 3)
+	})
+}
+
 func TestQueryer(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
@@ -1139,6 +1202,163 @@ func TestQueryer(t *testing.T) {
 	if n != 3 {
 		t.Errorf("Expected 3 rows but retrieved %v", n)
 	}
+}
+
+func testQuery(t *testing.T, test func(t *testing.T, db *sql.DB)) {
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "test.sqlite3"))
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+		CREATE TABLE FOO (id INTEGER);
+		INSERT INTO foo(id) VALUES(?);
+		INSERT INTO foo(id) VALUES(?);
+		INSERT INTO foo(id) VALUES(?);
+	`, 3, 2, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Capture panic so tests can continue
+	defer func() {
+		if e := recover(); e != nil {
+			buf := make([]byte, 32*1024)
+			n := runtime.Stack(buf, false)
+			t.Fatalf("\npanic: %v\n\n%s\n", e, buf[:n])
+		}
+	}()
+	test(t, db)
+}
+
+func testQueryValues(t *testing.T, query string, args ...interface{}) []interface{} {
+	var values []interface{}
+	testQuery(t, func(t *testing.T, db *sql.DB) {
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rows == nil {
+			t.Fatal("nil rows")
+		}
+		for i := 0; rows.Next(); i++ {
+			if i > 1_000 {
+				t.Fatal("To many iterations of rows.Next():", i)
+			}
+			var v interface{}
+			if err := rows.Scan(&v); err != nil {
+				t.Fatal(err)
+			}
+			values = append(values, v)
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		if err := rows.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	return values
+}
+
+func TestQuery(t *testing.T) {
+	queries := []struct {
+		query string
+		args  []interface{}
+	}{
+		{"SELECT id FROM foo ORDER BY id;", nil},
+		{"SELECT id FROM foo WHERE id != ? ORDER BY id;", []interface{}{4}},
+		{"SELECT id FROM foo WHERE id IN (?, ?, ?) ORDER BY id;", []interface{}{1, 2, 3}},
+
+		// Comments
+		{"SELECT id FROM foo ORDER BY id; -- comment", nil},
+		{"SELECT id FROM foo ORDER BY id -- comment", nil}, // Not terminated
+		{"SELECT id FROM foo ORDER BY id;\n -- comment\n", nil},
+		{
+			`-- FOO
+			 SELECT id FROM foo ORDER BY id; -- BAR
+			 /* BAZ */`,
+			nil,
+		},
+	}
+	want := []interface{}{
+		int64(1),
+		int64(2),
+		int64(3),
+	}
+	for _, q := range queries {
+		t.Run("", func(t *testing.T) {
+			got := testQueryValues(t, q.query, q.args...)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("Query(%q, %v) = %v; want: %v", q.query, q.args, got, want)
+			}
+		})
+	}
+}
+
+func TestQueryNoSQL(t *testing.T) {
+	got := testQueryValues(t, "")
+	if got != nil {
+		t.Fatalf("Query(%q, %v) = %v; want: %v", "", nil, got, nil)
+	}
+}
+
+func testQueryError(t *testing.T, query string, args ...interface{}) {
+	testQuery(t, func(t *testing.T, db *sql.DB) {
+		rows, err := db.Query(query, args...)
+		if err == nil {
+			t.Error("Expected an error got:", err)
+		}
+		if rows != nil {
+			t.Error("Returned rows should be nil on error!")
+			// Attempt to iterate over rows to make sure they don't panic.
+			for i := 0; rows.Next(); i++ {
+				if i > 1_000 {
+					t.Fatal("To many iterations of rows.Next():", i)
+				}
+			}
+			if err := rows.Err(); err != nil {
+				t.Error(err)
+			}
+			rows.Close()
+		}
+	})
+}
+
+func TestQueryNotEnoughArgs(t *testing.T) {
+	testQueryError(t, "SELECT FROM foo WHERE id = ? OR id = ?);", 1)
+}
+
+func TestQueryTooManyArgs(t *testing.T) {
+	// TODO: test error message / kind
+	testQueryError(t, "SELECT FROM foo WHERE id = ?);", 1, 2)
+}
+
+func TestQueryMultipleStatements(t *testing.T) {
+	testQueryError(t, "SELECT 1; SELECT 2;")
+	testQueryError(t, "SELECT 1; SELECT 2; SELECT 3;")
+	testQueryError(t, "SELECT 1; ; SELECT 2;") // Empty statement in between
+	testQueryError(t, "SELECT 1; FOOBAR 2;")   // Error in second statement
+
+	// Test that multiple trailing semicolons (";;") are not an error
+	noError := func(t *testing.T, query string, args ...any) {
+		testQuery(t, func(t *testing.T, db *sql.DB) {
+			var n int64
+			if err := db.QueryRow(query, args...).Scan(&n); err != nil {
+				t.Fatal(err)
+			}
+			if n != 1 {
+				t.Fatalf("got: %d want: %d", n, 1)
+			}
+		})
+	}
+	noError(t, "SELECT 1; ;")
+	noError(t, "SELECT ?; ;", 1)
+}
+
+func TestQueryInvalidTable(t *testing.T) {
+	testQueryError(t, "SELECT COUNT(*) FROM does_not_exist;")
 }
 
 func TestStress(t *testing.T) {
@@ -2030,7 +2250,7 @@ func BenchmarkCustomFunctions(b *testing.B) {
 }
 
 func TestSuite(t *testing.T) {
-	initializeTestDB(t)
+	initializeTestDB(t, false)
 	defer freeTestDB()
 
 	for _, test := range tests {
@@ -2039,7 +2259,7 @@ func TestSuite(t *testing.T) {
 }
 
 func BenchmarkSuite(b *testing.B) {
-	initializeTestDB(b)
+	initializeTestDB(b, true)
 	defer freeTestDB()
 
 	for _, benchmark := range benchmarks {
@@ -2068,8 +2288,13 @@ type TestDB struct {
 
 var db *TestDB
 
-func initializeTestDB(t testing.TB) {
-	tempFilename := TempFilename(t)
+func initializeTestDB(t testing.TB, memory bool) {
+	var tempFilename string
+	if memory {
+		tempFilename = ":memory:"
+	} else {
+		tempFilename = TempFilename(t)
+	}
 	d, err := sql.Open("sqlite3", tempFilename+"?_busy_timeout=99999")
 	if err != nil {
 		os.Remove(tempFilename)
@@ -2084,9 +2309,11 @@ func freeTestDB() {
 	if err != nil {
 		panic(err)
 	}
-	err = os.Remove(db.tempFilename)
-	if err != nil {
-		panic(err)
+	if db.tempFilename != "" && db.tempFilename != ":memory:" {
+		err := os.Remove(db.tempFilename)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -2106,11 +2333,18 @@ var tests = []testing.InternalTest{
 
 var benchmarks = []testing.InternalBenchmark{
 	{Name: "BenchmarkExec", F: benchmarkExec},
+	{Name: "BenchmarkExecContext", F: benchmarkExecContext},
+	{Name: "BenchmarkExecStep", F: benchmarkExecStep},
+	{Name: "BenchmarkExecContextStep", F: benchmarkExecContextStep},
+	{Name: "BenchmarkExecTx", F: benchmarkExecTx},
 	{Name: "BenchmarkQuery", F: benchmarkQuery},
+	{Name: "BenchmarkQuerySimple", F: benchmarkQuerySimple},
+	{Name: "BenchmarkQueryContext", F: benchmarkQueryContext},
 	{Name: "BenchmarkParams", F: benchmarkParams},
 	{Name: "BenchmarkStmt", F: benchmarkStmt},
 	{Name: "BenchmarkRows", F: benchmarkRows},
 	{Name: "BenchmarkStmtRows", F: benchmarkStmtRows},
+	{Name: "BenchmarkStmt10Cols", F: benchmarkStmt10Cols},
 }
 
 func (db *TestDB) mustExec(sql string, args ...any) sql.Result {
@@ -2458,9 +2692,74 @@ func testExecEmptyQuery(t *testing.T) {
 
 // benchmarkExec is benchmark for exec
 func benchmarkExec(b *testing.B) {
+	b.Run("Params", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			if _, err := db.Exec("select ?;", int64(1)); err != nil {
+				panic(err)
+			}
+		}
+	})
+	b.Run("NoParams", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			if _, err := db.Exec("select 1;"); err != nil {
+				panic(err)
+			}
+		}
+	})
+}
+
+func benchmarkExecContext(b *testing.B) {
+	b.Run("Params", func(b *testing.B) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		for i := 0; i < b.N; i++ {
+			if _, err := db.ExecContext(ctx, "select ?;", int64(1)); err != nil {
+				panic(err)
+			}
+		}
+	})
+	b.Run("NoParams", func(b *testing.B) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		for i := 0; i < b.N; i++ {
+			if _, err := db.ExecContext(ctx, "select 1;"); err != nil {
+				panic(err)
+			}
+		}
+	})
+}
+
+func benchmarkExecTx(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		if _, err := db.Exec("select 1"); err != nil {
+		tx, err := db.Begin()
+		if err != nil {
 			panic(err)
+		}
+		if _, err := tx.Exec("select 1;"); err != nil {
+			panic(err)
+		}
+		if err := tx.Commit(); err != nil {
+			panic(err)
+		}
+	}
+}
+
+var largeSelectStmt = strings.Repeat("select 1;\n", 1_000)
+
+func benchmarkExecStep(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		if _, err := db.Exec(largeSelectStmt); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func benchmarkExecContextStep(b *testing.B) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for n := 0; n < b.N; n++ {
+		if _, err := db.ExecContext(ctx, largeSelectStmt); err != nil {
+			b.Fatal(err)
 		}
 	}
 }
@@ -2477,6 +2776,74 @@ func benchmarkQuery(b *testing.B) {
 			panic(err)
 		}
 	}
+}
+
+func benchmarkQuerySimple(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		var n int
+		if err := db.QueryRow("select 1;").Scan(&n); err != nil {
+			panic(err)
+		}
+	}
+}
+
+// benchmarkQueryContext is benchmark for QueryContext
+func benchmarkQueryContext(b *testing.B) {
+	const createTableStmt = `
+	CREATE TABLE IF NOT EXISTS query_context(
+		id INTEGER PRIMARY KEY
+	);
+	DELETE FROM query_context;
+	VACUUM;`
+	test := func(ctx context.Context, b *testing.B) {
+		if _, err := db.Exec(createTableStmt); err != nil {
+			b.Fatal(err)
+		}
+		for i := 0; i < 10; i++ {
+			_, err := db.Exec("INSERT INTO query_context VALUES (?);", int64(i))
+			if err != nil {
+				db.Fatal(err)
+			}
+		}
+		stmt, err := db.PrepareContext(ctx, `SELECT id FROM query_context;`)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Cleanup(func() { stmt.Close() })
+
+		var n int
+		for i := 0; i < b.N; i++ {
+			rows, err := stmt.QueryContext(ctx)
+			if err != nil {
+				b.Fatal(err)
+			}
+			for rows.Next() {
+				if err := rows.Scan(&n); err != nil {
+					b.Fatal(err)
+				}
+			}
+			if err := rows.Err(); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+
+	// When the context does not have a Done channel we should use
+	// the fast path that directly handles the query instead of
+	// handling it in a goroutine. This benchmark also serves to
+	// highlight the performance impact of using a cancelable
+	// context.
+	b.Run("Background", func(b *testing.B) {
+		test(context.Background(), b)
+	})
+
+	// Benchmark a query with a context that can be canceled. This
+	// requires using a goroutine and is thus much slower.
+	b.Run("WithCancel", func(b *testing.B) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		test(ctx, b)
+	})
 }
 
 // benchmarkParams is benchmark for params
@@ -2565,6 +2932,63 @@ func benchmarkStmtRows(b *testing.B) {
 		}
 		if err = r.Err(); err != nil {
 			panic(err)
+		}
+	}
+}
+
+func benchmarkStmt10Cols(b *testing.B) {
+	db.once.Do(makeBench)
+
+	const createTableStmt = `
+	DROP TABLE IF EXISTS bench_cols;
+	VACUUM;
+	CREATE TABLE bench_cols (
+		r0 INTEGER NOT NULL,
+		r1 INTEGER NOT NULL,
+		r2 INTEGER NOT NULL,
+		r3 INTEGER NOT NULL,
+		r4 INTEGER NOT NULL,
+		r5 INTEGER NOT NULL,
+		r6 INTEGER NOT NULL,
+		r7 INTEGER NOT NULL,
+		r8 INTEGER NOT NULL,
+		r9 INTEGER NOT NULL
+	);`
+	if _, err := db.Exec(createTableStmt); err != nil {
+		b.Fatal(err)
+	}
+	for i := int64(0); i < 4; i++ {
+		_, err := db.Exec("INSERT INTO bench_cols VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+			i, i, i, i, i, i, i, i, i, i)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	stmt, err := db.Prepare("SELECT * FROM bench_cols;")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer stmt.Close()
+
+	b.ResetTimer()
+	var (
+		v0, v1, v2, v3, v4 int64
+		v5, v6, v7, v8, v9 int64
+	)
+	for i := 0; i < b.N; i++ {
+		rows, err := stmt.Query()
+		if err != nil {
+			b.Fatal(err)
+		}
+		for rows.Next() {
+			err := rows.Scan(&v0, &v1, &v2, &v3, &v4, &v5, &v6, &v7, &v8, &v9)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			b.Fatal(err)
 		}
 	}
 }

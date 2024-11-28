@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mattn/go-sqlite3"
+	"github.com/charlievieth/go-sqlite3"
 )
 
 func createBulkInsertQuery(n int, start int) (query string, args []any) {
