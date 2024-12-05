@@ -1553,6 +1553,158 @@ func TestAggregatorRegistration_GenericReturn(t *testing.T) {
 	}
 }
 
+type sumInt struct {
+	values []int64
+	sum    int64
+}
+
+func newSumInt() *sumInt {
+	return &sumInt{
+		sum: int64(0),
+	}
+}
+
+func (sumInt *sumInt) Step(x int64) {
+	sumInt.sum += x
+}
+
+func (sumInt *sumInt) Inverse(x int64) {
+	sumInt.sum -= x
+}
+
+func (sumInt *sumInt) Value() int64 {
+	return sumInt.sum
+}
+
+func (sumInt *sumInt) Done() int64 {
+	return sumInt.sum
+}
+
+func TestWindowAggregatorRegistration_GenericReturn(t *testing.T) {
+	sql.Register("sqlite3_WindowAggregatorRegistration_GenericReturn", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			return conn.RegisterAggregator("sumInt", newSumInt, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_WindowAggregatorRegistration_GenericReturn", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("create table foo (department integer, profits integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	_, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
+
+	rows, err := db.Query("select department, sumInt(profits) over (partition by department) from foo")
+	if err != nil {
+		t.Fatal("sumInt query error:", err)
+	}
+
+	for rows.Next() {
+		var department int64
+		var sum int64
+		if err = rows.Scan(&department, &sum); err != nil {
+			t.Fatalf("Reading row failed for: %s", err)
+		}
+		if department != 1 && department != 2 {
+			t.Fatalf("Found unexpected department: [%d]", department)
+		}
+		if department == 1 && sum != 75 {
+			t.Fatalf("Got incorrect sum. Wanted 55 got: [%d]", sum)
+		}
+		if department == 2 && sum != 177 {
+			t.Fatalf("Got incorrect sum. Wanted 177 got: [%d]", sum)
+		}
+	}
+}
+
+type lead struct {
+	value interface{}
+}
+
+func newlead() *lead {
+	return &lead{
+		value: nil,
+	}
+}
+
+func (lead *lead) Step(x interface{}) {
+	lead.value = x
+}
+
+func (lead *lead) Inverse(x interface{}) {
+	lead.value = nil
+}
+
+func (lead *lead) Value() interface{} {
+	return lead.value
+}
+
+func (lead *lead) Done() interface{} {
+	return lead.value
+}
+
+func TestWindowAggregatorRegistration_GenericReturnLead(t *testing.T) {
+	sql.Register("sqlite3_WindowAggregatorRegistration_GenericReturnLead", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			return conn.RegisterAggregator("test_lead", newlead, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_WindowAggregatorRegistration_GenericReturnLead", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("create table foo (department integer, profits integer)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	_, err = db.Exec("insert into foo values (1, 10), (1, 20), (1, 45), (2, 42), (2, 115), (2, 20)")
+	if err != nil {
+		t.Fatal("Failed to insert records:", err)
+	}
+
+	rows, err := db.Query("select department, profits, test_lead(profits) over (partition by department order by profits asc rows between current row and 1 following exclude current row) from foo")
+	if err != nil {
+		t.Fatal("test_lead query error:", err)
+	}
+
+	expectedRows := [][]interface{}{
+		{int64(1), int64(10), int64(20)},
+		{int64(1), int64(20), int64(45)},
+		{int64(1), int64(45), nil},
+		{int64(2), int64(20), int64(42)},
+		{int64(2), int64(42), int64(115)},
+		{int64(2), int64(115), nil},
+	}
+
+	index := 0
+	for rows.Next() {
+		if index == len(expectedRows) {
+			t.Fatalf("Unexpected row index: %d", index)
+		}
+		args := []interface{}{nil, nil, nil}
+		derefArgs := []interface{}{&args[0], &args[1], &args[2]}
+		if err = rows.Scan(derefArgs...); err != nil {
+			t.Fatalf("Reading row failed for: %s", err)
+		}
+
+		for i, v := range expectedRows[index] {
+			if v != args[i] {
+				t.Fatalf("Unexpected value found in row %s, expected [%s]", args, expectedRows[index])
+			}
+		}
+
+		index++
+	}
+}
 func rot13(r rune) rune {
 	switch {
 	case r >= 'A' && r <= 'Z':
