@@ -1782,26 +1782,20 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 }
 
 // Close the connection.
-func (c *SQLiteConn) Close() error {
-	rv := C.sqlite3_close_v2(c.db)
-	if rv != C.SQLITE_OK {
-		return c.lastError()
-	}
-	deleteHandles(c)
-	c.mu.Lock()
-	c.db = nil
-	c.mu.Unlock()
-	runtime.SetFinalizer(c, nil)
-	return nil
-}
-
-func (c *SQLiteConn) dbConnOpen() bool {
-	if c == nil {
-		return false
-	}
+func (c *SQLiteConn) Close() (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.db != nil
+	if c.db == nil {
+		return nil // Already closed
+	}
+	runtime.SetFinalizer(c, nil)
+	rv := C.sqlite3_close_v2(c.db)
+	if rv != C.SQLITE_OK {
+		err = c.lastError()
+	}
+	deleteHandles(c)
+	c.db = nil
+	return err
 }
 
 // Prepare the query string. Return a new statement.
@@ -1901,16 +1895,15 @@ func (s *SQLiteStmt) Close() error {
 		return nil
 	}
 	s.closed = true
-	if !s.c.dbConnOpen() {
-		return errors.New("sqlite statement with already closed database connection")
-	}
-	rv := C.sqlite3_finalize(s.s)
-	s.s = nil
-	if rv != C.SQLITE_OK {
-		return s.c.lastError()
-	}
+	conn := s.c
+	stmt := s.s
 	s.c = nil
+	s.s = nil
 	runtime.SetFinalizer(s, nil)
+	rv := C.sqlite3_finalize(stmt)
+	if rv != C.SQLITE_OK {
+		return conn.lastError()
+	}
 	return nil
 }
 

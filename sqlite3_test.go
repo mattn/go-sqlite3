@@ -338,6 +338,14 @@ func TestClose(t *testing.T) {
 	if err == nil {
 		t.Fatal("Failed to operate closed statement")
 	}
+	// Closing a statement should not error even if the db is closed.
+	if err := stmt.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Second close should be a no-op
+	if err := stmt.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestInsert(t *testing.T) {
