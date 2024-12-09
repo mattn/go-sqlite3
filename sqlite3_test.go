@@ -1864,6 +1864,32 @@ func TestSetFileControlInt(t *testing.T) {
 	})
 }
 
+func TestSetFileControlInt64(t *testing.T) {
+	const GiB = 1024 * 1024 * 1024
+
+	t.Run("", func(t *testing.T) {
+
+		sql.Register("sqlite3_FCNTL_SIZE_LIMIT", &SQLiteDriver{
+			ConnectHook: func(conn *SQLiteConn) error {
+				if err := conn.SetFileControlInt64("", SQLITE_FCNTL_SIZE_LIMIT, 4*GiB); err != nil {
+					return fmt.Errorf("Unexpected error from SetFileControlInt64(): %w", err)
+				}
+				return nil
+			},
+		})
+
+		db, err := sql.Open("sqlite3", "file:/dbname?vfs=memdb")
+		if err != nil {
+			t.Fatal("Failed to open database:", err)
+		}
+		err = db.Ping()
+		if err != nil {
+			t.Fatal("Failed to ping", err)
+		}
+		db.Close()
+	})
+}
+
 func TestNonColumnString(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
