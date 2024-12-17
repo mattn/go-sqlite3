@@ -399,6 +399,9 @@ type SQLiteRows struct {
 	decltype []string
 	ctx      context.Context // no better alternative to pass context into Next() method
 	closemu  sync.Mutex
+	// semaphore to signal the goroutine used to interrupt queries when a
+	// cancellable context is passed to QueryContext
+	sema chan struct{}
 }
 
 type functionInfo struct {
@@ -2117,6 +2120,9 @@ func (rc *SQLiteRows) Close() error {
 		return nil
 	}
 	rc.s = nil // remove reference to SQLiteStmt
+	if rc.sema != nil {
+		close(rc.sema)
+	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -2174,27 +2180,40 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 
-	if rc.ctx.Done() == nil {
+	done := rc.ctx.Done()
+	if done == nil {
 		return rc.nextSyncLocked(dest)
 	}
-	resultCh := make(chan error)
-	defer close(resultCh)
-	go func() {
-		resultCh <- rc.nextSyncLocked(dest)
-	}()
-	select {
-	case err := <-resultCh:
-		return err
-	case <-rc.ctx.Done():
-		select {
-		case <-resultCh: // no need to interrupt
-		default:
-			// this is still racy and can be no-op if executed between sqlite3_* calls in nextSyncLocked.
-			C.sqlite3_interrupt(rc.s.c.db)
-			<-resultCh // ensure goroutine completed
-		}
-		return rc.ctx.Err()
+	if err := rc.ctx.Err(); err != nil {
+		return err // Fast check if the channel is closed
 	}
+
+	if rc.sema == nil {
+		rc.sema = make(chan struct{})
+	}
+	go func() {
+		select {
+		case <-done:
+			C.sqlite3_interrupt(rc.s.c.db)
+			// Wait until signaled. We need to ensure that this goroutine
+			// will not call interrupt after this method returns.
+			<-rc.sema
+		case <-rc.sema:
+		}
+	}()
+
+	err := rc.nextSyncLocked(dest)
+	// Signal the goroutine to exit. This send will only succeed at a point
+	// where it is impossible for the goroutine to call sqlite3_interrupt.
+	//
+	// This is necessary to ensure the goroutine does not interrupt an
+	// unrelated query if the context is cancelled after this method returns
+	// but before the goroutine exits (we don't wait for it to exit).
+	rc.sema <- struct{}{}
+	if err != nil && isInterruptErr(err) {
+		err = rc.ctx.Err()
+	}
+	return err
 }
 
 // nextSyncLocked moves cursor to next; must be called with locked mutex.
