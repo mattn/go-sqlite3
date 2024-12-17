@@ -11,6 +11,6 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -DSQLITE_DEFAULT_FOREIGN_KEYS=1
-#cgo LDFLAGS: -lm
+#cgo LDFLAGS: -lcrypto -lsqlcipher
 */
 import "C"
