@@ -20,6 +20,7 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_OMIT_DEPRECATED
 #cgo CFLAGS: -DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1
 #cgo CFLAGS: -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
+#cgo CFLAGS: -DSQLITE_CKSUMVFS_STATIC
 #cgo CFLAGS: -Wno-deprecated-declarations
 #cgo openbsd CFLAGS: -I/usr/local/include
 #cgo openbsd LDFLAGS: -L/usr/local/lib

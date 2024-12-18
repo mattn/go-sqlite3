@@ -121,6 +121,7 @@ var (
 	ErrIoErrMMap              = ErrIoErr.Extend(24)
 	ErrIoErrGetTempPath       = ErrIoErr.Extend(25)
 	ErrIoErrConvPath          = ErrIoErr.Extend(26)
+	ErrIoErrData              = ErrIoErr.Extend(32)
 	ErrLockedSharedCache      = ErrLocked.Extend(1)
 	ErrBusyRecovery           = ErrBusy.Extend(1)
 	ErrBusySnapshot           = ErrBusy.Extend(2)

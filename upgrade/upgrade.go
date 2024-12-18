@@ -15,11 +15,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
+
+var includeRE = regexp.MustCompile(`^\s*#\s*include\s+"sqlite3.h"\s*$`)
 
 func download(prefix string) (url string, content []byte, err error) {
 	year := time.Now().Year()
@@ -76,20 +79,32 @@ func mergeFile(src string, dst string) error {
 	}
 	defer fdst.Close()
 
-	// Read source content
-	content, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
-	}
-
 	// Add Additional newline
 	if _, err := fdst.WriteString("\n"); err != nil {
 		return err
 	}
 
-	fmt.Printf("Merging: %s into %s\n", src, dst)
-	if _, err = fdst.Write(content); err != nil {
+	fsrc, err := os.OpenFile(src, os.O_RDONLY, 0)
+	if err != nil {
 		return err
+	}
+	defer fsrc.Close()
+
+	fmt.Printf("Merging: %s into %s\n", src, dst)
+	scanner := bufio.NewScanner(fsrc)
+	for scanner.Scan() {
+		text := scanner.Text()
+		if includeRE.Match([]byte(text)) {
+			text = `#include "sqlite3-binding.h"`
+		}
+		_, err = fmt.Fprintln(fdst, text)
+		if err != nil {
+			break
+		}
+	}
+	err = scanner.Err()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	return nil
@@ -198,6 +213,8 @@ func main() {
 			f, err = os.Create("../userauth.c")
 		case "sqlite3userauth.h":
 			f, err = os.Create("../userauth.h")
+		case "cksumvfs.c":
+			f, err = os.Create("../cksumvfs.c")
 		default:
 			continue
 		}
@@ -224,6 +241,9 @@ func main() {
 		log.Fatal(err)
 	}
 	if err := mergeFile("../userauth.h", "../sqlite3-binding.h"); err != nil {
+		log.Fatal(err)
+	}
+	if err := mergeFile("../cksumvfs.c", "../sqlite3-binding.c"); err != nil {
 		log.Fatal(err)
 	}
 
