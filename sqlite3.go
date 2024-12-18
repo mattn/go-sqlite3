@@ -273,6 +273,7 @@ const (
 	SQLITE_OK     = C.SQLITE_OK
 	SQLITE_IGNORE = C.SQLITE_IGNORE
 	SQLITE_DENY   = C.SQLITE_DENY
+	SQLITE_AUTH   = C.SQLITE_AUTH
 
 	// different actions query tries to do - passed as argument to authorizer
 	SQLITE_CREATE_INDEX        = C.SQLITE_CREATE_INDEX
@@ -1601,7 +1602,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		//
 		// If the SQLITE_USER table is not present in the database file, then
 		// this interface is a harmless no-op returnning SQLITE_OK.
-		if err := conn.RegisterFunc("authenticate", conn.authenticate, true); err != nil {
+		if err := conn.registerAuthFunc("authenticate", conn.authenticate, true); err != nil {
 			return err
 		}
 		//
@@ -1614,7 +1615,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		// The AuthUserAdd only works for the "main" database, not
 		// for any ATTACH-ed databases. Any call to AuthUserAdd by a
 		// non-admin user results in an error.
-		if err := conn.RegisterFunc("auth_user_add", conn.authUserAdd, true); err != nil {
+		if err := conn.registerAuthFunc("auth_user_add", conn.authUserAdd, true); err != nil {
 			return err
 		}
 		//
@@ -1624,7 +1625,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		// login credentials. Only an admin user can change another users login
 		// credentials or admin privilege setting. No user may change their own
 		// admin privilege setting.
-		if err := conn.RegisterFunc("auth_user_change", conn.authUserChange, true); err != nil {
+		if err := conn.registerAuthFunc("auth_user_change", conn.authUserChange, true); err != nil {
 			return err
 		}
 		//
@@ -1634,13 +1635,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		// which guarantees that there is always an admin user and hence that
 		// the database cannot be converted into a no-authentication-required
 		// database.
-		if err := conn.RegisterFunc("auth_user_delete", conn.authUserDelete, true); err != nil {
+		if err := conn.registerAuthFunc("auth_user_delete", conn.authUserDelete, true); err != nil {
 			return err
 		}
 
 		// Register: auth_enabled
 		// auth_enabled can be used to check if user authentication is enabled
-		if err := conn.RegisterFunc("auth_enabled", conn.authEnabled, true); err != nil {
+		if err := conn.registerAuthFunc("auth_enabled", conn.authEnabled, true); err != nil {
 			return err
 		}
 
