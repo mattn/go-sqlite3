@@ -27,10 +27,6 @@ type Session struct {
 	session *C.sqlite3_session
 }
 
-type Changeset struct {
-	changeset *C.sqlite3_changeset_iter
-}
-
 // CreateSession creates a new session object.
 func (c *SQLiteConn) CreateSession(dbName string) (*Session, error) {
 	cDbName := C.CString(dbName)
