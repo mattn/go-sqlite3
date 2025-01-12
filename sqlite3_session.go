@@ -58,111 +58,156 @@ func (s *Session) AttachSession(tableName string) error {
 // Delete deletes a session object.
 func (s *Session) DeleteSession() error {
 	if s.session != nil {
-		// Call sqlite3session_delete to free the session object
 		C.sqlite3session_delete(s.session)
-		s.session = nil // Set session to nil to avoid double deletion
+		s.session = nil
 	}
 	return nil
 }
 
+// Changeset represents a changeset object.
 type Changeset struct {
-	cs []byte
+	b []byte
 }
 
-type ChangesetIterator struct {
-	iter *C.sqlite3_changeset_iter
-}
-
-// Changeset generates a changeset from a session object.
-func (s *Session) Changeset() (*Changeset, error) {
+// NewChangeset returns a changeset from a session object.
+func NewChangeset(s *Session) (*Changeset, error) {
 	var nChangeset C.int
 	var pChangeset unsafe.Pointer
 
-	// Call sqlite3session_changeset
 	rc := C.sqlite3session_changeset(s.session, &nChangeset, &pChangeset)
 	if rc != C.SQLITE_OK {
 		return nil, fmt.Errorf("sqlite3session_changeset: %s", C.GoString(C.sqlite3_errstr(rc)))
 	}
-	defer C.sqlite3_free(pChangeset) // Free the changeset buffer after use
+	defer C.sqlite3_free(pChangeset)
 
-	// copy the changeset buffer to a Go byte slice, because cgo can nuke its memory at any time
+	// Copy the changeset buffer to a Go byte slice, because cgo
+	// does not support Go slices with C memory.
 	changeset := C.GoBytes(pChangeset, nChangeset)
-	return &Changeset{cs: changeset}, nil
+	return &Changeset{b: changeset}, nil
 }
 
-// ChangesetStart creates and initializes a changeset iterator.
-func ChangesetStart(changeset []byte) (*ChangesetIterator, error) {
-	var iter *C.sqlite3_changeset_iter
+// ChangesetIterator represents a changeset iterator object.
+type ChangesetIterator struct {
+	iter *C.sqlite3_changeset_iter
+}
 
-	// Call sqlite3changeset_start
-	rc := C.sqlite3changeset_start(&iter, C.int(len(changeset)), unsafe.Pointer(&changeset[0]))
+// NewChangesetIterator creates a new changeset iterator object.
+func NewChangesetIterator(cs *Changeset) (*ChangesetIterator, error) {
+	var iter *C.sqlite3_changeset_iter
+	ptr := unsafe.Pointer(nil)
+	if len(cs.b) > 0 {
+		ptr = unsafe.Pointer(&cs.b[0])
+	}
+	rc := C.sqlite3changeset_start(&iter, C.int(len(cs.b)), ptr)
 	if rc != C.SQLITE_OK {
 		return nil, fmt.Errorf("sqlite3changeset_start: %s", C.GoString(C.sqlite3_errstr(rc)))
 	}
-
 	return &ChangesetIterator{iter: iter}, nil
 }
 
-func (cs *Changeset) Start() (*ChangesetIterator, error) {
-	return ChangesetStart(cs.cs)
-}
-
-// ChangesetNext moves the changeset iterator to the next change.
-func (ci *ChangesetIterator) ChangesetNext() (bool, error) {
+// Next moves the changeset iterator to the next change.
+func (ci *ChangesetIterator) Next() (bool, error) {
 	rc := C.sqlite3changeset_next(ci.iter)
 	if rc == C.SQLITE_DONE {
 		return false, nil // No more changes
 	}
-	if rc != C.SQLITE_OK {
+	if rc != C.SQLITE_ROW {
 		return false, fmt.Errorf("sqlite3changeset_next: %s", C.GoString(C.sqlite3_errstr(rc)))
 	}
 	return true, nil
 }
 
-// ChangesetOp returns the type of change (INSERT, UPDATE, or DELETE) that the iterator points to.
-func (ci *ChangesetIterator) ChangesetOp() (string, int, int, bool, error) {
+// Op returns the current Operation from a Changeset Iterator
+func (ci *ChangesetIterator) Op() (tblName string, numCol int, oper int, indirect bool, err error) {
 	var tableName *C.char
 	var nCol C.int
 	var op C.int
-	var indirect C.int
+	var ind C.int
 
-	rc := C.sqlite3changeset_op(ci.iter, &tableName, &nCol, &op, &indirect)
+	rc := C.sqlite3changeset_op(ci.iter, &tableName, &nCol, &op, &ind)
 	if rc != C.SQLITE_OK {
 		return "", 0, 0, false, fmt.Errorf("sqlite3changeset_op: %s", C.GoString(C.sqlite3_errstr(rc)))
 	}
-
-	return C.GoString(tableName), int(nCol), int(op), indirect != 0, nil
+	return C.GoString(tableName), int(nCol), int(op), ind != 0, nil
 }
 
-// ChangesetOld retrieves the old value for the specified column in the change payload.
-func (ci *ChangesetIterator) ChangesetOld(column int) (*C.sqlite3_value, error) {
-	var value *C.sqlite3_value
+// Old retrieves the old value for the specified column in the change payload.
+func (ci *ChangesetIterator) Old(dest []any) error {
+	for i := 0; i < len(dest); i++ {
+		var val *C.sqlite3_value
+		var src any
 
-	rc := C.sqlite3changeset_old(ci.iter, C.int(column), &value)
-	if rc != C.SQLITE_OK {
-		return nil, fmt.Errorf("sqlite3changeset_old: %s", C.GoString(C.sqlite3_errstr(rc)))
+		rc := C.sqlite3changeset_old(ci.iter, C.int(i), &val)
+		if rc != C.SQLITE_OK {
+			return fmt.Errorf("sqlite3changeset_old: %s", C.GoString(C.sqlite3_errstr(rc)))
+		}
+
+		switch C.sqlite3_value_type(val) {
+		case C.SQLITE_INTEGER:
+			src = int64(C.sqlite3_value_int64(val))
+		case C.SQLITE_FLOAT:
+			src = float64(C.sqlite3_value_double(val))
+		case C.SQLITE_BLOB:
+			len := C.sqlite3_value_bytes(val)
+			blobptr := C.sqlite3_value_blob(val)
+			src = C.GoBytes(blobptr, len)
+		case C.SQLITE_TEXT:
+			len := C.sqlite3_value_bytes(val)
+			cstrptr := unsafe.Pointer(C.sqlite3_value_text(val))
+			src = C.GoBytes(cstrptr, len)
+		case C.SQLITE_NULL:
+			src = nil
+		}
+
+		err := convertAssign(&dest[i], src)
+		if err != nil {
+			return err
+		}
 	}
-
-	return value, nil
+	return nil
 }
 
-// ChangesetNew retrieves the new value for the specified column in the change payload.
-func (ci *ChangesetIterator) ChangesetNew(column int) (*C.sqlite3_value, error) {
-	var value *C.sqlite3_value
+// New retrieves the new value for the specified column in the change payload.
+func (ci *ChangesetIterator) New(dest []any) error {
+	for i := 0; i < len(dest); i++ {
+		var val *C.sqlite3_value
+		var src any
 
-	rc := C.sqlite3changeset_new(ci.iter, C.int(column), &value)
-	if rc != C.SQLITE_OK {
-		return nil, fmt.Errorf("sqlite3changeset_new: %s", C.GoString(C.sqlite3_errstr(rc)))
+		rc := C.sqlite3changeset_new(ci.iter, C.int(i), &val)
+		if rc != C.SQLITE_OK {
+			return fmt.Errorf("sqlite3changeset_new: %s", C.GoString(C.sqlite3_errstr(rc)))
+		}
+
+		switch C.sqlite3_value_type(val) {
+		case C.SQLITE_INTEGER:
+			src = int64(C.sqlite3_value_int64(val))
+		case C.SQLITE_FLOAT:
+			src = float64(C.sqlite3_value_double(val))
+		case C.SQLITE_BLOB:
+			len := C.sqlite3_value_bytes(val)
+			blobptr := C.sqlite3_value_blob(val)
+			src = C.GoBytes(blobptr, len)
+		case C.SQLITE_TEXT:
+			len := C.sqlite3_value_bytes(val)
+			cstrptr := unsafe.Pointer(C.sqlite3_value_text(val))
+			src = C.GoBytes(cstrptr, len)
+		case C.SQLITE_NULL:
+			src = nil
+		}
+
+		err := convertAssign(&dest[i], src)
+		if err != nil {
+			return err
+		}
 	}
-
-	return value, nil
+	return nil
 }
 
-// ChangesetFinalize deletes a changeset iterator.
-func (ci *ChangesetIterator) ChangesetFinalize() error {
+// Finalize deletes a changeset iterator.
+func (ci *ChangesetIterator) Finalize() error {
 	if ci.iter != nil {
 		rc := C.sqlite3changeset_finalize(ci.iter)
-		ci.iter = nil // Prevent double finalization
+		ci.iter = nil
 		if rc != C.SQLITE_OK {
 			return fmt.Errorf("sqlite3changeset_finalize: %s", C.GoString(C.sqlite3_errstr(rc)))
 		}
