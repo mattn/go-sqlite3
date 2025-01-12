@@ -7,7 +7,7 @@ jobs:
   test:
     docker:
       # specify the version
-      - image: cimg/go:1.18.0
+      - image: cimg/go:1.23.0
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -25,7 +25,7 @@ jobs:
       - run: go version
       - run: go get -v -t -d ./...
       - run: go vet
-      - run: go test -v ./...
+      - run: go test -v -failfast ./...
 
 workflows:
   version: 2
