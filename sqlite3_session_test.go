@@ -174,3 +174,135 @@ func Test_Changeset_OneRow(t *testing.T) {
 		t.Fatalf("Failed to finalize changeset iterator: %v", err)
 	}
 }
+
+func Test_Changeset_Multi(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open", err)
+	}
+	err = db.Ping()
+	if err != nil {
+		t.Fatal("Failed to ping", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal("Failed to get connection to database:", err)
+	}
+	defer conn.Close()
+
+	// Create tables, and attach a session.
+	mustExecute(conn, `CREATE TABLE table1 (id INTEGER PRIMARY KEY, name TEXT, gpa FLOAT, alive boolean)`)
+	mustExecute(conn, `CREATE TABLE table2 (id INTEGER PRIMARY KEY, age INTEGER)`)
+	var session *Session
+	if err := conn.Raw(func(raw any) error {
+		var err error
+		session, err = raw.(*SQLiteConn).CreateSession("main")
+		return err
+	}); err != nil {
+		t.Fatal("Failed to create session:", err)
+	}
+	defer func() {
+		if err := session.DeleteSession(); err != nil {
+			t.Fatalf("Failed to delete session: %v", err)
+		}
+	}()
+	err = session.AttachSession("")
+	if err != nil {
+		t.Fatalf("Failed to attach session to table: %v", err)
+	}
+
+	// Make a bunch of changes.
+	mustExecute(conn, `INSERT INTO table1 (name, gpa, alive) VALUES ('fiona', 3.5, 1)`)
+	mustExecute(conn, `INSERT INTO table1 (name, gpa, alive) VALUES ('declan', 2.5, 0)`)
+	mustExecute(conn, `INSERT INTO table2 (age) VALUES (20)`)
+	mustExecute(conn, `INSERT INTO table2 (age) VALUES (30)`)
+
+	// Prepare to iterate over the changes.
+	changeset, err := NewChangeset(session)
+	if err != nil {
+		t.Fatalf("Failed to generate changeset: %v", err)
+	}
+	iter, err := NewChangesetIterator(changeset)
+	if err != nil {
+		t.Fatalf("Failed to create changeset iterator: %v", err)
+	}
+
+	tt := []struct {
+		table string
+		op    int
+		data  []any
+	}{
+		{
+			table: "table1",
+			op:    SQLITE_INSERT,
+			data:  []any{int64(1), "fiona", 3.5, int64(1)},
+		},
+		{
+			table: "table1",
+			op:    SQLITE_INSERT,
+			data:  []any{int64(2), "declan", 2.5, int64(0)},
+		},
+		{
+			table: "table2",
+			op:    SQLITE_INSERT,
+			data:  []any{int64(1), int64(20)},
+		},
+		{
+			table: "table2",
+			op:    SQLITE_INSERT,
+			data:  []any{int64(2), int64(30)},
+		},
+	}
+
+	for _, v := range tt {
+		if b, err := iter.Next(); err != nil {
+			t.Fatalf("Failed to get next changeset: %v", err)
+		} else if !b {
+			t.Fatalf("changeset does not contain changes: %v", b)
+		}
+
+		tblName, nCol, op, _, err := iter.Op()
+		if err != nil {
+			t.Fatalf("Failed to get changeset operation: %v", err)
+		}
+		if exp, got := v.table, tblName; exp != got {
+			t.Fatalf("Expected table name '%s', got '%s'", exp, got)
+		}
+		if exp, got := len(v.data), nCol; exp != got {
+			t.Fatalf("Expected %d columns, got %d", exp, got)
+		}
+		if exp, got := v.op, op; exp != got {
+			t.Fatalf("Expected operation %d, got %d", exp, got)
+		}
+
+		dest := make([]any, nCol)
+		if err := iter.New(dest); err != nil {
+			t.Fatalf("Failed to get new row: %v", err)
+		}
+		for j, d := range v.data {
+			if exp, got := d, dest[j]; exp != got {
+				t.Fatalf("Expected %v (%T) for dest[%d], got %v (%T)", exp, exp, j, got, got)
+			}
+		}
+	}
+
+	if b, err := iter.Next(); err != nil {
+		t.Fatalf("Failed to get next changeset: %v", err)
+	} else if b {
+		t.Fatalf("changeset contains changes: %v", b)
+	}
+
+	if err := iter.Finalize(); err != nil {
+		t.Fatalf("Failed to finalize changeset iterator: %v", err)
+	}
+}
+
+func mustExecute(conn *sql.Conn, stmt string) {
+	_, err := conn.ExecContext(context.Background(), stmt)
+	if err != nil {
+		panic(err)
+	}
+}
