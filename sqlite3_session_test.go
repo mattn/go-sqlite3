@@ -104,7 +104,7 @@ func Test_Changeset_OneRow(t *testing.T) {
 		}
 	}()
 
-	// Attach to the table, insert a row, and capture the iunserted row in a changeset.
+	// Attach to the table, insert a row, and capture the inserted row in a changeset.
 	err = session.AttachSession("test_table")
 	if err != nil {
 		t.Fatalf("Failed to attach session to table: %v", err)
