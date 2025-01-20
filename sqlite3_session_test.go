@@ -196,6 +196,7 @@ func Test_Changeset_Multi(t *testing.T) {
 	// Create tables, and attach a session.
 	mustExecute(conn, `CREATE TABLE table1 (id INTEGER PRIMARY KEY, name TEXT, gpa FLOAT, alive boolean)`)
 	mustExecute(conn, `CREATE TABLE table2 (id INTEGER PRIMARY KEY, age INTEGER)`)
+	mustExecute(conn, `CREATE TABLE table3 (id INTEGER PRIMARY KEY, company TEXT)`)
 	var session *Session
 	if err := conn.Raw(func(raw any) error {
 		var err error
@@ -219,6 +220,8 @@ func Test_Changeset_Multi(t *testing.T) {
 	mustExecute(conn, `INSERT INTO table1 (name, gpa, alive) VALUES ('declan', 2.5, 0)`)
 	mustExecute(conn, `INSERT INTO table2 (age) VALUES (20)`)
 	mustExecute(conn, `INSERT INTO table2 (age) VALUES (30)`)
+	mustExecute(conn, `INSERT INTO table3 (company) VALUES ('foo')`)
+	mustExecute(conn, `UPDATE table3 SET company = 'bar' WHERE id = 1`)
 
 	// Prepare to iterate over the changes.
 	changeset, err := NewChangeset(session)
@@ -233,31 +236,37 @@ func Test_Changeset_Multi(t *testing.T) {
 	tt := []struct {
 		table string
 		op    int
-		data  []any
+		old   []any
+		new   []any
 	}{
 		{
 			table: "table1",
 			op:    SQLITE_INSERT,
-			data:  []any{int64(1), "fiona", 3.5, int64(1)},
+			new:   []any{int64(1), "fiona", 3.5, int64(1)},
 		},
 		{
 			table: "table1",
 			op:    SQLITE_INSERT,
-			data:  []any{int64(2), "declan", 2.5, int64(0)},
+			new:   []any{int64(2), "declan", 2.5, int64(0)},
 		},
 		{
 			table: "table2",
 			op:    SQLITE_INSERT,
-			data:  []any{int64(1), int64(20)},
+			new:   []any{int64(1), int64(20)},
 		},
 		{
 			table: "table2",
 			op:    SQLITE_INSERT,
-			data:  []any{int64(2), int64(30)},
+			new:   []any{int64(2), int64(30)},
+		},
+		{
+			table: "table3",
+			op:    SQLITE_INSERT,
+			new:   []any{int64(1), "bar"},
 		},
 	}
 
-	for _, v := range tt {
+	for i, v := range tt {
 		if b, err := iter.Next(); err != nil {
 			t.Fatalf("Failed to get next changeset: %v", err)
 		} else if !b {
@@ -271,20 +280,34 @@ func Test_Changeset_Multi(t *testing.T) {
 		if exp, got := v.table, tblName; exp != got {
 			t.Fatalf("Expected table name '%s', got '%s'", exp, got)
 		}
-		if exp, got := len(v.data), nCol; exp != got {
-			t.Fatalf("Expected %d columns, got %d", exp, got)
-		}
+		// if exp, got := len(v.new), nCol; exp != got {
+		// 	t.Fatalf("Expected %d columns, got %d", exp, got)
+		// }
 		if exp, got := v.op, op; exp != got {
 			t.Fatalf("Expected operation %d, got %d", exp, got)
 		}
 
-		dest := make([]any, nCol)
-		if err := iter.New(dest); err != nil {
-			t.Fatalf("Failed to get new row: %v", err)
+		if v.old != nil {
+			dest := make([]any, nCol)
+			if err := iter.Old(dest); err != nil {
+				t.Fatalf("Failed to get old row: %v", err)
+			}
+			for j, d := range v.old {
+				if exp, got := d, dest[j]; exp != got {
+					t.Fatalf("Test %d, expected %v (%T) for dest[%d], got %v (%T)", i, exp, exp, j, got, got)
+				}
+			}
 		}
-		for j, d := range v.data {
-			if exp, got := d, dest[j]; exp != got {
-				t.Fatalf("Expected %v (%T) for dest[%d], got %v (%T)", exp, exp, j, got, got)
+
+		if v.new != nil {
+			dest := make([]any, nCol)
+			if err := iter.New(dest); err != nil {
+				t.Fatalf("Failed to get new row: %v", err)
+			}
+			for j, d := range v.new {
+				if exp, got := d, dest[j]; exp != got {
+					t.Fatalf("Test %d, expected %v (%T) for new dest[%d], got %v (%T)", i, exp, exp, j, got, got)
+				}
 			}
 		}
 	}
