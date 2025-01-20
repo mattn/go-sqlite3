@@ -100,25 +100,25 @@ func Test_Changeset_OneRow(t *testing.T) {
 	}
 	defer func() {
 		if err := session.DeleteSession(); err != nil {
-			t.Errorf("Failed to delete session: %v", err)
+			t.Fatalf("Failed to delete session: %v", err)
 		}
 	}()
 
+	// Attach to the table, insert a row, and capture the iunserted row in a changeset.
 	err = session.AttachSession("test_table")
 	if err != nil {
 		t.Fatalf("Failed to attach session to table: %v", err)
 	}
-
-	_, err = conn.ExecContext(ctx, `INSERT INTO test_table (value) VALUES ('test')`)
+	_, err = conn.ExecContext(ctx, `INSERT INTO test_table (value) VALUES ('fiona')`)
 	if err != nil {
 		t.Fatalf("Failed to insert row: %v", err)
 	}
-
 	changeset, err := NewChangeset(session)
 	if err != nil {
 		t.Fatalf("Failed to generate changeset: %v", err)
 	}
 
+	// Prepare to iterate over the changeset.
 	iter, err := NewChangesetIterator(changeset)
 	if err != nil {
 		t.Fatalf("Failed to create changeset iterator: %v", err)
@@ -129,6 +129,7 @@ func Test_Changeset_OneRow(t *testing.T) {
 		t.Fatalf("changeset does not contain changes: %v", b)
 	}
 
+	// Check table, number of columns changed, the the operation type.
 	tblName, nCol, op, indirect, err := iter.Op()
 	if err != nil {
 		t.Fatalf("Failed to get changeset operation: %v", err)
@@ -146,21 +147,23 @@ func Test_Changeset_OneRow(t *testing.T) {
 		t.Fatalf("Expected indirect false, got true")
 	}
 
+	// Now, get the new data.
 	dest := make([]any, nCol)
 	if err := iter.New(dest); err != nil {
 		t.Fatalf("Failed to get new row: %v", err)
 	}
 	if v, ok := dest[0].(int64); !ok {
 		t.Fatalf("Expected int64, got %T", dest[0])
-	} else if v != 1 {
-		t.Fatalf("Expected 1, got %d", v)
+	} else if exp, got := v, int64(1); exp != got {
+		t.Fatalf("Expected %d, got %d", exp, got)
 	}
 	if v, ok := dest[1].(string); !ok {
 		t.Fatalf("Expected string, got %T", dest[1])
-	} else if v != "test" {
-		t.Fatalf("Expected test, got %s", v)
+	} else if exp, got := v, "fiona"; exp != got {
+		t.Fatalf("Expected %s, %s", exp, got)
 	}
 
+	// We only inserted one row, so there should be no more changes.
 	if b, err := iter.Next(); err != nil {
 		t.Fatalf("Failed to get next changeset: %v", err)
 	} else if b {
