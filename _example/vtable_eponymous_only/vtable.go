@@ -95,6 +95,7 @@ func (vc *seriesCursor) Filter(idxNum int, idxStr string, vals []any) error {
 		vc.seriesTable.start = vals[0].(int64)
 		vc.seriesTable.stop = vals[1].(int64)
 		vc.seriesTable.step = vals[2].(int64)
+		vc.value = vc.seriesTable.start
 	}
 
 	return nil
