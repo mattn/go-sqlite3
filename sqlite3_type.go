@@ -18,6 +18,27 @@ import (
 	"strings"
 )
 
+const (
+	SQLITE_INTEGER = iota
+	SQLITE_TEXT
+	SQLITE_BLOB
+	SQLITE_REAL
+	SQLITE_NUMERIC
+	SQLITE_TIME
+	SQLITE_BOOL
+	SQLITE_NULL
+)
+
+var (
+	TYPE_NULLINT    = reflect.TypeOf(sql.NullInt64{})
+	TYPE_NULLFLOAT  = reflect.TypeOf(sql.NullFloat64{})
+	TYPE_NULLSTRING = reflect.TypeOf(sql.NullString{})
+	TYPE_RAWBYTES   = reflect.TypeOf(sql.RawBytes{})
+	TYPE_NULLBOOL   = reflect.TypeOf(sql.NullBool{})
+	TYPE_NULLTIME   = reflect.TypeOf(sql.NullTime{})
+	TYPE_ANY        = reflect.TypeOf(new(any))
+)
+
 // ColumnTypeDatabaseTypeName implement RowsColumnTypeDatabaseTypeName.
 func (rc *SQLiteRows) ColumnTypeDatabaseTypeName(i int) string {
 	return C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i)))
@@ -39,42 +60,47 @@ func (rc *SQLiteRows) ColumnTypeNullable(i int) (nullable, ok bool) {
 }
 
 // ColumnTypeScanType implement RowsColumnTypeScanType.
+// In SQLite3, this method should be called after Next() has been called, as sqlite3_column_type()
+// returns the column type for a specific row. If Next() has not been called, fallback to
+// sqlite3_column_decltype()
 func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
-	//ct := C.sqlite3_column_type(rc.s.s, C.int(i))  // Always returns 5
+	switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
+	case C.SQLITE_INTEGER:
+		return TYPE_NULLINT
+	case C.SQLITE_FLOAT:
+		return TYPE_NULLFLOAT
+	case C.SQLITE_TEXT:
+		return TYPE_NULLSTRING
+	case C.SQLITE_BLOB:
+		return TYPE_RAWBYTES
+		//case C.SQLITE_NULL:
+		//	return TYPE_ANY
+	}
+
+	// Fallback to schema declared to remain retro-compatible
 	return scanType(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
 }
-
-const (
-	SQLITE_INTEGER = iota
-	SQLITE_TEXT
-	SQLITE_BLOB
-	SQLITE_REAL
-	SQLITE_NUMERIC
-	SQLITE_TIME
-	SQLITE_BOOL
-	SQLITE_NULL
-)
 
 func scanType(cdt string) reflect.Type {
 	t := strings.ToUpper(cdt)
 	i := databaseTypeConvSqlite(t)
 	switch i {
 	case SQLITE_INTEGER:
-		return reflect.TypeOf(sql.NullInt64{})
+		return TYPE_NULLINT
 	case SQLITE_TEXT:
-		return reflect.TypeOf(sql.NullString{})
+		return TYPE_NULLSTRING
 	case SQLITE_BLOB:
-		return reflect.TypeOf(sql.RawBytes{})
+		return TYPE_RAWBYTES
 	case SQLITE_REAL:
-		return reflect.TypeOf(sql.NullFloat64{})
+		return TYPE_NULLFLOAT
 	case SQLITE_NUMERIC:
-		return reflect.TypeOf(sql.NullFloat64{})
+		return TYPE_NULLFLOAT
 	case SQLITE_BOOL:
-		return reflect.TypeOf(sql.NullBool{})
+		return TYPE_NULLBOOL
 	case SQLITE_TIME:
-		return reflect.TypeOf(sql.NullTime{})
+		return TYPE_NULLTIME
 	}
-	return reflect.TypeOf(new(any))
+	return TYPE_ANY
 }
 
 func databaseTypeConvSqlite(t string) int {
