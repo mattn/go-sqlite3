@@ -73,6 +73,9 @@ func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
 		return TYPE_NULLSTRING
 	case C.SQLITE_BLOB:
 		return TYPE_RAWBYTES
+		// This case can signal that the value is NULL or that Next() has not been called yet.
+		// Skip it and return the fallback behaviour as a best effort. This is safe as all types
+		// returned are Nullable or any, which is the expected value for SQLite3.
 		//case C.SQLITE_NULL:
 		//	return TYPE_ANY
 	}
