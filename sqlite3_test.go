@@ -14,6 +14,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/url"
@@ -1706,6 +1707,288 @@ func TestDeclTypes(t *testing.T) {
 
 	if !reflect.DeepEqual(declTypes, []string{"integer", "text"}) {
 		t.Fatal("Unexpected declTypes:", declTypes)
+	}
+}
+
+func TestScanTypes(t *testing.T) {
+
+	d := SQLiteDriver{}
+
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+	defer conn.Close()
+
+	sqlite3conn := conn.(*SQLiteConn)
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text, price integer, length float, token blob, dob timestamp, jdays date, somedate datetime)", nil)
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+	expected := []reflect.Type{type_nullint, type_nullstring, type_nullint, type_nullfloat, type_rawbytes, type_nulltime, type_nulltime, type_nulltime}
+
+	_, err = sqlite3conn.Exec("insert into foo(name, price, length, token, dob, jdays, somedate) values('bar', 10, 3.1415, x'0500', 100, 5.0, '2006-01-02 15:04:05')", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	rs, err := sqlite3conn.Query("select * from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
+	}
+	defer rs.Close()
+
+	cols := make([]driver.Value, len(rs.Columns()))
+	err = rs.Next(cols)
+	if err != nil {
+		t.Fatal("Failed to advance cursor:", err)
+	}
+
+	rc, ok := rs.(driver.RowsColumnTypeScanType)
+	if !ok {
+		t.Fatal("SQLiteRows does not implement driver.RowsColumnTypeScanType")
+	}
+
+	for i := range rc.Columns() {
+		if st := rc.ColumnTypeScanType(i); st != expected[i] {
+			t.Fatal("Unexpected ScanType. Expected:", expected[i], "Got:", st)
+		}
+	}
+}
+
+func TestScanTypesBeforeNext(t *testing.T) {
+
+	d := SQLiteDriver{}
+
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+	defer conn.Close()
+
+	sqlite3conn := conn.(*SQLiteConn)
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text, price integer, length float, token blob, dob timestamp, jdays date, somedate datetime)", nil)
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = sqlite3conn.Exec("insert into foo(name, price, length, token, dob, jdays, somedate) values('bar', 10, 3.1415, x'0500', 100, 5.0, '2006-01-02 15:04:05')", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	rs, err := sqlite3conn.Query("select * from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
+	}
+	defer rs.Close()
+
+	rc, ok := rs.(driver.RowsColumnTypeScanType)
+	if !ok {
+		t.Fatal("SQLiteRows does not implement driver.RowsColumnTypeScanType")
+	}
+
+	for i := range rc.Columns() {
+		if st := rc.ColumnTypeScanType(i); st != type_any {
+			t.Fatal("Unexpected ScanType:", st)
+		}
+	}
+}
+
+func TestScanTypesAfterClosed(t *testing.T) {
+
+	d := SQLiteDriver{}
+
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+	defer conn.Close()
+
+	sqlite3conn := conn.(*SQLiteConn)
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text, price integer, length float, token blob, dob timestamp, jdays date, somedate datetime)", nil)
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = sqlite3conn.Exec("insert into foo(name, price, length, token, dob, jdays, somedate) values('bar', 10, 3.1415, x'0500', 100, 5.0, '2006-01-02 15:04:05')", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	rs, err := sqlite3conn.Query("select * from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
+	}
+	defer rs.Close()
+
+	cols := make([]driver.Value, len(rs.Columns()))
+	err = rs.Next(cols)
+	if err != nil {
+		t.Fatal("Failed to advance cursor:", err)
+	}
+	err = rs.Next(cols)
+	if err != io.EOF {
+		t.Fatal("Unexpected error when reaching end of dataset:", err)
+	}
+
+	rc, ok := rs.(driver.RowsColumnTypeScanType)
+	if !ok {
+		t.Fatal("SQLiteRows does not implement driver.RowsColumnTypeScanType")
+	}
+
+	for i := range rc.Columns() {
+		if st := rc.ColumnTypeScanType(i); st != type_any {
+			t.Fatal("Unexpected ScanType:", st)
+		}
+	}
+}
+
+func TestScanTypesInvalidColumn(t *testing.T) {
+
+	d := SQLiteDriver{}
+
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+	defer conn.Close()
+
+	sqlite3conn := conn.(*SQLiteConn)
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text, price integer, length float, token blob, dob timestamp, jdays date, somedate datetime)", nil)
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = sqlite3conn.Exec("insert into foo(name, price, length, token, dob, jdays, somedate) values('bar', 10, 3.1415, x'0500', 100, 5.0, '2006-01-02 15:04:05')", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	rs, err := sqlite3conn.Query("select * from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
+	}
+	defer rs.Close()
+
+	cols := make([]driver.Value, len(rs.Columns()))
+	err = rs.Next(cols)
+	if err != nil {
+		t.Fatal("Failed to advance cursor:", err)
+	}
+
+	rc, ok := rs.(driver.RowsColumnTypeScanType)
+	if !ok {
+		t.Fatal("SQLiteRows does not implement driver.RowsColumnTypeScanType")
+	}
+
+	if st := rc.ColumnTypeScanType(len(rc.Columns())); st != type_any {
+		t.Fatal("Unexpected ScanType:", st)
+	}
+	if st := rc.ColumnTypeScanType(-1); st != type_any {
+		t.Fatal("Unexpected ScanType:", st)
+	}
+}
+
+func TestScanTypesNull(t *testing.T) {
+
+	d := SQLiteDriver{}
+
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+	defer conn.Close()
+
+	sqlite3conn := conn.(*SQLiteConn)
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, name text, price integer, length float, token blob, dob timestamp, jdays date, somedate datetime)", nil)
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = sqlite3conn.Exec("insert into foo(name, price, length, token, dob, jdays, somedate) values(null, null, null, null, null, null, null)", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	rs, err := sqlite3conn.Query("select * from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
+	}
+	defer rs.Close()
+
+	cols := make([]driver.Value, len(rs.Columns()))
+	err = rs.Next(cols)
+	if err != nil {
+		t.Fatal("Failed to advance cursor:", err)
+	}
+
+	rc, ok := rs.(driver.RowsColumnTypeScanType)
+	if !ok {
+		t.Fatal("SQLiteRows does not implement driver.RowsColumnTypeScanType")
+	}
+
+	for i := 1; i < len(rc.Columns()); i++ {
+		if st := rc.ColumnTypeScanType(i); st != type_any {
+			t.Fatal("Unexpected ScanType:", i, st)
+		}
+	}
+}
+
+func TestScanTypesAggregate(t *testing.T) {
+
+	d := SQLiteDriver{}
+
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to begin transaction:", err)
+	}
+	defer conn.Close()
+
+	sqlite3conn := conn.(*SQLiteConn)
+
+	_, err = sqlite3conn.Exec("create table foo (id integer not null primary key, price integer)", nil)
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = sqlite3conn.Exec("insert into foo(price) values(0)", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+	_, err = sqlite3conn.Exec("insert into foo(price) values(5)", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+	_, err = sqlite3conn.Exec("insert into foo(price) values(10)", nil)
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	rs, err := sqlite3conn.Query("select total(price) from foo", nil)
+	if err != nil {
+		t.Fatal("Failed to select:", err)
+	}
+	defer rs.Close()
+
+	cols := make([]driver.Value, len(rs.Columns()))
+	err = rs.Next(cols)
+	if err != nil {
+		t.Fatal("Failed to advance cursor:", err)
+	}
+
+	rc, ok := rs.(driver.RowsColumnTypeScanType)
+	if !ok {
+		t.Fatal("SQLiteRows does not implement driver.RowsColumnTypeScanType")
+	}
+
+	if st := rc.ColumnTypeScanType(0); st != type_nullfloat {
+		t.Fatal("Unexpected ScanType:", st)
 	}
 }
 

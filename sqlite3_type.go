@@ -15,28 +15,16 @@ import "C"
 import (
 	"database/sql"
 	"reflect"
-	"strings"
-)
-
-const (
-	SQLITE_INTEGER = iota
-	SQLITE_TEXT
-	SQLITE_BLOB
-	SQLITE_REAL
-	SQLITE_NUMERIC
-	SQLITE_TIME
-	SQLITE_BOOL
-	SQLITE_NULL
 )
 
 var (
-	TYPE_NULLINT    = reflect.TypeOf(sql.NullInt64{})
-	TYPE_NULLFLOAT  = reflect.TypeOf(sql.NullFloat64{})
-	TYPE_NULLSTRING = reflect.TypeOf(sql.NullString{})
-	TYPE_RAWBYTES   = reflect.TypeOf(sql.RawBytes{})
-	TYPE_NULLBOOL   = reflect.TypeOf(sql.NullBool{})
-	TYPE_NULLTIME   = reflect.TypeOf(sql.NullTime{})
-	TYPE_ANY        = reflect.TypeOf(new(any))
+	type_nullint    = reflect.TypeOf(sql.NullInt64{})
+	type_nullfloat  = reflect.TypeOf(sql.NullFloat64{})
+	type_nullstring = reflect.TypeOf(sql.NullString{})
+	type_rawbytes   = reflect.TypeOf(sql.RawBytes{})
+	type_nullbool   = reflect.TypeOf(sql.NullBool{})
+	type_nulltime   = reflect.TypeOf(sql.NullTime{})
+	type_any        = reflect.TypeOf(new(any)).Elem()
 )
 
 // ColumnTypeDatabaseTypeName implement RowsColumnTypeDatabaseTypeName.
@@ -64,74 +52,38 @@ func (rc *SQLiteRows) ColumnTypeNullable(i int) (nullable, ok bool) {
 // returns the column type for a specific row. If Next() has not been called, fallback to
 // sqlite3_column_decltype()
 func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
+	rc.s.mu.Lock()
+	defer rc.s.mu.Unlock()
+
+	if isValidRow := C.sqlite3_stmt_busy(rc.s.s) != 0; !isValidRow {
+		return type_any
+	}
+	if isValidColumn := i >= 0 && i < int(rc.nc); !isValidColumn {
+		return type_any
+	}
+
 	switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
 	case C.SQLITE_INTEGER:
-		return TYPE_NULLINT
+		switch rc.decltype[i] {
+		case columnTimestamp, columnDatetime, columnDate:
+			return type_nulltime
+		case columnBoolean:
+			return type_nullbool
+		}
+		return type_nullint
 	case C.SQLITE_FLOAT:
-		return TYPE_NULLFLOAT
+		return type_nullfloat
 	case C.SQLITE_TEXT:
-		return TYPE_NULLSTRING
+		switch rc.decltype[i] {
+		case columnTimestamp, columnDatetime, columnDate:
+			return type_nulltime
+		}
+		return type_nullstring
 	case C.SQLITE_BLOB:
-		return TYPE_RAWBYTES
-		// This case can signal that the value is NULL or that Next() has not been called yet.
-		// Skip it and return the fallback behaviour as a best effort. This is safe as all types
-		// returned are Nullable or any, which is the expected value for SQLite3.
-		//case C.SQLITE_NULL:
-		//	return TYPE_ANY
+		return type_rawbytes
+	case C.SQLITE_NULL:
+		fallthrough
+	default:
+		return type_any
 	}
-
-	// Fallback to schema declared to remain retro-compatible
-	return scanType(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
-}
-
-func scanType(cdt string) reflect.Type {
-	t := strings.ToUpper(cdt)
-	i := databaseTypeConvSqlite(t)
-	switch i {
-	case SQLITE_INTEGER:
-		return TYPE_NULLINT
-	case SQLITE_TEXT:
-		return TYPE_NULLSTRING
-	case SQLITE_BLOB:
-		return TYPE_RAWBYTES
-	case SQLITE_REAL:
-		return TYPE_NULLFLOAT
-	case SQLITE_NUMERIC:
-		return TYPE_NULLFLOAT
-	case SQLITE_BOOL:
-		return TYPE_NULLBOOL
-	case SQLITE_TIME:
-		return TYPE_NULLTIME
-	}
-	return TYPE_ANY
-}
-
-func databaseTypeConvSqlite(t string) int {
-	if strings.Contains(t, "INT") {
-		return SQLITE_INTEGER
-	}
-	if t == "CLOB" || t == "TEXT" ||
-		strings.Contains(t, "CHAR") {
-		return SQLITE_TEXT
-	}
-	if t == "BLOB" {
-		return SQLITE_BLOB
-	}
-	if t == "REAL" || t == "FLOAT" ||
-		strings.Contains(t, "DOUBLE") {
-		return SQLITE_REAL
-	}
-	if t == "DATE" || t == "DATETIME" ||
-		t == "TIMESTAMP" {
-		return SQLITE_TIME
-	}
-	if t == "NUMERIC" ||
-		strings.Contains(t, "DECIMAL") {
-		return SQLITE_NUMERIC
-	}
-	if t == "BOOLEAN" {
-		return SQLITE_BOOL
-	}
-
-	return SQLITE_NULL
 }
