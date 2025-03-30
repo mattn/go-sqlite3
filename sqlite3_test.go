@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/url"
 	"os"
@@ -30,7 +29,7 @@ import (
 )
 
 func TempFilename(t testing.TB) string {
-	f, err := ioutil.TempFile("", "go-sqlite3-test-")
+	f, err := os.CreateTemp("", "go-sqlite3-test-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1726,7 +1725,7 @@ func TestScanTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to create table:", err)
 	}
-	expected := []reflect.Type{type_nullint, type_nullstring, type_nullint, type_nullfloat, type_rawbytes, type_nulltime, type_nulltime, type_nulltime}
+	expected := []reflect.Type{type_int, type_string, type_int, type_float, type_rawbytes, type_time, type_time, type_time}
 
 	_, err = sqlite3conn.Exec("insert into foo(name, price, length, token, dob, jdays, somedate) values('bar', 10, 3.1415, x'0500', 100, 5.0, '2006-01-02 15:04:05')", nil)
 	if err != nil {
@@ -1987,7 +1986,7 @@ func TestScanTypesAggregate(t *testing.T) {
 		t.Fatal("SQLiteRows does not implement driver.RowsColumnTypeScanType")
 	}
 
-	if st := rc.ColumnTypeScanType(0); st != type_nullfloat {
+	if st := rc.ColumnTypeScanType(0); st != type_float {
 		t.Fatal("Unexpected ScanType:", st)
 	}
 }

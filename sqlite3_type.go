@@ -15,16 +15,17 @@ import "C"
 import (
 	"database/sql"
 	"reflect"
+	"time"
 )
 
 var (
-	type_nullint    = reflect.TypeOf(sql.NullInt64{})
-	type_nullfloat  = reflect.TypeOf(sql.NullFloat64{})
-	type_nullstring = reflect.TypeOf(sql.NullString{})
-	type_rawbytes   = reflect.TypeOf(sql.RawBytes{})
-	type_nullbool   = reflect.TypeOf(sql.NullBool{})
-	type_nulltime   = reflect.TypeOf(sql.NullTime{})
-	type_any        = reflect.TypeOf(new(any)).Elem()
+	type_int      = reflect.TypeOf(int64(0))
+	type_float    = reflect.TypeOf(float64(0))
+	type_string   = reflect.TypeOf("")
+	type_rawbytes = reflect.TypeOf(sql.RawBytes{})
+	type_bool     = reflect.TypeOf(true)
+	type_time     = reflect.TypeOf(time.Time{})
+	type_any      = reflect.TypeOf(new(any)).Elem()
 )
 
 // ColumnTypeDatabaseTypeName implement RowsColumnTypeDatabaseTypeName.
@@ -66,19 +67,19 @@ func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
 	case C.SQLITE_INTEGER:
 		switch rc.decltype[i] {
 		case columnTimestamp, columnDatetime, columnDate:
-			return type_nulltime
+			return type_time
 		case columnBoolean:
-			return type_nullbool
+			return type_bool
 		}
-		return type_nullint
+		return type_int
 	case C.SQLITE_FLOAT:
-		return type_nullfloat
+		return type_float
 	case C.SQLITE_TEXT:
 		switch rc.decltype[i] {
 		case columnTimestamp, columnDatetime, columnDate:
-			return type_nulltime
+			return type_time
 		}
-		return type_nullstring
+		return type_string
 	case C.SQLITE_BLOB:
 		return type_rawbytes
 	case C.SQLITE_NULL:
