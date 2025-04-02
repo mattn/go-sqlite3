@@ -11,6 +11,6 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -DSQLITE_ENABLE_API_ARMOR
-#cgo LDFLAGS: -lm
+#cgo LDFLAGS: -lcrypto -lsqlcipher
 */
 import "C"

@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/mattn/go-sqlite3"
+	"github.com/fhir-fli/go-sqlite3-sqlcipher"
 )
 
 type githubRepo struct {

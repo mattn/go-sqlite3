@@ -10,6 +10,12 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -DSQLITE_ENABLE_UNLOCK_NOTIFY
+#cgo LDFLAGS: -lcrypto -lsqlcipher
+#ifndef USE_LIBSQLITE3
+#include "sqlite3-binding.h" // Use amalgamation if enabled
+#else
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
+#endif
 
 #include <stdlib.h>
 #ifndef USE_LIBSQLITE3
@@ -21,6 +27,7 @@ package sqlite3
 extern void unlock_notify_callback(void *arg, int argc);
 */
 import "C"
+
 import (
 	"fmt"
 	"math"

@@ -8,7 +8,8 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_ENABLE_COLUMN_METADATA
 #include <sqlite3-binding.h>
 #else
-#include <sqlite3.h>
+#cgo CFLAGS: -DSQLITE_HAS_CODEC
+#include <sqlcipher/sqlite3.h>
 #endif
 */
 import "C"

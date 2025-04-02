@@ -9,12 +9,16 @@
 package sqlite3
 
 /*
-#cgo LDFLAGS: -licuuc -licui18n
+#cgo LDFLAGS: -licuuc -licui18n -lcrypto -lsqlcipher
 #cgo CFLAGS: -DSQLITE_ENABLE_ICU
 #cgo darwin,amd64 CFLAGS:  -I/usr/local/opt/icu4c/include
 #cgo darwin,amd64 LDFLAGS: -L/usr/local/opt/icu4c/lib
 #cgo darwin,arm64 CFLAGS:  -I/opt/homebrew/opt/icu4c/include
 #cgo darwin,arm64 LDFLAGS: -L/opt/homebrew/opt/icu4c/lib
-#cgo openbsd LDFLAGS: -lsqlite3
+#ifndef USE_LIBSQLITE3
+#include "sqlite3-binding.h" // Use amalgamation if enabled
+#else
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
+#endif
 */
 import "C"
