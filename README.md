@@ -180,6 +180,7 @@ go build -tags "icu json1 fts5 secure_delete"
 | Tracing / Debug | sqlite_trace | Activate trace functions |
 | User Authentication | sqlite_userauth | SQLite User Authentication see [User Authentication](#user-authentication) for more information. |
 | Virtual Tables | sqlite_vtable | SQLite Virtual Tables see [SQLite Official VTABLE Documentation](https://www.sqlite.org/vtab.html) for more information, and a [full example here](https://github.com/mattn/go-sqlite3/tree/master/_example/vtable) |
+| SQLITE_DBPAGE Virtual Table | sqlite_dbpage | SQLITE_DBPAGE Virtual Table see [SQLite Official SQLITE_DBPAGE Documentation](https://www.sqlite.org/dbpage.html) for more information. |
 
 # Compilation
 
