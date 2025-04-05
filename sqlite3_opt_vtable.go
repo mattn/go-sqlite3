@@ -692,7 +692,7 @@ func (c *SQLiteConn) DeclareVTab(sql string) error {
 	defer C.free(unsafe.Pointer(zSQL))
 	rv := C.sqlite3_declare_vtab(c.db, zSQL)
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		return c.lastError(int(rv))
 	}
 	return nil
 }
@@ -707,13 +707,13 @@ func (c *SQLiteConn) CreateModule(moduleName string, module Module) error {
 	case EponymousOnlyModule:
 		rv := C._sqlite3_create_module_eponymous_only(c.db, mname, C.uintptr_t(uintptr(newHandle(c, &udm))))
 		if rv != C.SQLITE_OK {
-			return c.lastError()
+			return c.lastError(int(rv))
 		}
 		return nil
 	case Module:
 		rv := C._sqlite3_create_module(c.db, mname, C.uintptr_t(uintptr(newHandle(c, &udm))))
 		if rv != C.SQLITE_OK {
-			return c.lastError()
+			return c.lastError(int(rv))
 		}
 		return nil
 	}

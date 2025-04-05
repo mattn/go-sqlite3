@@ -282,7 +282,7 @@ func (c *SQLiteConn) setSQLiteTrace(sqliteEventMask uint) error {
 	// passing the database connection handle as callback context.
 
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		return c.lastError(int(rv))
 	}
 	return nil
 }

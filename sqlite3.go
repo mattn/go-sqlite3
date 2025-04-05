@@ -540,7 +540,7 @@ func (c *SQLiteConn) RegisterCollation(name string, cmp func(string, string) int
 	defer C.free(unsafe.Pointer(cname))
 	rv := C.sqlite3_create_collation(c.db, cname, C.SQLITE_UTF8, handle, (*[0]byte)(unsafe.Pointer(C.compareTrampoline)))
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		return c.lastError(int(rv))
 	}
 	return nil
 }
@@ -675,7 +675,7 @@ func (c *SQLiteConn) RegisterFunc(name string, impl any, pure bool) error {
 	}
 	rv := sqlite3CreateFunction(c.db, cname, C.int(numArgs), C.int(opts), newHandle(c, &fi), C.callbackTrampoline, nil, nil)
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		return c.lastError(int(rv))
 	}
 	return nil
 }
@@ -804,7 +804,7 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl any, pure bool) error 
 	}
 	rv := sqlite3CreateFunction(c.db, cname, C.int(stepNArgs), C.int(opts), newHandle(c, &ai), nil, C.stepTrampoline, C.doneTrampoline)
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		return c.lastError(int(rv))
 	}
 	return nil
 }
@@ -816,32 +816,38 @@ func (c *SQLiteConn) AutoCommit() bool {
 	return int(C.sqlite3_get_autocommit(c.db)) != 0
 }
 
-func (c *SQLiteConn) lastError() error {
-	return lastError(c.db)
+func (c *SQLiteConn) lastError(rv int) error {
+	return lastError(c.db, rv)
 }
 
-// Note: may be called with db == nil
-func lastError(db *C.sqlite3) error {
-	rv := C.sqlite3_errcode(db) // returns SQLITE_NOMEM if db == nil
-	if rv == C.SQLITE_OK {
+func lastError(db *C.sqlite3, rv int) error {
+	if rv == SQLITE_OK {
 		return nil
 	}
-	extrv := C.sqlite3_extended_errcode(db)    // returns SQLITE_NOMEM if db == nil
-	errStr := C.GoString(C.sqlite3_errmsg(db)) // returns "out of memory" if db == nil
+	extrv := rv
+	// Convert the extended result code to a basic result code.
+	rv &= ErrNoMask
 
 	// https://www.sqlite.org/c3ref/system_errno.html
 	// sqlite3_system_errno is only meaningful if the error code was SQLITE_CANTOPEN,
 	// or it was SQLITE_IOERR and the extended code was not SQLITE_IOERR_NOMEM
 	var systemErrno syscall.Errno
-	if rv == C.SQLITE_CANTOPEN || (rv == C.SQLITE_IOERR && extrv != C.SQLITE_IOERR_NOMEM) {
+	if db != nil && (rv == C.SQLITE_CANTOPEN ||
+		(rv == C.SQLITE_IOERR && extrv != C.SQLITE_IOERR_NOMEM)) {
 		systemErrno = syscall.Errno(C.sqlite3_system_errno(db))
 	}
 
+	var msg string
+	if db != nil {
+		msg = C.GoString(C.sqlite3_errmsg(db))
+	} else {
+		msg = errorString(extrv)
+	}
 	return Error{
 		Code:         ErrNo(rv),
 		ExtendedCode: ErrNoExtended(extrv),
 		SystemErrno:  systemErrno,
-		err:          errStr,
+		err:          msg,
 	}
 }
 
@@ -1467,7 +1473,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if rv != 0 {
 		// Save off the error _before_ closing the database.
 		// This is safe even if db is nil.
-		err := lastError(db)
+		err := lastError(db, int(rv))
 		if db != nil {
 			C.sqlite3_close_v2(db)
 		}
@@ -1476,13 +1482,18 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if db == nil {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
+	rv = C.sqlite3_extended_result_codes(db, 1)
+	if rv != SQLITE_OK {
+		C.sqlite3_close_v2(db)
+		return nil, lastError(db, int(rv))
+	}
 
 	exec := func(s string) error {
 		cs := C.CString(s)
 		rv := C.sqlite3_exec(db, cs, nil, nil, nil)
 		C.free(unsafe.Pointer(cs))
 		if rv != C.SQLITE_OK {
-			return lastError(db)
+			return lastError(db, int(rv))
 		}
 		return nil
 	}
@@ -1782,26 +1793,20 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 }
 
 // Close the connection.
-func (c *SQLiteConn) Close() error {
-	rv := C.sqlite3_close_v2(c.db)
-	if rv != C.SQLITE_OK {
-		return c.lastError()
-	}
-	deleteHandles(c)
-	c.mu.Lock()
-	c.db = nil
-	c.mu.Unlock()
-	runtime.SetFinalizer(c, nil)
-	return nil
-}
-
-func (c *SQLiteConn) dbConnOpen() bool {
-	if c == nil {
-		return false
-	}
+func (c *SQLiteConn) Close() (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.db != nil
+	if c.db == nil {
+		return nil // Already closed
+	}
+	runtime.SetFinalizer(c, nil)
+	rv := C.sqlite3_close_v2(c.db)
+	if rv != C.SQLITE_OK {
+		err = lastError(nil, int(rv))
+	}
+	deleteHandles(c)
+	c.db = nil
+	return err
 }
 
 // Prepare the query string. Return a new statement.
@@ -1816,7 +1821,7 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 	var tail *C.char
 	rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(-1), &s, &tail)
 	if rv != C.SQLITE_OK {
-		return nil, c.lastError()
+		return nil, c.lastError(int(rv))
 	}
 	var t string
 	if tail != nil && *tail != '\000' {
@@ -1891,7 +1896,7 @@ func (c *SQLiteConn) SetFileControlInt(dbName string, op int, arg int) error {
 	cArg := C.int(arg)
 	rv := C.sqlite3_file_control(c.db, cDBName, C.int(op), unsafe.Pointer(&cArg))
 	if rv != C.SQLITE_OK {
-		return c.lastError()
+		return c.lastError(int(rv))
 	}
 	return nil
 }
@@ -1932,16 +1937,15 @@ func (s *SQLiteStmt) Close() error {
 		return nil
 	}
 	s.closed = true
-	if !s.c.dbConnOpen() {
-		return errors.New("sqlite statement with already closed database connection")
-	}
-	rv := C.sqlite3_finalize(s.s)
-	s.s = nil
-	if rv != C.SQLITE_OK {
-		return s.c.lastError()
-	}
+	conn := s.c
+	stmt := s.s
 	s.c = nil
+	s.s = nil
 	runtime.SetFinalizer(s, nil)
+	rv := C.sqlite3_finalize(stmt)
+	if rv != C.SQLITE_OK {
+		return conn.lastError(int(rv))
+	}
 	return nil
 }
 
@@ -1955,7 +1959,7 @@ var placeHolder = []byte{0}
 func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 	rv := C.sqlite3_reset(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
-		return s.c.lastError()
+		return s.c.lastError(int(rv))
 	}
 
 	bindIndices := make([][3]int, len(args))
@@ -2013,7 +2017,7 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 			}
 			if rv != C.SQLITE_OK {
-				return s.c.lastError()
+				return s.c.lastError(int(rv))
 			}
 		}
 	}
@@ -2123,7 +2127,7 @@ func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 	var rowid, changes C.longlong
 	rv := C._sqlite3_step_row_internal(s.s, &rowid, &changes)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
-		err := s.c.lastError()
+		err := s.c.lastError(int(rv))
 		C.sqlite3_reset(s.s)
 		C.sqlite3_clear_bindings(s.s)
 		return nil, err
@@ -2159,8 +2163,8 @@ func (rc *SQLiteRows) Close() error {
 	}
 	rv := C.sqlite3_reset(s.s)
 	if rv != C.SQLITE_OK {
-		s.mu.Unlock()
-		return s.c.lastError()
+		rc.s.mu.Unlock()
+		return rc.s.c.lastError(int(rv))
 	}
 	s.mu.Unlock()
 	return nil
@@ -2237,7 +2241,7 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 	if rv != C.SQLITE_ROW {
 		rv = C.sqlite3_reset(rc.s.s)
 		if rv != C.SQLITE_OK {
-			return rc.s.c.lastError()
+			return rc.s.c.lastError(int(rv))
 		}
 		return nil
 	}
