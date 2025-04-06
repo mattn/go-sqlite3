@@ -1985,7 +1985,7 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 				if len(v) == 0 {
 					rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.int(0))
 				} else {
-					b := []byte(v)
+					b := *(*[]byte)(unsafe.Pointer(&v))
 					rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 				}
 			case int64:
