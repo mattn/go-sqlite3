@@ -11,6 +11,6 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -DSQLITE_ALLOW_URI_AUTHORITY
-#cgo LDFLAGS: -lm
+#cgo LDFLAGS: -lcrypto -lsqlcipher
 */
 import "C"

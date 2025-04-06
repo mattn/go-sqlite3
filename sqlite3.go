@@ -21,13 +21,17 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1
 #cgo CFLAGS: -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
 #cgo CFLAGS: -Wno-deprecated-declarations
+#cgo CFLAGS: -DSQLITE_HAS_CODEC
+#cgo LDFLAGS: -lcrypto -lsqlcipher
 #cgo openbsd CFLAGS: -I/usr/local/include
 #cgo openbsd LDFLAGS: -L/usr/local/lib
+
 #ifndef USE_LIBSQLITE3
-#include "sqlite3-binding.h"
+#include "sqlite3-binding.h" // Use amalgamation if enabled
 #else
-#include <sqlite3.h>
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
 #endif
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -145,7 +149,6 @@ void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l) {
   sqlite3_result_blob(ctx, b, l, SQLITE_TRANSIENT);
 }
 
-
 int _sqlite3_create_function(
   sqlite3 *db,
   const char *zFunctionName,
@@ -203,6 +206,7 @@ static int sqlite3_system_errno(sqlite3 *db) {
 #endif
 */
 import "C"
+
 import (
 	"context"
 	"database/sql"
@@ -1109,6 +1113,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	writableSchema := -1
 	vfsName := ""
 	var cacheSize *int64
+	var encryptionKey string
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -1132,6 +1137,36 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 		if val := params.Get("_auth_salt"); val != "" {
 			authSalt = val
+		}
+		if val := params.Get("_pragma_key"); val != "" {
+			encryptionKey = val
+		}
+		// Find the position of the `?` indicating the start of query parameters
+		pos := strings.IndexRune(dsn, '?')
+		if pos >= 1 {
+			// Extract the part of the DSN containing the query parameters
+			query := dsn[pos+1:]
+			params, err := url.ParseQuery(query)
+			if err != nil {
+				return nil, err
+			}
+
+			// Extract the `_pragma_key` if it exists
+			if val := params.Get("_pragma_key"); val != "" {
+				encryptionKey = val
+				// Remove `_pragma_key` from the parameters
+				params.Del("_pragma_key")
+			}
+
+			// Reconstruct the DSN without the `_pragma_key`
+			baseDSN := dsn[:pos]
+			if len(params) > 0 {
+				// Only append the remaining parameters if there are any left
+				dsn = fmt.Sprintf("%s?%s", baseDSN, params.Encode())
+			} else {
+				// If no parameters are left, just use the base DSN
+				dsn = baseDSN
+			}
 		}
 
 		// _loc
@@ -1487,6 +1522,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil
 	}
 
+	// Set the encryption key after opening the database
+	if encryptionKey != "" {
+		if err := exec(fmt.Sprintf("PRAGMA key = '%s';", encryptionKey)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
 	// Busy timeout
 	if err := exec(fmt.Sprintf("PRAGMA busy_timeout = %d;", busyTimeout)); err != nil {
 		C.sqlite3_close_v2(db)

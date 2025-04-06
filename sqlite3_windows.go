@@ -14,5 +14,12 @@ package sqlite3
 #cgo CFLAGS: -fno-stack-protector
 #cgo CFLAGS: -mno-stack-arg-probe
 #cgo windows,386 CFLAGS: -D_USE_32BIT_TIME_T
+#cgo LDFLAGS: -lcrypto -lsqlcipher
+
+#ifndef USE_LIBSQLITE3
+#include "sqlite3-binding.h" // Use amalgamation if enabled
+#else
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
+#endif
 */
 import "C"

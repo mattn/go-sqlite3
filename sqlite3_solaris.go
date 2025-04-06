@@ -10,6 +10,12 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -D__EXTENSIONS__=1
-#cgo LDFLAGS: -lc
+#cgo LDFLAGS: -lc -lcrypto -lsqlcipher
+
+#ifndef USE_LIBSQLITE3
+#include "sqlite3-binding.h" // Use amalgamation if enabled
+#else
+#include <sqlcipher/sqlite3.h> // Use system-provided SQLCipher
+#endif
 */
 import "C"

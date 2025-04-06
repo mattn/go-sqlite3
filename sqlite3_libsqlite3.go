@@ -10,14 +10,16 @@ package sqlite3
 
 /*
 #cgo CFLAGS: -DUSE_LIBSQLITE3
-#cgo linux LDFLAGS: -lsqlite3
-#cgo darwin,amd64 LDFLAGS: -L/usr/local/opt/sqlite/lib -lsqlite3
-#cgo darwin,amd64 CFLAGS:  -I/usr/local/opt/sqlite/include
-#cgo darwin,arm64 LDFLAGS: -L/opt/homebrew/opt/sqlite/lib -lsqlite3
-#cgo darwin,arm64 CFLAGS:  -I/opt/homebrew/opt/sqlite/include
-#cgo openbsd LDFLAGS: -lsqlite3
-#cgo solaris LDFLAGS: -lsqlite3
-#cgo windows LDFLAGS: -lsqlite3
-#cgo zos LDFLAGS: -lsqlite3
+#cgo linux LDFLAGS: -lsqlcipher        // Use system SQLCipher instead of SQLite
+#cgo darwin,amd64 LDFLAGS: -L/usr/local/opt/sqlcipher/lib -lsqlcipher
+#cgo darwin,amd64 CFLAGS:  -I/usr/local/opt/sqlcipher/include
+#cgo darwin,arm64 LDFLAGS: -L/opt/homebrew/opt/sqlcipher/lib -lsqlcipher
+#cgo darwin,arm64 CFLAGS:  -I/opt/homebrew/opt/sqlcipher/include
+#cgo openbsd LDFLAGS: -lsqlcipher
+#cgo solaris LDFLAGS: -lsqlcipher
+#cgo windows LDFLAGS: -lsqlcipher
+#cgo zos LDFLAGS: -lsqlcipher
+#include <sqlite3.h>
+#include <stdlib.h>
 */
 import "C"
