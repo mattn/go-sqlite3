@@ -170,6 +170,8 @@ void updateHookTrampoline(void*, int, char*, char*, sqlite3_int64);
 
 int authorizerTrampoline(void*, int, char*, char*, char*, char*);
 
+int busyHandlerTrampoline(void*, int);
+
 #ifdef SQLITE_LIMIT_WORKER_THREADS
 # define _SQLITE_HAS_LIMIT
 # define SQLITE_LIMIT_LENGTH                    0
@@ -682,6 +684,34 @@ func (c *SQLiteConn) RegisterFunc(name string, impl any, pure bool) error {
 
 func sqlite3CreateFunction(db *C.sqlite3, zFunctionName *C.char, nArg C.int, eTextRep C.int, pApp unsafe.Pointer, xFunc unsafe.Pointer, xStep unsafe.Pointer, xFinal unsafe.Pointer) C.int {
 	return C._sqlite3_create_function(db, zFunctionName, nArg, eTextRep, C.uintptr_t(uintptr(pApp)), (*[0]byte)(xFunc), (*[0]byte)(xStep), (*[0]byte)(xFinal))
+}
+
+// RegisterBusyHandler sets the busy handler for a connection.
+//
+// The parameter to the callback is the number of times that the busy
+// handler has been invoked previously for the same locking event.
+//
+// If there is an existing busy handler for this connection, it will be
+// removed. If callback is nil the existing handler (if any) will be removed
+// without creating a new one.
+//
+// If the busy callback returns 0 then no additional attempts are made to
+// access the database and SQLITE_BUSY is returned to the application.
+// If the callback returns non-zero, then another attempt is made to access
+// the database.
+func (c *SQLiteConn) RegisterBusyHandler(callback func(int) int) error {
+	var rv C.int
+	if callback == nil {
+		rv = C.sqlite3_busy_handler(c.db, nil, nil)
+	} else {
+		handle := newHandle(c, callback)
+		rv = C.sqlite3_busy_handler(c.db, (*[0]byte)(unsafe.Pointer(C.busyHandlerTrampoline)), handle)
+	}
+	if rv != C.SQLITE_OK {
+		return c.lastError()
+	}
+
+	return nil
 }
 
 // RegisterAggregator makes a Go type available as a SQLite aggregation function.
