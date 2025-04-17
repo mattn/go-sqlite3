@@ -2127,6 +2127,7 @@ var tests = []testing.InternalTest{
 	{Name: "TestManyQueryRow", F: testManyQueryRow},
 	{Name: "TestTxQuery", F: testTxQuery},
 	{Name: "TestPreparedStmt", F: testPreparedStmt},
+	{Name: "TestExecStmtDoesNotBlockTable", F: testExecStmtDoesNotBlockTable},
 	{Name: "TestExecEmptyQuery", F: testExecEmptyQuery},
 }
 
@@ -2457,6 +2458,40 @@ func testPreparedStmt(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// testExecStmtDoesNotBlockTable tests that the tables' locks are cleared after
+// executing a statement.
+func testExecStmtDoesNotBlockTable(t *testing.T) {
+	db.tearDown()
+	db.mustExec("CREATE TABLE t (count INT)")
+	sel, err := db.Prepare("SELECT count FROM t")
+	if err != nil {
+		t.Fatalf("prepare 1: %v", err)
+	}
+	ins, err := db.Prepare(db.q("INSERT INTO t (count) VALUES (?)"))
+	if err != nil {
+		t.Fatalf("prepare 2: %v", err)
+	}
+	drop, err := db.Prepare(db.q("DROP TABLE t"))
+	if err != nil {
+		t.Fatalf("prepare 3: %v", err)
+	}
+
+	for n := 1; n <= 3; n++ {
+		if _, err := ins.Exec(n); err != nil {
+			t.Fatalf("insert(%d) = %v", n, err)
+		}
+	}
+
+	_, err = sel.Exec()
+	if err != nil {
+		t.Fatalf("exec 1: %v", err)
+	}
+	_, err = drop.Exec()
+	if err != nil {
+		t.Fatalf("exec 2: %v", err)
+	}
 }
 
 // testEmptyQuery is test for validating the API in case of empty query
