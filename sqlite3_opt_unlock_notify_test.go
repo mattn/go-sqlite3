@@ -51,12 +51,12 @@ func TestUnlockNotify(t *testing.T) {
 	wg.Add(1)
 	timer := time.NewTimer(500 * time.Millisecond)
 	go func() {
+		defer wg.Done()
 		<-timer.C
 		err := tx.Commit()
 		if err != nil {
 			t.Fatal("Failed to commit transaction:", err)
 		}
-		wg.Done()
 	}()
 
 	rows, err := db.Query("SELECT count(*) from foo")
@@ -111,33 +111,39 @@ func TestUnlockNotifyMany(t *testing.T) {
 	wg.Add(1)
 	timer := time.NewTimer(500 * time.Millisecond)
 	go func() {
+		defer wg.Done()
 		<-timer.C
 		err := tx.Commit()
 		if err != nil {
 			t.Fatal("Failed to commit transaction:", err)
 		}
-		wg.Done()
 	}()
 
 	const concurrentQueries = 1000
 	wg.Add(concurrentQueries)
 	for i := 0; i < concurrentQueries; i++ {
 		go func() {
+			defer wg.Done()
 			rows, err := db.Query("SELECT count(*) from foo")
 			if err != nil {
-				t.Fatal("Unable to query foo table:", err)
+				t.Error("Unable to query foo table:", err)
+				return
 			}
 
 			if rows.Next() {
 				var count int
 				if err := rows.Scan(&count); err != nil {
-					t.Fatal("Failed to Scan rows", err)
+					t.Error("Failed to Scan rows", err)
+					return
+				}
+				if count != 1 {
+					t.Errorf("count=%d want=%d", count, 1)
 				}
 			}
 			if err := rows.Err(); err != nil {
-				t.Fatal("Failed at the call to Next:", err)
+				t.Error("Failed at the call to Next:", err)
+				return
 			}
-			wg.Done()
 		}()
 	}
 	wg.Wait()
@@ -177,16 +183,17 @@ func TestUnlockNotifyDeadlock(t *testing.T) {
 	wg.Add(1)
 	timer := time.NewTimer(500 * time.Millisecond)
 	go func() {
+		defer wg.Done()
 		<-timer.C
 		err := tx.Commit()
 		if err != nil {
 			t.Fatal("Failed to commit transaction:", err)
 		}
-		wg.Done()
 	}()
 
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		tx2, err := db.Begin()
 		if err != nil {
 			t.Fatal("Failed to begin transaction:", err)
@@ -201,7 +208,6 @@ func TestUnlockNotifyDeadlock(t *testing.T) {
 		if err != nil {
 			t.Fatal("Failed to commit transaction:", err)
 		}
-		wg.Done()
 	}()
 
 	rows, err := tx.Query("SELECT count(*) from foo")

@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
-#include <stdio.h>
 #ifndef USE_LIBSQLITE3
 #include "sqlite3-binding.h"
 #else
@@ -12,6 +11,10 @@
 #endif
 
 extern int unlock_notify_wait(sqlite3 *db);
+
+static inline int is_locked(int rv) {
+  return rv == SQLITE_LOCKED || rv == SQLITE_LOCKED_SHAREDCACHE;
+}
 
 int
 _sqlite3_step_blocking(sqlite3_stmt *stmt)
@@ -22,10 +25,7 @@ _sqlite3_step_blocking(sqlite3_stmt *stmt)
   db = sqlite3_db_handle(stmt);
   for (;;) {
     rv = sqlite3_step(stmt);
-    if (rv != SQLITE_LOCKED) {
-      break;
-    }
-    if (sqlite3_extended_errcode(db) != SQLITE_LOCKED_SHAREDCACHE) {
+    if (!is_locked(rv)) {
       break;
     }
     rv = unlock_notify_wait(db);
@@ -47,10 +47,7 @@ _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* chan
   db = sqlite3_db_handle(stmt);
   for (;;) {
     rv = sqlite3_step(stmt);
-    if (rv!=SQLITE_LOCKED) {
-      break;
-    }
-    if (sqlite3_extended_errcode(db) != SQLITE_LOCKED_SHAREDCACHE) {
+    if (!is_locked(rv)) {
       break;
     }
     rv = unlock_notify_wait(db);
@@ -72,10 +69,7 @@ _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_
 
   for (;;) {
     rv = sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
-    if (rv!=SQLITE_LOCKED) {
-      break;
-    }
-    if (sqlite3_extended_errcode(db) != SQLITE_LOCKED_SHAREDCACHE) {
+    if (!is_locked(rv)) {
       break;
     }
     rv = unlock_notify_wait(db);

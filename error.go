@@ -13,13 +13,16 @@ package sqlite3
 #endif
 */
 import "C"
-import "syscall"
+import (
+	"sync"
+	"syscall"
+)
 
 // ErrNo inherit errno.
 type ErrNo int
 
 // ErrNoMask is mask code.
-const ErrNoMask C.int = 0xff
+const ErrNoMask = 0xff
 
 // ErrNoExtended is extended errno.
 type ErrNoExtended int
@@ -85,7 +88,7 @@ func (err Error) Error() string {
 	if err.err != "" {
 		str = err.err
 	} else {
-		str = C.GoString(C.sqlite3_errstr(C.int(err.Code)))
+		str = errorString(int(err.Code))
 	}
 	if err.SystemErrno != 0 {
 		str += ": " + err.SystemErrno.Error()
@@ -148,3 +151,22 @@ var (
 	ErrNoticeRecoverRollback  = ErrNotice.Extend(2)
 	ErrWarningAutoIndex       = ErrWarning.Extend(1)
 )
+
+var errStrCache sync.Map // int => string
+
+// errorString returns the result of sqlite3_errstr for result code rv,
+// which may be cached.
+func errorString(rv int) string {
+	if v, ok := errStrCache.Load(rv); ok {
+		return v.(string)
+	}
+	s := C.GoString(C.sqlite3_errstr(C.int(rv)))
+	// Prevent the cache from growing unbounded by ignoring invalid
+	// error codes.
+	if s != "unknown error" {
+		if v, loaded := errStrCache.LoadOrStore(rv, s); loaded {
+			s = v.(string)
+		}
+	}
+	return s
+}
