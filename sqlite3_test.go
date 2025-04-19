@@ -1951,6 +1951,32 @@ func TestDBConfigNoCkptOnClose(t *testing.T) {
 	}
 }
 
+func TestSetFileControlInt64(t *testing.T) {
+	const GiB = 1024 * 1024 * 1024
+
+	t.Run("", func(t *testing.T) {
+
+		sql.Register("sqlite3_FCNTL_SIZE_LIMIT", &SQLiteDriver{
+			ConnectHook: func(conn *SQLiteConn) error {
+				if err := conn.SetFileControlInt64("", SQLITE_FCNTL_SIZE_LIMIT, 4*GiB); err != nil {
+					return fmt.Errorf("Unexpected error from SetFileControlInt64(): %w", err)
+				}
+				return nil
+			},
+		})
+
+		db, err := sql.Open("sqlite3", "file:/dbname?vfs=memdb")
+		if err != nil {
+			t.Fatal("Failed to open database:", err)
+		}
+		err = db.Ping()
+		if err != nil {
+			t.Fatal("Failed to ping", err)
+		}
+		db.Close()
+	})
+}
+
 func TestNonColumnString(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
@@ -2198,6 +2224,7 @@ var benchmarks = []testing.InternalBenchmark{
 	{Name: "BenchmarkStmt", F: benchmarkStmt},
 	{Name: "BenchmarkRows", F: benchmarkRows},
 	{Name: "BenchmarkStmtRows", F: benchmarkStmtRows},
+	{Name: "BenchmarkQueryParallel", F: benchmarkQueryParallel},
 }
 
 func (db *TestDB) mustExec(sql string, args ...any) sql.Result {
@@ -2654,4 +2681,21 @@ func benchmarkStmtRows(b *testing.B) {
 			panic(err)
 		}
 	}
+}
+
+func benchmarkQueryParallel(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		db, err := sql.Open("sqlite3", ":memory:")
+		if err != nil {
+			panic(err)
+		}
+		db.SetMaxOpenConns(runtime.NumCPU())
+		defer db.Close()
+		var i int64
+		for pb.Next() {
+			if err := db.QueryRow("SELECT 1, 2, 3, 4").Scan(&i, &i, &i, &i); err != nil {
+				panic(err)
+			}
+		}
+	})
 }
