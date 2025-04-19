@@ -1865,7 +1865,6 @@ func TestSetFileControlInt(t *testing.T) {
 	})
 }
 
-<<<<<<< HEAD
 func TestDBConfigNoCkptOnClose(t *testing.T) {
 	fname := TempFilename(t)
 	defer os.Remove(fname)
