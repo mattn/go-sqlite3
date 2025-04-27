@@ -1,3 +1,5 @@
+// +build !upgrade
+
 // Package upgrade is a dummy package to ensure package can be loaded
 //
 // This file is to avoid the following error:

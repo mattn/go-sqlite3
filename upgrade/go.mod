@@ -2,4 +2,7 @@ module github.com/mattn/go-sqlite3/upgrade
 
 go 1.19
 
-require github.com/PuerkitoBio/goquery v1.7.1 // indirect
+require (
+	golang.org/x/crypto v0.16.0
+	golang.org/x/net v0.19.0
+)
