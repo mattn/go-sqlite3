@@ -367,7 +367,14 @@ func orderBys(info *C.sqlite3_index_info) []InfoOrderBy {
 // output fields for `sqlite3_index_info`
 // See: https://www.sqlite.org/c3ref/index_info.html
 type IndexResult struct {
-	Used           []bool // aConstraintUsage
+	Used []bool // aConstraintUsage
+	// Omit sets the optional sqlite .omit flag.
+	// note: The previous default behavior was to set the .omit flag if
+	//	the Used flag is set. That behavior is maintained if
+	//	Omit is nil for backward compatability.
+	//  Otherwise, the Omit slice explicitly
+	//	directs the setting of the .omit flag in sqlite.
+	Omit           []bool
 	IdxNum         int
 	IdxStr         string
 	AlreadyOrdered bool // orderByConsumed
@@ -455,6 +462,9 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	if len(res.Used) != len(csts) {
 		return mPrintf("Result.Used != expected value", "")
 	}
+	if res.Omit != nil && len(res.Omit) != len(res.Used) {
+		return mPrintf("len Result.Omit != len Result.Used", "")
+	}
 
 	// Get a pointer to constraint_usage struct so we can update in place.
 
@@ -467,8 +477,13 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	for i := range slice {
 		if res.Used[i] {
 			slice[i].argvIndex = C.int(index)
-			slice[i].omit = C.uchar(1)
 			index++
+
+			// Backward compatible default behavior is to set omit if used, otherwise
+			// only set if the caller is explicitly setting it.
+			if (res.Omit) == nil || res.Omit[i] {
+				slice[i].omit = C.uchar(1)
+			}
 		}
 	}
 
