@@ -36,3 +36,4 @@ func (c *SQLiteConn) RegisterCommitHook(func() int)                            {
 func (c *SQLiteConn) RegisterFunc(string, any, bool) error                     { return errorMsg }
 func (c *SQLiteConn) RegisterRollbackHook(func())                              {}
 func (c *SQLiteConn) RegisterUpdateHook(func(int, string, string, int64))      {}
+func (c *SQLiteConn) RegisterBusyHandler(func(int) int) error                  { return errorMsg }
