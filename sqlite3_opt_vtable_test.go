@@ -67,7 +67,7 @@ func (m testModule) Connect(c *SQLiteConn, args []string) (VTab, error) {
 
 func (m testModule) DestroyModule() {}
 
-func (v *testVTab) BestIndex(cst []InfoConstraint, ob []InfoOrderBy) (*IndexResult, error) {
+func (v *testVTab) BestIndex(cst []InfoConstraint, ob []InfoOrderBy, colsUsed uint64) (*IndexResult, error) {
 	used := make([]bool, 0, len(cst))
 	for range cst {
 		used = append(used, false)
@@ -377,7 +377,7 @@ func (t *vtabUpdateTable) Open() (VTabCursor, error) {
 	return &vtabUpdateCursor{t, 0}, nil
 }
 
-func (t *vtabUpdateTable) BestIndex(cst []InfoConstraint, ob []InfoOrderBy) (*IndexResult, error) {
+func (t *vtabUpdateTable) BestIndex(cst []InfoConstraint, ob []InfoOrderBy, colsUsed uint64) (*IndexResult, error) {
 	return &IndexResult{Used: make([]bool, len(cst))}, nil
 }
 
@@ -516,7 +516,7 @@ func (m testModuleEponymousOnly) Connect(c *SQLiteConn, args []string) (VTab, er
 
 func (m testModuleEponymousOnly) DestroyModule() {}
 
-func (v *testVTabEponymousOnly) BestIndex(cst []InfoConstraint, ob []InfoOrderBy) (*IndexResult, error) {
+func (v *testVTabEponymousOnly) BestIndex(cst []InfoConstraint, ob []InfoOrderBy, colsUsed uint64) (*IndexResult, error) {
 	used := make([]bool, 0, len(cst))
 	for range cst {
 		used = append(used, false)
