@@ -448,7 +448,7 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	vt := lookupHandle(pVTab).(*sqliteVTab)
 	info := (*C.sqlite3_index_info)(icp)
 	csts := constraints(info)
-	res, err := vt.vTab.BestIndex(csts, orderBys(info))
+	res, err := vt.vTab.BestIndex(csts, orderBys(info), uint64(info.colUsed))
 	if err != nil {
 		return mPrintf("%s", err.Error())
 	}
@@ -650,7 +650,7 @@ type EponymousOnlyModule interface {
 // See: http://sqlite.org/c3ref/vtab.html
 type VTab interface {
 	// http://sqlite.org/vtab.html#xbestindex
-	BestIndex([]InfoConstraint, []InfoOrderBy) (*IndexResult, error)
+	BestIndex([]InfoConstraint, []InfoOrderBy, uint64) (*IndexResult, error)
 	// http://sqlite.org/vtab.html#xdisconnect
 	Disconnect() error
 	// http://sqlite.org/vtab.html#sqlite3_module.xDestroy
