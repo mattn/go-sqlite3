@@ -98,7 +98,7 @@ func (vc *testVTabCursor) Close() error {
 	return nil
 }
 
-func (vc *testVTabCursor) Filter(idxNum int, idxStr string, vals []interface{}) error {
+func (vc *testVTabCursor) Filter(idxNum int, idxStr string, vals []any) error {
 	vc.index = 0
 	return nil
 }
@@ -236,10 +236,10 @@ func TestVUpdate(t *testing.T) {
 	if len(vt.data) != 2 {
 		t.Fatalf("expected table vt to have exactly 2 rows, got: %d", len(vt.data))
 	}
-	if !reflect.DeepEqual(vt.data[0], []interface{}{int64(115), "b", "c"}) {
+	if !reflect.DeepEqual(vt.data[0], []any{int64(115), "b", "c"}) {
 		t.Fatalf("expected table vt entry 0 to be [115 b c], instead: %v", vt.data[0])
 	}
-	if !reflect.DeepEqual(vt.data[1], []interface{}{int64(116), "d", "e"}) {
+	if !reflect.DeepEqual(vt.data[1], []any{int64(116), "d", "e"}) {
 		t.Fatalf("expected table vt entry 1 to be [116 d e], instead: %v", vt.data[1])
 	}
 
@@ -273,10 +273,10 @@ func TestVUpdate(t *testing.T) {
 	if len(vt.data) != 2 {
 		t.Fatalf("expected table vt to have exactly 2 rows, got: %d", len(vt.data))
 	}
-	if !reflect.DeepEqual(vt.data[0], []interface{}{int64(115), "b", "c"}) {
+	if !reflect.DeepEqual(vt.data[0], []any{int64(115), "b", "c"}) {
 		t.Fatalf("expected table vt entry 0 to be [115 b c], instead: %v", vt.data[0])
 	}
-	if !reflect.DeepEqual(vt.data[1], []interface{}{int64(117), "f", "e"}) {
+	if !reflect.DeepEqual(vt.data[1], []any{int64(117), "f", "e"}) {
 		t.Fatalf("expected table vt entry 1 to be [117 f e], instead: %v", vt.data[1])
 	}
 
@@ -297,7 +297,7 @@ func TestVUpdate(t *testing.T) {
 	if len(vt.data) != 1 {
 		t.Fatalf("expected table vt to have exactly 1 row, got: %d", len(vt.data))
 	}
-	if !reflect.DeepEqual(vt.data[0], []interface{}{int64(115), "b", "c"}) {
+	if !reflect.DeepEqual(vt.data[0], []any{int64(115), "b", "c"}) {
 		t.Fatalf("expected table vt entry 0 to be [115 b c], instead: %v", vt.data[0])
 	}
 
@@ -353,7 +353,7 @@ func (m *vtabUpdateModule) Create(c *SQLiteConn, args []string) (VTab, error) {
 	}
 
 	// create table
-	vtab := &vtabUpdateTable{m.t, dbname, tname, cols, typs, make([][]interface{}, 0)}
+	vtab := &vtabUpdateTable{m.t, dbname, tname, cols, typs, make([][]any, 0)}
 	m.tables[tname] = vtab
 	return vtab, nil
 }
@@ -370,7 +370,7 @@ type vtabUpdateTable struct {
 	name string
 	cols []string
 	typs []string
-	data [][]interface{}
+	data [][]any
 }
 
 func (t *vtabUpdateTable) Open() (VTabCursor, error) {
@@ -389,7 +389,7 @@ func (t *vtabUpdateTable) Destroy() error {
 	return nil
 }
 
-func (t *vtabUpdateTable) Insert(id interface{}, vals []interface{}) (int64, error) {
+func (t *vtabUpdateTable) Insert(id any, vals []any) (int64, error) {
 	var i int64
 	if id == nil {
 		i, t.data = int64(len(t.data)), append(t.data, vals)
@@ -407,7 +407,7 @@ func (t *vtabUpdateTable) Insert(id interface{}, vals []interface{}) (int64, err
 	return i, nil
 }
 
-func (t *vtabUpdateTable) Update(id interface{}, vals []interface{}) error {
+func (t *vtabUpdateTable) Update(id any, vals []any) error {
 	i, ok := id.(int64)
 	if !ok {
 		return fmt.Errorf("id is invalid type: %T", id)
@@ -422,7 +422,7 @@ func (t *vtabUpdateTable) Update(id interface{}, vals []interface{}) error {
 	return nil
 }
 
-func (t *vtabUpdateTable) Delete(id interface{}) error {
+func (t *vtabUpdateTable) Delete(id any) error {
 	i, ok := id.(int64)
 	if !ok {
 		return fmt.Errorf("id is invalid type: %T", id)
@@ -465,7 +465,7 @@ func (c *vtabUpdateCursor) Column(ctxt *SQLiteContext, col int) error {
 	return nil
 }
 
-func (c *vtabUpdateCursor) Filter(ixNum int, ixName string, vals []interface{}) error {
+func (c *vtabUpdateCursor) Filter(ixNum int, ixName string, vals []any) error {
 	return nil
 }
 
@@ -547,7 +547,7 @@ func (vc *testVTabCursorEponymousOnly) Close() error {
 	return nil
 }
 
-func (vc *testVTabCursorEponymousOnly) Filter(idxNum int, idxStr string, vals []interface{}) error {
+func (vc *testVTabCursorEponymousOnly) Filter(idxNum int, idxStr string, vals []any) error {
 	vc.index = 0
 	return nil
 }

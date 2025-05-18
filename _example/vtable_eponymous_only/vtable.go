@@ -77,7 +77,7 @@ func (vc *seriesCursor) Column(c *sqlite3.SQLiteContext, col int) error {
 	return nil
 }
 
-func (vc *seriesCursor) Filter(idxNum int, idxStr string, vals []interface{}) error {
+func (vc *seriesCursor) Filter(idxNum int, idxStr string, vals []any) error {
 	switch {
 	case len(vals) < 1:
 		vc.seriesTable.start = 0

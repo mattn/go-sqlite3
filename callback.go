@@ -100,13 +100,13 @@ func preUpdateHookTrampoline(handle unsafe.Pointer, dbHandle uintptr, op int, db
 // Use handles to avoid passing Go pointers to C.
 type handleVal struct {
 	db  *SQLiteConn
-	val interface{}
+	val any
 }
 
 var handleLock sync.Mutex
 var handleVals = make(map[unsafe.Pointer]handleVal)
 
-func newHandle(db *SQLiteConn, v interface{}) unsafe.Pointer {
+func newHandle(db *SQLiteConn, v any) unsafe.Pointer {
 	handleLock.Lock()
 	defer handleLock.Unlock()
 	val := handleVal{db: db, val: v}
@@ -124,7 +124,7 @@ func lookupHandleVal(handle unsafe.Pointer) handleVal {
 	return handleVals[handle]
 }
 
-func lookupHandle(handle unsafe.Pointer) interface{} {
+func lookupHandle(handle unsafe.Pointer) any {
 	return lookupHandleVal(handle).val
 }
 
@@ -238,7 +238,7 @@ func callbackArg(typ reflect.Type) (callbackArgConverter, error) {
 	switch typ.Kind() {
 	case reflect.Interface:
 		if typ.NumMethod() != 0 {
-			return nil, errors.New("the only supported interface type is interface{}")
+			return nil, errors.New("the only supported interface type is any")
 		}
 		return callbackArgGeneric, nil
 	case reflect.Slice:
@@ -345,7 +345,8 @@ func callbackRetText(ctx *C.sqlite3_context, v reflect.Value) error {
 	if v.Type().Kind() != reflect.String {
 		return fmt.Errorf("cannot convert %s to TEXT", v.Type())
 	}
-	C._sqlite3_result_text(ctx, C.CString(v.Interface().(string)))
+	cstr := C.CString(v.Interface().(string))
+	C._sqlite3_result_text(ctx, cstr)
 	return nil
 }
 
@@ -360,11 +361,11 @@ func callbackRetGeneric(ctx *C.sqlite3_context, v reflect.Value) error {
 	}
 
 	cb, err := callbackRet(v.Elem().Type())
-        if err != nil {
-                return err
-        }
+	if err != nil {
+		return err
+	}
 
-        return cb(ctx, v.Elem())
+	return cb(ctx, v.Elem())
 }
 
 func callbackRet(typ reflect.Type) (callbackRetConverter, error) {

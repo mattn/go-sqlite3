@@ -10,14 +10,14 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-func createBulkInsertQuery(n int, start int) (query string, args []interface{}) {
+func createBulkInsertQuery(n int, start int) (query string, args []any) {
 	values := make([]string, n)
-	args = make([]interface{}, n*2)
+	args = make([]any, n*2)
 	pos := 0
 	for i := 0; i < n; i++ {
 		values[i] = "(?, ?)"
 		args[pos] = start + i
-		args[pos+1] = fmt.Sprintf("こんにちわ世界%03d", i)
+		args[pos+1] = fmt.Sprintf("こんにちは世界%03d", i)
 		pos += 2
 	}
 	query = fmt.Sprintf(
@@ -27,7 +27,7 @@ func createBulkInsertQuery(n int, start int) (query string, args []interface{}) 
 	return
 }
 
-func bulkInsert(db *sql.DB, query string, args []interface{}) (err error) {
+func bulkInsert(db *sql.DB, query string, args []any) (err error) {
 	stmt, err := db.Prepare(query)
 	if err != nil {
 		return

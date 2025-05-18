@@ -9,7 +9,7 @@
 # -----------------------------------------------------------------------------
 #  Build Stage
 # -----------------------------------------------------------------------------
-FROM golang:alpine AS build
+FROM golang:alpine3.18 AS build
 
 # Important:
 #   Because this is a CGO enabled package, you are required to set it as 1.
@@ -26,14 +26,16 @@ WORKDIR /workspace
 COPY . /workspace/
 
 RUN \
+    cd _example/simple && \
     go mod init github.com/mattn/sample && \
+    go mod edit -replace=github.com/mattn/go-sqlite3=../.. && \
     go mod tidy && \
     go install -ldflags='-s -w -extldflags "-static"' ./simple.go
 
 RUN \
     # Smoke test
     set -o pipefail; \
-    /go/bin/simple | grep 99\ こんにちわ世界099
+    /go/bin/simple | grep 99\ こんにちは世界099
 
 # -----------------------------------------------------------------------------
 #  Main Stage
