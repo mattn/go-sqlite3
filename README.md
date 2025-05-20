@@ -180,6 +180,7 @@ go build -tags "icu json1 fts5 secure_delete"
 | Tracing / Debug | sqlite_trace | Activate trace functions |
 | User Authentication | sqlite_userauth | SQLite User Authentication see [User Authentication](#user-authentication) for more information. |
 | Virtual Tables | sqlite_vtable | SQLite Virtual Tables see [SQLite Official VTABLE Documentation](https://www.sqlite.org/vtab.html) for more information, and a [full example here](https://github.com/mattn/go-sqlite3/tree/master/_example/vtable) |
+| The DBSTAT Virtual Table | sqlite_dbstat | The DBSTAT virtual table is a read-only virtual table that returns information about the amount of disk space used to store the content of an SQLite database. See [SQLite Official Documentation](https://www.sqlite.org/dbstat.html) for more information. |
 
 # Compilation
 
