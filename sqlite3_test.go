@@ -2597,4 +2597,47 @@ func TestSQLiteConnector(t *testing.T) {
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("PingContext failed: %v", err)
 	}
+
+	// Test basic query
+	_, err := db.ExecContext(ctx, "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, err = db.ExecContext(ctx, "INSERT INTO test (name) VALUES (?)", "Alice")
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	var name string
+	err = db.QueryRowContext(ctx, "SELECT name FROM test WHERE id = 1").Scan(&name)
+	if err != nil {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+	if name != "Alice" {
+		t.Errorf("Expected name 'Alice', got '%s'", name)
+	}
+}
+
+func TestSQLiteConnectorContextCancellation(t *testing.T) {
+	connector := NewConnector(":memory:")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	conn, err := connector.Connect(ctx)
+	if err == nil {
+		conn.Close()
+		t.Error("Expected error on canceled context, got nil")
+	}
+}
+
+func TestSQLiteConnectorDriver(t *testing.T) {
+	driver := &SQLiteDriver{}
+	connector := &SQLiteConnector{
+		DSN:            ":memory:",
+		DriverInstance: driver,
+	}
+	if connector.Driver() != driver {
+		t.Errorf("Driver() returned %v, want %v", connector.Driver(), driver)
+	}
 }
