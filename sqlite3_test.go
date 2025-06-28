@@ -10,6 +10,7 @@ package sqlite3
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -2585,4 +2586,15 @@ func benchmarkQueryParallel(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestSQLiteConnector(t *testing.T) {
+	connector := NewConnector(":memory:")
+	db := sql.OpenDB(connector)
+	defer db.Close()
+
+	ctx := context.Background()
+	if err := db.PingContext(ctx); err != nil {
+		t.Fatalf("PingContext failed: %v", err)
+	}
 }
