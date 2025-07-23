@@ -3,8 +3,8 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-// +build cgo
-// +build sqlite_unlock_notify
+//go:build cgo && sqlite_unlock_notify
+// +build cgo,sqlite_unlock_notify
 
 package sqlite3
 
@@ -12,7 +12,11 @@ package sqlite3
 #cgo CFLAGS: -DSQLITE_ENABLE_UNLOCK_NOTIFY
 
 #include <stdlib.h>
+#ifndef USE_LIBSQLITE3
 #include "sqlite3-binding.h"
+#else
+#include <sqlite3.h>
+#endif
 
 extern void unlock_notify_callback(void *arg, int argc);
 */

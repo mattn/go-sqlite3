@@ -3,6 +3,7 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
+//go:build libsqlite3
 // +build libsqlite3
 
 package sqlite3
@@ -17,5 +18,6 @@ package sqlite3
 #cgo openbsd LDFLAGS: -lsqlite3
 #cgo solaris LDFLAGS: -lsqlite3
 #cgo windows LDFLAGS: -lsqlite3
+#cgo zos LDFLAGS: -lsqlite3
 */
 import "C"
