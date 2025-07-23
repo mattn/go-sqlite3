@@ -81,7 +81,7 @@ func doTestOpen(t *testing.T, option string) (string, error) {
 func TestOpen(t *testing.T) {
 	cases := map[string]bool{
 		"":                   true,
-		"?_txlock=immediate": true,
+		"?_txlock=concurrent": true,
 		"?_txlock=deferred":  true,
 		"?_txlock=exclusive": true,
 		"?_txlock=bogus":     false,
@@ -1069,7 +1069,7 @@ func TestTimezoneConversion(t *testing.T) {
 }
 
 // TODO: Execer & Queryer currently disabled
-// https://github.com/mattn/go-sqlite3/issues/82
+// https://github.com/walterwanderley/go-sqlite3/issues/82
 func TestExecer(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)

@@ -1,11 +1,11 @@
 go-sqlite3
 ==========
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/mattn/go-sqlite3.svg)](https://pkg.go.dev/github.com/mattn/go-sqlite3)
-[![GitHub Actions](https://github.com/mattn/go-sqlite3/workflows/Go/badge.svg)](https://github.com/mattn/go-sqlite3/actions?query=workflow%3AGo)
+[![Go Reference](https://pkg.go.dev/badge/github.com/walterwanderley/go-sqlite3.svg)](https://pkg.go.dev/github.com/walterwanderley/go-sqlite3)
+[![GitHub Actions](https://github.com/walterwanderley/go-sqlite3/workflows/Go/badge.svg)](https://github.com/walterwanderley/go-sqlite3/actions?query=workflow%3AGo)
 [![Financial Contributors on Open Collective](https://opencollective.com/mattn-go-sqlite3/all/badge.svg?label=financial+contributors)](https://opencollective.com/mattn-go-sqlite3) 
 [![codecov](https://codecov.io/gh/mattn/go-sqlite3/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-sqlite3)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
+[![Go Report Card](https://goreportcard.com/badge/github.com/walterwanderley/go-sqlite3)](https://goreportcard.com/report/github.com/walterwanderley/go-sqlite3)
 
 Latest stable version is v1.14 or later, not v2.
 
@@ -66,7 +66,7 @@ This package follows the official [Golang Release Policy](https://golang.org/doc
 
 This package can be installed with the `go get` command:
 
-    go get github.com/mattn/go-sqlite3
+    go get github.com/walterwanderley/go-sqlite3
 
 _go-sqlite3_ is *cgo* package.
 If you want to build your app using go-sqlite3, you need gcc.
@@ -75,7 +75,7 @@ If you want to build your app using go-sqlite3, you need gcc.
 
 # API Reference
 
-API documentation can be found [here](http://godoc.org/github.com/mattn/go-sqlite3).
+API documentation can be found [here](http://godoc.org/github.com/walterwanderley/go-sqlite3).
 
 Examples can be found under the [examples](./_example) directory.
 
@@ -163,6 +163,7 @@ go build -tags "icu json1 fts5 secure_delete"
 | Additional Statistics | sqlite_stat4 | This option adds additional logic to the ANALYZE command and to the query planner that can help SQLite to chose a better query plan under certain situations. The ANALYZE command is enhanced to collect histogram data from all columns of every index and store that data in the sqlite_stat4 table.<br><br>The query planner will then use the histogram data to help it make better index choices. The downside of this compile-time option is that it violates the query planner stability guarantee making it more difficult to ensure consistent performance in mass-produced applications.<br><br>SQLITE_ENABLE_STAT4 is an enhancement of SQLITE_ENABLE_STAT3. STAT3 only recorded histogram data for the left-most column of each index whereas the STAT4 enhancement records histogram data from all columns of each index.<br><br>The SQLITE_ENABLE_STAT3 compile-time option is a no-op and is ignored if the SQLITE_ENABLE_STAT4 compile-time option is used |
 | Allow URI Authority | sqlite_allow_uri_authority | URI filenames normally throws an error if the authority section is not either empty or "localhost".<br><br>However, if SQLite is compiled with the SQLITE_ALLOW_URI_AUTHORITY compile-time option, then the URI is converted into a Uniform Naming Convention (UNC) filename and passed down to the underlying operating system that way |
 | App Armor | sqlite_app_armor | When defined, this C-preprocessor macro activates extra code that attempts to detect misuse of the SQLite API, such as passing in NULL pointers to required parameters or using objects after they have been destroyed. <br><br>App Armor is not available under `Windows`. |
+| DBSTAT Virtual Table | sqlite_dbstat_vtab | This option adds support to [DBSTAT virtual table](https://www.sqlite.org/dbstat.html) that returns information about the amount of disk space used to store the content of an SQLite database.
 | Disable Load Extensions | sqlite_omit_load_extension | Loading of external extensions is enabled by default.<br><br>To disable extension loading add the build tag `sqlite_omit_load_extension`. |
 | Enable Serialization with `libsqlite3` | sqlite_serialize | Serialization and deserialization of a SQLite database is available by default, unless the build tag `libsqlite3` is set.<br><br>To enable this functionality even if `libsqlite3` is set, add the build tag `sqlite_serialize`. |
 | Foreign Keys | sqlite_foreign_keys | This macro determines whether enforcement of foreign key constraints is enabled or disabled by default for new database connections.<br><br>Each database connection can always turn enforcement of foreign key constraints on and off and run-time using the foreign_keys pragma.<br><br>Enforcement of foreign key constraints is normally off by default, but if this compile-time parameter is set to 1, enforcement of foreign key constraints will be on by default | 
@@ -179,7 +180,7 @@ go build -tags "icu json1 fts5 secure_delete"
 | Secure Delete (FAST) | sqlite_secure_delete_fast | For more information see [PRAGMA secure_delete](https://www.sqlite.org/pragma.html#pragma_secure_delete) |
 | Tracing / Debug | sqlite_trace | Activate trace functions |
 | User Authentication | sqlite_userauth | SQLite User Authentication see [User Authentication](#user-authentication) for more information. |
-| Virtual Tables | sqlite_vtable | SQLite Virtual Tables see [SQLite Official VTABLE Documentation](https://www.sqlite.org/vtab.html) for more information, and a [full example here](https://github.com/mattn/go-sqlite3/tree/master/_example/vtable) |
+| Virtual Tables | sqlite_vtable | SQLite Virtual Tables see [SQLite Official VTABLE Documentation](https://www.sqlite.org/vtab.html) for more information, and a [full example here](https://github.com/walterwanderley/go-sqlite3/tree/master/_example/vtable) |
 
 # Compilation
 
@@ -196,7 +197,7 @@ Compile with:
 go build -tags "android"
 ```
 
-For more information see [#201](https://github.com/mattn/go-sqlite3/issues/201)
+For more information see [#201](https://github.com/walterwanderley/go-sqlite3/issues/201)
 
 # ARM
 
@@ -209,8 +210,8 @@ env CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++ \
 ```
 
 Additional information:
-- [#242](https://github.com/mattn/go-sqlite3/issues/242)
-- [#504](https://github.com/mattn/go-sqlite3/issues/504)
+- [#242](https://github.com/walterwanderley/go-sqlite3/issues/242)
+- [#504](https://github.com/walterwanderley/go-sqlite3/issues/504)
 
 # Cross Compile
 
@@ -305,8 +306,8 @@ go build -tags "libsqlite3 darwin arm64"
 ```
 
 Additional information:
-- [#206](https://github.com/mattn/go-sqlite3/issues/206)
-- [#404](https://github.com/mattn/go-sqlite3/issues/404)
+- [#206](https://github.com/walterwanderley/go-sqlite3/issues/206)
+- [#404](https://github.com/walterwanderley/go-sqlite3/issues/404)
 
 ## Windows
 
@@ -332,21 +333,21 @@ For example the TDM-GCC Toolchain can be found [here](https://jmeubank.github.io
     go build -ldflags '-extldflags=-fno-PIC'
     ```
 
-    More details see [#120](https://github.com/mattn/go-sqlite3/issues/120)
+    More details see [#120](https://github.com/walterwanderley/go-sqlite3/issues/120)
 
 - Can't build go-sqlite3 on windows 64bit.
 
     > Probably, you are using go 1.0, go1.0 has a problem when it comes to compiling/linking on windows 64bit.
-    > See: [#27](https://github.com/mattn/go-sqlite3/issues/27)
+    > See: [#27](https://github.com/walterwanderley/go-sqlite3/issues/27)
 
-- `go get github.com/mattn/go-sqlite3` throws compilation error.
+- `go get github.com/walterwanderley/go-sqlite3` throws compilation error.
 
     `gcc` throws: `internal compiler error`
 
     Remove the download repository from your disk and try re-install with:
 
     ```bash
-    go install github.com/mattn/go-sqlite3
+    go install github.com/walterwanderley/go-sqlite3
     ```
 
 # User Authentication
@@ -484,11 +485,11 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 - Getting insert error while query is opened.
 
     > You can pass some arguments into the connection string, for example, a URI.
-    > See: [#39](https://github.com/mattn/go-sqlite3/issues/39)
+    > See: [#39](https://github.com/walterwanderley/go-sqlite3/issues/39)
 
 - Do you want to cross compile? mingw on Linux or Mac?
 
-    > See: [#106](https://github.com/mattn/go-sqlite3/issues/106)
+    > See: [#106](https://github.com/walterwanderley/go-sqlite3/issues/106)
     > See also: http://www.limitlessfx.com/cross-compile-golang-app-for-windows-from-linux.html
 
 - Want to get time.Time with current locale
@@ -497,7 +498,7 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
 - Can I use this in multiple routines concurrently?
 
-    Yes for readonly. But not for writable. See [#50](https://github.com/mattn/go-sqlite3/issues/50), [#51](https://github.com/mattn/go-sqlite3/issues/51), [#209](https://github.com/mattn/go-sqlite3/issues/209), [#274](https://github.com/mattn/go-sqlite3/issues/274).
+    Yes for readonly. But not for writable. See [#50](https://github.com/walterwanderley/go-sqlite3/issues/50), [#51](https://github.com/walterwanderley/go-sqlite3/issues/51), [#209](https://github.com/walterwanderley/go-sqlite3/issues/209), [#274](https://github.com/walterwanderley/go-sqlite3/issues/274).
 
 - Why I'm getting `no such table` error?
 
@@ -512,8 +513,8 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
     Note that if the last database connection in the pool closes, the in-memory database is deleted. Make sure the [max idle connection limit](https://golang.org/pkg/database/sql/#DB.SetMaxIdleConns) is > 0, and the [connection lifetime](https://golang.org/pkg/database/sql/#DB.SetConnMaxLifetime) is infinite.
     
     For more information see:
-    * [#204](https://github.com/mattn/go-sqlite3/issues/204)
-    * [#511](https://github.com/mattn/go-sqlite3/issues/511)
+    * [#204](https://github.com/walterwanderley/go-sqlite3/issues/204)
+    * [#511](https://github.com/walterwanderley/go-sqlite3/issues/511)
     * https://www.sqlite.org/sharedcache.html#shared_cache_and_in_memory_databases
     * https://www.sqlite.org/inmemorydb.html#sharedmemdb
 
@@ -521,7 +522,7 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
     OS X limits OS-wide to not have more than 1000 files open simultaneously by default.
 
-    For more information, see [#289](https://github.com/mattn/go-sqlite3/issues/289)
+    For more information, see [#289](https://github.com/walterwanderley/go-sqlite3/issues/289)
 
 - Trying to execute a `.` (dot) command throws an error.
 
@@ -530,7 +531,7 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
     You need to implement the feature or call the sqlite3 cli.
 
-    More information see [#305](https://github.com/mattn/go-sqlite3/issues/305).
+    More information see [#305](https://github.com/walterwanderley/go-sqlite3/issues/305).
 
 - Error: `database is locked`
 
@@ -549,14 +550,14 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
     db.SetMaxOpenConns(1)
     ```
 
-    For more information, see [#209](https://github.com/mattn/go-sqlite3/issues/209).
+    For more information, see [#209](https://github.com/walterwanderley/go-sqlite3/issues/209).
 
 ## Contributors
 
 ### Code Contributors
 
 This project exists thanks to all the people who [[contribute](CONTRIBUTING.md)].
-<a href="https://github.com/mattn/go-sqlite3/graphs/contributors"><img src="https://opencollective.com/mattn-go-sqlite3/contributors.svg?width=890&button=false" /></a>
+<a href="https://github.com/walterwanderley/go-sqlite3/graphs/contributors"><img src="https://opencollective.com/mattn-go-sqlite3/contributors.svg?width=890&button=false" /></a>
 
 ### Financial Contributors
 

@@ -246,7 +246,7 @@ const (
 )
 
 // This variable can be replaced with -ldflags like below:
-// go build -ldflags="-X 'github.com/mattn/go-sqlite3.driverName=my-sqlite3'"
+// go build -ldflags="-X 'github.com/walterwanderley/go-sqlite3.driverName=my-sqlite3'"
 var driverName = "sqlite3"
 
 func init() {
@@ -897,7 +897,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 		s.Close()
 		if tail == "" {
 			if res == nil {
-				// https://github.com/mattn/go-sqlite3/issues/963
+				// https://github.com/walterwanderley/go-sqlite3/issues/963
 				res = &SQLiteResult{0, 0}
 			}
 			return res, nil
@@ -1162,8 +1162,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		// _txlock
 		if val := params.Get("_txlock"); val != "" {
 			switch strings.ToLower(val) {
-			case "immediate":
-				txlock = "BEGIN IMMEDIATE"
+			case "concurrent":
+				txlock = "BEGIN CONCURRENT"
 			case "exclusive":
 				txlock = "BEGIN EXCLUSIVE"
 			case "deferred":
