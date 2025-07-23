@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"io/ioutil"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/walterwanderley/go-sqlite3"
 )
 
 func FuzzOpenExec(data []byte) int {

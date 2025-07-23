@@ -338,11 +338,11 @@ func doTestOpenContext(t *testing.T, option string) (string, error) {
 
 func TestOpenContext(t *testing.T) {
 	cases := map[string]bool{
-		"":                   true,
-		"?_txlock=immediate": true,
-		"?_txlock=deferred":  true,
-		"?_txlock=exclusive": true,
-		"?_txlock=bogus":     false,
+		"":                    true,
+		"?_txlock=concurrent": true,
+		"?_txlock=deferred":   true,
+		"?_txlock=exclusive":  true,
+		"?_txlock=bogus":      false,
 	}
 	for option, expectedPass := range cases {
 		result, err := doTestOpenContext(t, option)

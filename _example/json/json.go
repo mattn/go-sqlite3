@@ -5,9 +5,10 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"os"
+
+	_ "github.com/walterwanderley/go-sqlite3"
 )
 
 type Tag struct {
