@@ -36,7 +36,10 @@ func (destConn *SQLiteConn) Backup(dest string, srcConn *SQLiteConn, src string)
 		runtime.SetFinalizer(bb, (*SQLiteBackup).Finish)
 		return bb, nil
 	}
-	return nil, destConn.lastError()
+	if destConn.db != nil {
+		return nil, destConn.lastError(int(C.sqlite3_extended_errcode(destConn.db)))
+	}
+	return nil, Error{Code: 1, ExtendedCode: 1, err: "backup: destination connection is nil"}
 }
 
 // Step to backs up for one step. Calls the underlying `sqlite3_backup_step`
