@@ -1568,9 +1568,11 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 	}
 
-	// Preform Authentication
-	if err := conn.Authenticate(authUser, authPass); err != nil {
-		return nil, err
+	if conn.AuthEnabled() {
+		// Preform Authentication
+		if err := conn.Authenticate(authUser, authPass); err != nil {
+			return nil, err
+		}
 	}
 
 	// Register: authenticate

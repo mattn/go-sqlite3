@@ -161,7 +161,7 @@ func (c *SQLiteConn) AuthEnabled() (exists bool) {
 //		0 - Disabled
 //	 1 - Enabled
 func (c *SQLiteConn) authEnabled() int {
-	return 1
+	return 0
 }
 
 // EOF
