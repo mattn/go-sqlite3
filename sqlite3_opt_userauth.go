@@ -29,6 +29,7 @@ const (
 var (
 	ErrUnauthorized  = errors.New("SQLITE_AUTH: Unauthorized")
 	ErrAdminRequired = errors.New("SQLITE_AUTH: Unauthorized; Admin Privileges Required")
+	errUserAuthNoLongerSupported = errors.New("sqlite3: the sqlite_userauth tag is no longer supported as the userauth extension is no longer supported by the SQLite authors, see https://github.com/mattn/go-sqlite3/issues/1341").
 )
 
 // Authenticate will perform an authentication of the provided username
@@ -45,7 +46,7 @@ var (
 // If the SQLITE_USER table is not present in the database file, then
 // this interface is a harmless no-op returning SQLITE_OK.
 func (c *SQLiteConn) Authenticate(username, password string) error {
-	return ErrUnauthorized
+	return errUserAuthNoLongerSupported
 }
 
 // authenticate provides the actual authentication to SQLite.
@@ -70,7 +71,7 @@ func (c *SQLiteConn) authenticate(username, password string) int {
 // for any ATTACH-ed databases. Any call to AuthUserAdd by a
 // non-admin user results in an error.
 func (c *SQLiteConn) AuthUserAdd(username, password string, admin bool) error {
-	return ErrUnauthorized
+	return errUserAuthNoLongerSupported
 }
 
 // authUserAdd enables the User Authentication if not enabled.
@@ -97,7 +98,7 @@ func (c *SQLiteConn) authUserAdd(username, password string, admin int) int {
 // credentials or admin privilege setting. No user may change their own
 // admin privilege setting.
 func (c *SQLiteConn) AuthUserChange(username, password string, admin bool) error {
-	return ErrUnauthorized
+	return errUserAuthNoLongerSupported
 }
 
 // authUserChange allows to modify a user.
@@ -127,7 +128,7 @@ func (c *SQLiteConn) authUserChange(username, password string, admin int) int {
 // the database cannot be converted into a no-authentication-required
 // database.
 func (c *SQLiteConn) AuthUserDelete(username string) error {
-	return ErrUnauthorized
+	return errUserAuthNoLongerSupported
 }
 
 // authUserDelete can be used to delete a user.
