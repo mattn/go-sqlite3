@@ -53,7 +53,7 @@ func init() {
 		}
 
 		// Dummy query to force connection and database creation
-		// Will return ErrUnauthorized (SQLITE_AUTH) if user authentication fails
+		// Will return errUserAuthNoLongerSupported if user authentication fails
 		if _, err = db.Exec("SELECT 1;"); err != nil {
 			defer os.Remove(file)
 			defer db.Close()
@@ -70,7 +70,7 @@ func TestUserAuth(t *testing.T) {
 	if err == nil {
 		t.Fatalf("UserAuth not enabled: %s", err)
 	}
-	if !errors.Is(err, ErrUnauthorized) {
+	if !errors.Is(err, errUserAuthNoLongerSupported) {
 		t.Fatal(err)
 	}
 }
