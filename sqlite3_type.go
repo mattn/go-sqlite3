@@ -64,7 +64,7 @@ func scanType(cdt string) reflect.Type {
 	case SQLITE_TEXT:
 		return reflect.TypeOf(sql.NullString{})
 	case SQLITE_BLOB:
-		return reflect.TypeOf(sql.RawBytes{})
+		return reflect.SliceOf(reflect.TypeOf(byte(0)))
 	case SQLITE_REAL:
 		return reflect.TypeOf(sql.NullFloat64{})
 	case SQLITE_NUMERIC:
