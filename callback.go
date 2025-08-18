@@ -97,6 +97,12 @@ func preUpdateHookTrampoline(handle unsafe.Pointer, dbHandle uintptr, op int, db
 	callback(data)
 }
 
+//export busyHandlerTrampoline
+func busyHandlerTrampoline(handle unsafe.Pointer, count int) int {
+	callback := lookupHandle(handle).(func(int) int)
+	return callback(count)
+}
+
 // Use handles to avoid passing Go pointers to C.
 type handleVal struct {
 	db  *SQLiteConn
