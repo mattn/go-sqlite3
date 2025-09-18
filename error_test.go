@@ -43,7 +43,10 @@ func TestCorruptDbErrors(t *testing.T) {
 		_, err = db.Exec("drop table foo")
 	}
 
-	sqliteErr := err.(Error)
+	sqliteErr, ok := err.(Error)
+	if !ok {
+		t.Fatal(err)
+	}
 	if sqliteErr.Code != ErrNotADB {
 		t.Error("wrong error code for corrupted DB")
 	}

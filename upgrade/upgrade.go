@@ -114,10 +114,10 @@ func main() {
 	}
 
 	// Download Source
-	_, source, err := download("sqlite-src-")
-	if err != nil {
-		log.Fatalf("Failed to download: sqlite-src; %s", err)
-	}
+	//_, source, err := download("sqlite-src-")
+	//if err != nil {
+	//	log.Fatalf("Failed to download: sqlite-src; %s", err)
+	//}
 
 	// Create Amalgamation Zip Reader
 	rAmalgamation, err := zip.NewReader(bytes.NewReader(amalgamation), int64(len(amalgamation)))
@@ -126,10 +126,10 @@ func main() {
 	}
 
 	// Create Source Zip Reader
-	rSource, err := zip.NewReader(bytes.NewReader(source), int64(len(source)))
-	if err != nil {
-		log.Fatal(err)
-	}
+	//rSource, err := zip.NewReader(bytes.NewReader(source), int64(len(source)))
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	// Extract Amalgamation
 	for _, zf := range rAmalgamation.File {
@@ -191,41 +191,41 @@ func main() {
 	}
 
 	//Extract Source
-	for _, zf := range rSource.File {
-		var f *os.File
-		switch path.Base(zf.Name) {
-		case "userauth.c":
-			f, err = os.Create("../userauth.c")
-		case "sqlite3userauth.h":
-			f, err = os.Create("../userauth.h")
-		default:
-			continue
-		}
-		if err != nil {
-			log.Fatal(err)
-		}
-		zr, err := zf.Open()
-		if err != nil {
-			log.Fatal(err)
-		}
+	//for _, zf := range rSource.File {
+	//	var f *os.File
+	//	switch path.Base(zf.Name) {
+	//	case "userauth.c":
+	//		f, err = os.Create("../userauth.c")
+	//	case "sqlite3userauth.h":
+	//		f, err = os.Create("../userauth.h")
+	//	default:
+	//		continue
+	//	}
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
+	//	zr, err := zf.Open()
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
 
-		_, err = io.Copy(f, zr)
-		if err != nil {
-			log.Fatal(err)
-		}
+	//	_, err = io.Copy(f, zr)
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
 
-		zr.Close()
-		f.Close()
-		fmt.Printf("extracted %v\n", filepath.Base(f.Name()))
-	}
+	//	zr.Close()
+	//	f.Close()
+	//	fmt.Printf("extracted %v\n", filepath.Base(f.Name()))
+	//}
 
 	// Merge SQLite User Authentication into amalgamation
-	if err := mergeFile("../userauth.c", "../sqlite3-binding.c"); err != nil {
-		log.Fatal(err)
-	}
-	if err := mergeFile("../userauth.h", "../sqlite3-binding.h"); err != nil {
-		log.Fatal(err)
-	}
+	//if err := mergeFile("../userauth.c", "../sqlite3-binding.c"); err != nil {
+	//	log.Fatal(err)
+	//}
+	//if err := mergeFile("../userauth.h", "../sqlite3-binding.h"); err != nil {
+	//	log.Fatal(err)
+	//}
 
 	os.Exit(0)
 }
