@@ -4,9 +4,6 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-//go:build sqlite_preupdate_hook
-// +build sqlite_preupdate_hook
-
 package sqlite3
 
 /*
