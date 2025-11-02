@@ -2290,9 +2290,12 @@ type SQLiteConnector struct {
 }
 
 // Connect implements driver.Connector.
+// If the provided context is already cancelled, returns its error immediately.
 func (c *SQLiteConnector) Connect(ctx context.Context) (driver.Conn, error) {
-	// Context is ignored for now, as SQLiteDriver.Open does not use it.
-	return c.DriverInstance.Open(c.DSN)
+    if err := ctx.Err(); err != nil {
+        return nil, err
+    }
+    return c.DriverInstance.Open(c.DSN)
 }
 
 // Driver returns the underlying driver.
