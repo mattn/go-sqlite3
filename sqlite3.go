@@ -167,6 +167,7 @@ int compareTrampoline(void*, int, char*, int, char*);
 int commitHookTrampoline(void*);
 void rollbackHookTrampoline(void*);
 void updateHookTrampoline(void*, int, char*, char*, sqlite3_int64);
+int walHookTrampoline(void *, sqlite3*, const char*, int);
 
 int authorizerTrampoline(void*, int, char*, char*, char*, char*);
 
@@ -587,6 +588,27 @@ func (c *SQLiteConn) RegisterUpdateHook(callback func(int, string, string, int64
 		C.sqlite3_update_hook(c.db, nil, nil)
 	} else {
 		C.sqlite3_update_hook(c.db, (*[0]byte)(C.updateHookTrampoline), newHandle(c, callback))
+	}
+}
+
+// RegisterWalHook sets the WAL hook for a connection.
+//
+// The callback is invoked after each commit in WAL mode. The parameters
+// are the connection, the database name ("main" or attached), and the
+// number of pages currently in the WAL.
+//
+// The callback should normally return SQLITE_OK (0). A non-zero return
+// propagates as an error on the committing statement, though the commit
+// itself still occurs.
+//
+// If there is an existing WAL hook for this connection, it will be
+// removed. If callback is nil the existing hook (if any) will be removed
+// without creating a new one.
+func (c *SQLiteConn) RegisterWalHook(callback func(dbName string, nPages int) int) {
+	if callback == nil {
+		C.sqlite3_wal_hook(c.db, nil, nil)
+	} else {
+		C.sqlite3_wal_hook(c.db, (*[0]byte)(C.walHookTrampoline), newHandle(c, callback))
 	}
 }
 
