@@ -2056,7 +2056,7 @@ func BenchmarkCustomFunctions(b *testing.B) {
 }
 
 func TestSuite(t *testing.T) {
-	initializeTestDB(t)
+	initializeTestDB(t, false)
 	defer freeTestDB()
 
 	for _, test := range tests {
@@ -2065,7 +2065,7 @@ func TestSuite(t *testing.T) {
 }
 
 func BenchmarkSuite(b *testing.B) {
-	initializeTestDB(b)
+	initializeTestDB(b, true)
 	defer freeTestDB()
 
 	for _, benchmark := range benchmarks {
@@ -2094,8 +2094,13 @@ type TestDB struct {
 
 var db *TestDB
 
-func initializeTestDB(t testing.TB) {
-	tempFilename := TempFilename(t)
+func initializeTestDB(t testing.TB, memory bool) {
+	var tempFilename string
+	if memory {
+		tempFilename = ":memory:"
+	} else {
+		tempFilename = TempFilename(t)
+	}
 	d, err := sql.Open("sqlite3", tempFilename+"?_busy_timeout=99999")
 	if err != nil {
 		os.Remove(tempFilename)
@@ -2110,9 +2115,11 @@ func freeTestDB() {
 	if err != nil {
 		panic(err)
 	}
-	err = os.Remove(db.tempFilename)
-	if err != nil {
-		panic(err)
+	if db.tempFilename != "" && db.tempFilename != ":memory:" {
+		err := os.Remove(db.tempFilename)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -2138,6 +2145,7 @@ var benchmarks = []testing.InternalBenchmark{
 	{Name: "BenchmarkRows", F: benchmarkRows},
 	{Name: "BenchmarkStmtRows", F: benchmarkStmtRows},
 	{Name: "BenchmarkQueryParallel", F: benchmarkQueryParallel},
+	{Name: "BenchmarkStmt10Cols", F: benchmarkStmt10Cols},
 }
 
 func (db *TestDB) mustExec(sql string, args ...any) sql.Result {
@@ -2611,4 +2619,61 @@ func benchmarkQueryParallel(b *testing.B) {
 			}
 		}
 	})
+}
+
+func benchmarkStmt10Cols(b *testing.B) {
+	db.once.Do(makeBench)
+
+	const createTableStmt = `
+	DROP TABLE IF EXISTS bench_cols;
+	VACUUM;
+	CREATE TABLE bench_cols (
+		r0 INTEGER NOT NULL,
+		r1 INTEGER NOT NULL,
+		r2 INTEGER NOT NULL,
+		r3 INTEGER NOT NULL,
+		r4 INTEGER NOT NULL,
+		r5 INTEGER NOT NULL,
+		r6 INTEGER NOT NULL,
+		r7 INTEGER NOT NULL,
+		r8 INTEGER NOT NULL,
+		r9 INTEGER NOT NULL
+	);`
+	if _, err := db.Exec(createTableStmt); err != nil {
+		b.Fatal(err)
+	}
+	for i := int64(0); i < 4; i++ {
+		_, err := db.Exec("INSERT INTO bench_cols VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+			i, i, i, i, i, i, i, i, i, i)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	stmt, err := db.Prepare("SELECT * FROM bench_cols;")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer stmt.Close()
+
+	b.ResetTimer()
+	var (
+		v0, v1, v2, v3, v4 int64
+		v5, v6, v7, v8, v9 int64
+	)
+	for i := 0; i < b.N; i++ {
+		rows, err := stmt.Query()
+		if err != nil {
+			b.Fatal(err)
+		}
+		for rows.Next() {
+			err := rows.Scan(&v0, &v1, &v2, &v3, &v4, &v5, &v6, &v7, &v8, &v9)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
