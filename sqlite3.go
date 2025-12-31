@@ -1510,7 +1510,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	
 	// _pragma_key
     if encryptionKey != "" {
-        query := fmt.Sprintf("PRAGMA key = \"%s\";", pragmaKey)
+        query := fmt.Sprintf("PRAGMA key = %q;", pragmaKey)
         if err := exec(query); err != nil {
             C.sqlite3_close_v2(db)
             return nil, err
