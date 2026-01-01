@@ -116,10 +116,7 @@ func main() {
 	if !ok {
 		log.Fatal("could not get current file info")
 	}
-	err := os.Chdir(filepath.Dir(filepath.Dir(file)))
-	if err != nil {
-		log.Fatalf("could not change directory: %s", err)
-	}
+	basedir := filepath.Dir(filepath.Dir(file))
 
 	// Download Amalgamation
 	_, amalgamation, err := download("sqlite-amalgamation-")
@@ -150,11 +147,11 @@ func main() {
 		var f *os.File
 		switch path.Base(zf.Name) {
 		case "sqlite3.c":
-			f, err = os.Create("../sqlite3-binding.c")
+			f, err = os.Create(filepath.Join(basedir, "sqlite3-binding.c"))
 		case "sqlite3.h":
-			f, err = os.Create("../sqlite3-binding.h")
+			f, err = os.Create(filepath.Join(basedir, "sqlite3-binding.h"))
 		case "sqlite3ext.h":
-			f, err = os.Create("../sqlite3ext.h")
+			f, err = os.Create(filepath.Join(basedir, "sqlite3ext.h"))
 		default:
 			continue
 		}
