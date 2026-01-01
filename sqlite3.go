@@ -809,6 +809,53 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl any, pure bool) error 
 	return nil
 }
 
+// Raw provides access to the underlying raw C sqlite context pointer
+// by casting the `raw` argument from `unsafe.Pointer` to
+// `*C.sqlite3`.  This is can be used, for example, to add your own C
+// functions directly (which, due to fewer runtime reflection checks,
+// typically run an order of magnitude faster).  For example:
+//
+//    /*
+//    #include <sqlite3.h>
+//    ...
+//    void myFunc(sqlite3_context *context, int argc, sqlite3_value **argv) {
+//        // Function definition
+//    }
+//
+//    int myfunc_setup(sqlite3 *db) {
+//        return sqlite3_create_function(db, "myFunc", ...);
+//    }
+//    */
+//    import "C"
+//
+//    d := &sqlite3.SQLiteDriver{
+//        ConnectHook: func(c *SQLiteConn) error {
+//            return c.Raw(func(raw unsafe.Pointer) error {
+//                db := (*C.sqlite3)(raw)
+//                if rv := C.myfunc_setup(db); rv != C.SQLITE_OK {
+//                    return sqlite3.ErrNo(rv)
+//                }
+//                return nil
+//            }
+//         },
+//    }
+//
+// Note that as of 1.13, go doesn't correctly handle passing C
+// function pointers back to C functions, so C.sqlite3_create_function
+// can't be called from Go directly.  See
+// https://github.com/golang/go/issues/19835 for more details.
+func (c *SQLiteConn) Raw(f func(unsafe.Pointer) error) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := f(unsafe.Pointer(c.db)); err != nil {
+		if _, ok := err.(ErrNo); ok {
+			return c.lastError()
+		}
+		return err
+	}
+	return nil
+}
+
 // AutoCommit return which currently auto commit or not.
 func (c *SQLiteConn) AutoCommit() bool {
 	c.mu.Lock()
