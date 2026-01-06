@@ -301,10 +301,18 @@ const (
 	OpLT            = 16
 	OpGE            = 32
 	OpMATCH         = 64
-	OpLIKE          = 65 /* 3.10.0 and later only */
-	OpGLOB          = 66 /* 3.10.0 and later only */
-	OpREGEXP        = 67 /* 3.10.0 and later only */
-	OpScanUnique    = 1  /* Scan visits at most 1 row */
+	OpLIKE          = 65  /* 3.10.0 and later only */
+	OpGLOB          = 66  /* 3.10.0 and later only */
+	OpREGEXP        = 67  /* 3.10.0 and later only */
+	OpNE            = 68  /* 3.21.0 and later only */
+	OpISNOT         = 69  /* 3.21.0 and later */
+	OpISNOTNULL     = 70  /* 3.21.0 and later */
+	OpISNULL        = 71  /* 3.21.0 and later */
+	OpIS            = 72  /* 3.21.0 and later */
+	OpLIMIT         = 73  /* 3.38.0 and later */
+	OpOFFSET        = 74  /* 3.38.0 and later */
+	OpFUNCTION      = 150 /* 3.25.0 and later */
+	OpScanUnique    = 1   /* Scan visits at most 1 row */
 )
 
 // InfoConstraint give information of constraint.
@@ -448,7 +456,7 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	vt := lookupHandle(pVTab).(*sqliteVTab)
 	info := (*C.sqlite3_index_info)(icp)
 	csts := constraints(info)
-	res, err := vt.vTab.BestIndex(csts, orderBys(info))
+	res, err := vt.vTab.BestIndex(csts, orderBys(info), uint64(info.colUsed))
 	if err != nil {
 		return mPrintf("%s", err.Error())
 	}
@@ -650,7 +658,7 @@ type EponymousOnlyModule interface {
 // See: http://sqlite.org/c3ref/vtab.html
 type VTab interface {
 	// http://sqlite.org/vtab.html#xbestindex
-	BestIndex([]InfoConstraint, []InfoOrderBy) (*IndexResult, error)
+	BestIndex([]InfoConstraint, []InfoOrderBy, uint64) (*IndexResult, error)
 	// http://sqlite.org/vtab.html#xdisconnect
 	Disconnect() error
 	// http://sqlite.org/vtab.html#sqlite3_module.xDestroy
