@@ -80,7 +80,7 @@ func (d *SQLitePreUpdateData) row(dest []any, new bool) error {
 		case C.SQLITE_TEXT:
 			len := C.sqlite3_value_bytes(val)
 			cstrptr := unsafe.Pointer(C.sqlite3_value_text(val))
-			src = C.GoBytes(cstrptr, len)
+			src = C.GoStringN((*C.char)(cstrptr), len)
 		case C.SQLITE_NULL:
 			src = nil
 		}
