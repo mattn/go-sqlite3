@@ -243,6 +243,7 @@ const (
 	columnDate      string = "date"
 	columnDatetime  string = "datetime"
 	columnTimestamp string = "timestamp"
+	columnBoolean   string = "boolean"
 )
 
 // This variable can be replaced with -ldflags like below:
@@ -269,7 +270,7 @@ const (
 	SQLITE_INSERT = C.SQLITE_INSERT
 	SQLITE_UPDATE = C.SQLITE_UPDATE
 
-	// used by authorzier - as return value
+	// used by authorizer - as return value
 	SQLITE_OK     = C.SQLITE_OK
 	SQLITE_IGNORE = C.SQLITE_IGNORE
 	SQLITE_DENY   = C.SQLITE_DENY
@@ -2136,7 +2137,7 @@ func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 //
 // See: https://sqlite.org/c3ref/stmt_readonly.html
 func (s *SQLiteStmt) Readonly() bool {
-	return C.sqlite3_stmt_readonly(s.s) == 1
+	return C.sqlite3_stmt_readonly(s.s) != 0
 }
 
 // Close the rows.
@@ -2264,8 +2265,8 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 					t = t.In(rc.s.c.loc)
 				}
 				dest[i] = t
-			case "boolean":
-				dest[i] = val > 0
+			case columnBoolean:
+				dest[i] = val != 0
 			default:
 				dest[i] = val
 			}

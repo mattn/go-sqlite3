@@ -15,7 +15,17 @@ import "C"
 import (
 	"database/sql"
 	"reflect"
-	"strings"
+	"time"
+)
+
+var (
+	type_int      = reflect.TypeOf(int64(0))
+	type_float    = reflect.TypeOf(float64(0))
+	type_string   = reflect.TypeOf("")
+	type_rawbytes = reflect.TypeOf(sql.RawBytes{})
+	type_bool     = reflect.TypeOf(true)
+	type_time     = reflect.TypeOf(time.Time{})
+	type_any      = reflect.TypeOf(new(any)).Elem()
 )
 
 // ColumnTypeDatabaseTypeName implement RowsColumnTypeDatabaseTypeName.
@@ -39,70 +49,42 @@ func (rc *SQLiteRows) ColumnTypeNullable(i int) (nullable, ok bool) {
 }
 
 // ColumnTypeScanType implement RowsColumnTypeScanType.
+// In SQLite3, this method should be called after Next() has been called, as sqlite3_column_type()
+// returns the column type for a specific row. If Next() has not been called, fallback to
+// sqlite3_column_decltype()
 func (rc *SQLiteRows) ColumnTypeScanType(i int) reflect.Type {
-	//ct := C.sqlite3_column_type(rc.s.s, C.int(i))  // Always returns 5
-	return scanType(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
-}
+	rc.s.mu.Lock()
+	defer rc.s.mu.Unlock()
 
-const (
-	SQLITE_INTEGER = iota
-	SQLITE_TEXT
-	SQLITE_BLOB
-	SQLITE_REAL
-	SQLITE_NUMERIC
-	SQLITE_TIME
-	SQLITE_BOOL
-	SQLITE_NULL
-)
-
-func scanType(cdt string) reflect.Type {
-	t := strings.ToUpper(cdt)
-	i := databaseTypeConvSqlite(t)
-	switch i {
-	case SQLITE_INTEGER:
-		return reflect.TypeOf(sql.NullInt64{})
-	case SQLITE_TEXT:
-		return reflect.TypeOf(sql.NullString{})
-	case SQLITE_BLOB:
-		return reflect.TypeOf(sql.RawBytes{})
-	case SQLITE_REAL:
-		return reflect.TypeOf(sql.NullFloat64{})
-	case SQLITE_NUMERIC:
-		return reflect.TypeOf(sql.NullFloat64{})
-	case SQLITE_BOOL:
-		return reflect.TypeOf(sql.NullBool{})
-	case SQLITE_TIME:
-		return reflect.TypeOf(sql.NullTime{})
+	if isValidRow := C.sqlite3_stmt_busy(rc.s.s) != 0; !isValidRow {
+		return type_any
 	}
-	return reflect.TypeOf(new(any))
-}
-
-func databaseTypeConvSqlite(t string) int {
-	if strings.Contains(t, "INT") {
-		return SQLITE_INTEGER
-	}
-	if t == "CLOB" || t == "TEXT" ||
-		strings.Contains(t, "CHAR") {
-		return SQLITE_TEXT
-	}
-	if t == "BLOB" {
-		return SQLITE_BLOB
-	}
-	if t == "REAL" || t == "FLOAT" ||
-		strings.Contains(t, "DOUBLE") {
-		return SQLITE_REAL
-	}
-	if t == "DATE" || t == "DATETIME" ||
-		t == "TIMESTAMP" {
-		return SQLITE_TIME
-	}
-	if t == "NUMERIC" ||
-		strings.Contains(t, "DECIMAL") {
-		return SQLITE_NUMERIC
-	}
-	if t == "BOOLEAN" {
-		return SQLITE_BOOL
+	if isValidColumn := i >= 0 && i < int(rc.nc); !isValidColumn {
+		return type_any
 	}
 
-	return SQLITE_NULL
+	switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
+	case C.SQLITE_INTEGER:
+		switch rc.decltype[i] {
+		case columnTimestamp, columnDatetime, columnDate:
+			return type_time
+		case columnBoolean:
+			return type_bool
+		}
+		return type_int
+	case C.SQLITE_FLOAT:
+		return type_float
+	case C.SQLITE_TEXT:
+		switch rc.decltype[i] {
+		case columnTimestamp, columnDatetime, columnDate:
+			return type_time
+		}
+		return type_string
+	case C.SQLITE_BLOB:
+		return type_rawbytes
+	case C.SQLITE_NULL:
+		fallthrough
+	default:
+		return type_any
+	}
 }
