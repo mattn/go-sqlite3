@@ -22,10 +22,6 @@ import (
 	"errors"
 )
 
-const (
-	SQLITE_AUTH = C.SQLITE_AUTH
-)
-
 var (
 	ErrUnauthorized              = errors.New("SQLITE_AUTH: Unauthorized")
 	ErrAdminRequired             = errors.New("SQLITE_AUTH: Unauthorized; Admin Privileges Required")
@@ -163,6 +159,10 @@ func (c *SQLiteConn) AuthEnabled() (exists bool) {
 //	 1 - Enabled
 func (c *SQLiteConn) authEnabled() int {
 	return 0
+}
+
+func (c *SQLiteConn) registerAuthFunc(name string, impl any, pure bool) error {
+	return c.RegisterFunc(name, impl, pure)
 }
 
 // EOF
