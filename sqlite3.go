@@ -1109,6 +1109,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	writableSchema := -1
 	vfsName := ""
 	var cacheSize *int64
+	encryptionKey := ""
+    cipherPageSize := -1
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -1196,6 +1198,19 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 				return nil, fmt.Errorf("Invalid _auto_vacuum: %v, expecting value of '0 NONE 1 FULL 2 INCREMENTAL'", val)
 			}
 		}
+		// _pragma_key
+        if val := params.Get("_pragma_key"); val != "" {
+            encryptionKey = val
+        }
+
+        // _pragma_cipher_page_size
+        if val := params.Get("_pragma_cipher_page_size"); val != "" {
+            pageSize, err := strconv.Atoi(val)
+            if err != nil {
+                return nil, fmt.Errorf("sqlite3: _pragma_cipher_page_size cannot be parsed: %s", err)
+            }
+            cipherPageSize = pageSize
+        }
 
 		// Busy Timeout (_busy_timeout)
 		//
@@ -1492,6 +1507,25 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		C.sqlite3_close_v2(db)
 		return nil, err
 	}
+	
+	// _pragma_key
+    if encryptionKey != "" {
+        query := fmt.Sprintf("PRAGMA key = %q;", pragmaKey)
+        if err := exec(query); err != nil {
+            C.sqlite3_close_v2(db)
+            return nil, err
+        }
+    }
+
+    // _pragma_cipher_page_size
+    if cipherPageSize != -1 {
+        query := fmt.Sprintf("PRAGMA cipher_page_size = %d;",
+            pragmaCipherPageSize)
+        if err := exec(query); err != nil {
+            C.sqlite3_close_v2(db)
+            return nil, err
+        }
+    }
 
 	// USER AUTHENTICATION
 	//
