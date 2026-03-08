@@ -1,6 +1,3 @@
-//go:build sqlite_column_metadata
-// +build sqlite_column_metadata
-
 package sqlite3
 
 import "testing"
