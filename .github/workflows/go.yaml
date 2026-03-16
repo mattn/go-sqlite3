@@ -23,7 +23,7 @@ jobs:
       - if: startsWith(matrix.os, 'macos')
         run: brew update
 
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
 
@@ -35,7 +35,7 @@ jobs:
         run: |
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
 
       - name: 'Tags: default'
         run: go-acc . -- -race -v -tags ""
@@ -50,7 +50,7 @@ jobs:
         run: go-acc . -- -race -v -tags "sqlite_vacuum_full"
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v5
         with:
           env_vars: OS,GO
           file: coverage.txt
@@ -77,7 +77,7 @@ jobs:
           msystem: MINGW64
           path-type: inherit
 
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
 
@@ -86,7 +86,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
         shell: msys2 {0}
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
 
       - name: 'Tags: default'
         run: go build -race -v -tags ""
@@ -107,7 +107,7 @@ jobs:
         shell: msys2 {0}
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v5
         with:
           env_vars: OS,GO
           file: coverage.txt
