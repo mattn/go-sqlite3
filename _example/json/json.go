@@ -33,7 +33,9 @@ func main() {
 	}
 	defer db.Close()
 
-	_, err = db.Exec(`create table foo (tag jsonb)`)
+	// Using a json-typed column
+	// Verify type: `create table foo (tag text) strict`
+	_, err = db.Exec(`create table foo (tag json)`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -74,6 +76,52 @@ func main() {
 	}
 
 	err = db.QueryRow("select tag->>'country' from foo where tag->>'name' = 'mattn'").Scan(&country)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(country)
+
+	// Using a jsonb-typed column
+	// Verify type: `create table bar (tag blob) strict`
+	_, err = db.Exec(`create table bar (tag jsonb)`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	stmt, err = db.Prepare("insert into bar(tag) values(jsonb(?))")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(`{"name": "mattn", "country": "japan"}`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = stmt.Exec(`{"name": "michael", "country": "usa"}`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = db.QueryRow("select tag->>'country' from bar where tag->>'name' = 'mattn'").Scan(&country)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(country)
+
+	err = db.QueryRow("select json(tag) from bar where tag->>'name' = 'mattn'").Scan(&tag)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(tag.Name)
+
+	tag.Country = "日本"
+	_, err = db.Exec(`update bar set tag = jsonb(?) where tag->>'name' == 'mattn'`, &tag)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = db.QueryRow("select tag->>'country' from bar where tag->>'name' = 'mattn'").Scan(&country)
 	if err != nil {
 		log.Fatal(err)
 	}
