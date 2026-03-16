@@ -1958,6 +1958,8 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 		return s.c.lastError()
 	}
 
+	C.sqlite3_clear_bindings(s.s)
+
 	bindIndices := make([][3]int, len(args))
 	prefixes := []string{":", "@", "$"}
 	for i, v := range args {
