@@ -11,6 +11,7 @@ package sqlite3
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -500,5 +501,101 @@ func TestFileCopyTruncate(t *testing.T) {
 	cancel()
 	if err != nil {
 		t.Fatal("create table error:", err)
+	}
+}
+
+func TestBeginReadOnly(t *testing.T) {
+	srcTempFilename := TempFilename(t)
+	defer os.Remove(srcTempFilename)
+
+	// Setup a database with WAL journaling and immediate locking to support concurrent read transactions with an active read-write transaction
+	db, err := sql.Open("sqlite3", srcTempFilename+"?_journal_mode=WAL&_busy_timeout=-1&_txlock=immediate")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+
+	defer db.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Begin an IMMEDIATE transaction that holds the write lock
+	_, err = db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		t.Fatal("Failed to create IMMEDIATE transaction (1):", err)
+	}
+
+	// Attempting to create a concurrent IMMEDIATE transaction should fail immediately with SQLITE_BUSY
+	_, err = db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		var sqlerr Error
+		if !errors.As(err, &sqlerr) {
+			t.Fatalf("IMMEDIATE transaction (2) should have returned an sqlite3.Error. Got %T", err)
+		}
+
+		if sqlerr.Code&ErrBusy != ErrBusy {
+			t.Fatalf("IMMEDIATE transaction (2) should have returned an ErrBusy code. Got %q", sqlerr.Error())
+		}
+
+	} else {
+		t.Fatal("IMMEDIATE transaction (2) should have failed")
+	}
+
+	// Begin multiple DEFERRED transactions with an active read-write transaction
+	_, err = db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal("Failed to create DEFERRED transaction (1):", err)
+	}
+
+	_, err = db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal("Failed to create DEFERRED transaction (2):", err)
+	}
+
+	_, err = db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal("Failed to create DEFERRED transaction (3):", err)
+	}
+}
+
+func TestBeginTimeout(t *testing.T) {
+	srcTempFilename := TempFilename(t)
+	defer os.Remove(srcTempFilename)
+
+	// Setup a database with WAL journaling, immediate locking, and a busy_timeout to support blocking concurrent calls to BeginTx
+	db, err := sql.Open("sqlite3", srcTempFilename+"?_journal_mode=WAL&_busy_timeout=1000&_txlock=immediate")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+
+	defer db.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	start := time.Now()
+
+	// Begin an IMMEDIATE transaction that holds the write lock for 100ms
+	timeout, _ := context.WithTimeout(ctx, 100*time.Millisecond)
+	_, err = db.BeginTx(timeout, &sql.TxOptions{})
+	if err != nil {
+		t.Fatal("Failed to create IMMEDIATE transaction (1):", err)
+	}
+
+	// Begin a second IMMEDIATE transaction that blocks until the first is closed
+	_, err = db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		t.Fatal("Failed to create IMMEDIATE transaction (2):", err)
+	}
+
+	elapsed := time.Since(start)
+	if elapsed < 100*time.Millisecond {
+		t.Fatalf("Beginning IMMEDIATE transaction (2) should have blocked for at least 100 milliseconds. Got %s", elapsed)
 	}
 }

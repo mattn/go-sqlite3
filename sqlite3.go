@@ -962,11 +962,16 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
-	return c.begin(context.Background())
+	return c.begin(context.Background(), false)
 }
 
-func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
-	if _, err := c.exec(ctx, c.txlock, nil); err != nil {
+func (c *SQLiteConn) begin(ctx context.Context, ro bool) (driver.Tx, error) {
+	txlock := c.txlock
+	if ro {
+		txlock = "BEGIN"
+	}
+
+	if _, err := c.exec(ctx, txlock, nil); err != nil {
 		return nil, err
 	}
 	return &SQLiteTx{c}, nil
