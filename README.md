@@ -180,6 +180,7 @@ go build -tags "icu json1 fts5 secure_delete"
 | Secure Delete (FAST) | sqlite_secure_delete_fast | For more information see [PRAGMA secure_delete](https://www.sqlite.org/pragma.html#pragma_secure_delete) |
 | Tracing / Debug | sqlite_trace | Activate trace functions |
 | User Authentication | sqlite_userauth | SQLite User Authentication see [User Authentication](#user-authentication) for more information. |
+| Session Extension | sqlite_session | The Session Extension see [Documentation](https://sqlite.org/session/intro.html) for more information |
 | Virtual Tables | sqlite_vtable | SQLite Virtual Tables see [SQLite Official VTABLE Documentation](https://www.sqlite.org/vtab.html) for more information, and a [full example here](https://github.com/mattn/go-sqlite3/tree/master/_example/vtable) |
 
 # Compilation
