@@ -19,12 +19,14 @@ import (
 )
 
 type testModule struct {
-	t        *testing.T
-	intarray []int
+	t            *testing.T
+	intarray     []int
+	bestIndexLog []uint64
 }
 
 type testVTab struct {
 	intarray []int
+	log      *[]uint64
 }
 
 type testVTabCursor struct {
@@ -32,7 +34,7 @@ type testVTabCursor struct {
 	index int
 }
 
-func (m testModule) Create(c *SQLiteConn, args []string) (VTab, error) {
+func (m *testModule) Create(c *SQLiteConn, args []string) (VTab, error) {
 	if len(args) != 6 {
 		m.t.Fatal("six arguments expected")
 	}
@@ -58,16 +60,19 @@ func (m testModule) Create(c *SQLiteConn, args []string) (VTab, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &testVTab{m.intarray}, nil
+	return &testVTab{intarray: m.intarray, log: &m.bestIndexLog}, nil
 }
 
-func (m testModule) Connect(c *SQLiteConn, args []string) (VTab, error) {
+func (m *testModule) Connect(c *SQLiteConn, args []string) (VTab, error) {
 	return m.Create(c, args)
 }
 
-func (m testModule) DestroyModule() {}
+func (m *testModule) DestroyModule() {}
 
-func (v *testVTab) BestIndex(cst []InfoConstraint, ob []InfoOrderBy) (*IndexResult, error) {
+func (v *testVTab) BestIndex(cst []InfoConstraint, ob []InfoOrderBy, colsUsed uint64) (*IndexResult, error) {
+	if v.log != nil {
+		*v.log = append(*v.log, colsUsed)
+	}
 	used := make([]bool, 0, len(cst))
 	for range cst {
 		used = append(used, false)
@@ -128,9 +133,10 @@ func TestCreateModule(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
 	intarray := []int{1, 2, 3}
+	module := &testModule{t: t, intarray: intarray}
 	sql.Register("sqlite3_TestCreateModule", &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
-			return conn.CreateModule("test", testModule{t, intarray})
+			return conn.CreateModule("test", module)
 		},
 	})
 	db, err := sql.Open("sqlite3_TestCreateModule", tempFilename)
@@ -141,6 +147,7 @@ func TestCreateModule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create vtable: %v", err)
 	}
+	bestIndexCallsBeforeQuery := len(module.bestIndexLog)
 
 	var i, value int
 	rows, err := db.Query("SELECT rowid, * FROM vtab WHERE test = '3'")
@@ -151,6 +158,15 @@ func TestCreateModule(t *testing.T) {
 		rows.Scan(&i, &value)
 		if intarray[i] != value {
 			t.Fatalf("want %v but %v", intarray[i], value)
+		}
+	}
+	bestIndexCalls := module.bestIndexLog[bestIndexCallsBeforeQuery:]
+	if len(bestIndexCalls) == 0 {
+		t.Fatal("expected BestIndex to be called during query planning")
+	}
+	for _, colsUsed := range bestIndexCalls {
+		if colsUsed != 1 {
+			t.Fatalf("expected colsUsed mask 1, got %d", colsUsed)
 		}
 	}
 
@@ -377,7 +393,7 @@ func (t *vtabUpdateTable) Open() (VTabCursor, error) {
 	return &vtabUpdateCursor{t, 0}, nil
 }
 
-func (t *vtabUpdateTable) BestIndex(cst []InfoConstraint, ob []InfoOrderBy) (*IndexResult, error) {
+func (t *vtabUpdateTable) BestIndex(cst []InfoConstraint, ob []InfoOrderBy, colsUsed uint64) (*IndexResult, error) {
 	return &IndexResult{Used: make([]bool, len(cst))}, nil
 }
 
@@ -516,7 +532,7 @@ func (m testModuleEponymousOnly) Connect(c *SQLiteConn, args []string) (VTab, er
 
 func (m testModuleEponymousOnly) DestroyModule() {}
 
-func (v *testVTabEponymousOnly) BestIndex(cst []InfoConstraint, ob []InfoOrderBy) (*IndexResult, error) {
+func (v *testVTabEponymousOnly) BestIndex(cst []InfoConstraint, ob []InfoOrderBy, colsUsed uint64) (*IndexResult, error) {
 	used := make([]bool, 0, len(cst))
 	for range cst {
 		used = append(used, false)
