@@ -960,6 +960,44 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 	}
 }
 
+type SqliteDBStatusOption int
+
+const (
+	SQLITE_DBSTATUS_LOOKASIDE_USED SqliteDBStatusOption = iota
+	SQLITE_DBSTATUS_CACHE_USED
+	SQLITE_DBSTATUS_SCHEMA_USED
+	SQLITE_DBSTATUS_STMT_USED
+	SQLITE_DBSTATUS_LOOKASIDE_HIT
+	SQLITE_DBSTATUS_LOOKASIDE_MISS_SIZE
+	SQLITE_DBSTATUS_LOOKASIDE_MISS_FULL
+	SQLITE_DBSTATUS_CACHE_HIT
+	SQLITE_DBSTATUS_CACHE_MISS
+	SQLITE_DBSTATUS_CACHE_WRITE
+	SQLITE_DBSTATUS_DEFERRED_FKS
+	SQLITE_DBSTATUS_CACHE_USED_SHARED
+	SQLITE_DBSTATUS_CACHE_SPILL
+	SQLITE_DBSTATUS_MAX = iota - 1 /* Largest defined SqliteDBStatusOption */
+)
+
+// GetDBStatus retrieve runtime status information about a single database connection.
+// See: sqlite3_db_status https://www.sqlite.org/c3ref/db_status.html
+func (c *SQLiteConn) GetDBStatus(option SqliteDBStatusOption, resetFlag bool) (int, int, error) {
+	var curr C.int
+	var hiwtr C.int
+
+	reset := C.int(0)
+	if resetFlag {
+		reset = C.int(1)
+	}
+
+	ret := C.sqlite3_db_status(c.db, C.int(option), &curr, &hiwtr, reset)
+	if ret != C.SQLITE_OK {
+		return 0, 0, lastError(c.db)
+	}
+
+	return int(curr), int(hiwtr), nil
+}
+
 // Begin transaction.
 func (c *SQLiteConn) Begin() (driver.Tx, error) {
 	return c.begin(context.Background())
