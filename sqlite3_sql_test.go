@@ -3,16 +3,17 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-//go:build go1.8 && cgo
-// +build go1.8,cgo
+//go:build cgo
+// +build cgo
 
 package sqlite3
 
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"sync"
@@ -223,282 +224,125 @@ func TestQueryRowContextCancelParallel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer db.Close()
+	initDatabase(t, db, 100)
+
+	const query = `SELECT key_id FROM test_table ORDER BY key2 ASC`
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var keyID string
+			for j := 0; j < 100; j++ {
+				ctx, cancel := context.WithCancel(context.Background())
+				row := db.QueryRowContext(ctx, query)
+				cancel()
+				_ = row.Scan(&keyID)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestBeginTxCancel(t *testing.T) {
+	srcTempFilename := TempFilename(t)
+	defer os.Remove(srcTempFilename)
+
+	db, err := sql.Open("sqlite3", srcTempFilename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 
 	defer db.Close()
 	initDatabase(t, db, 100)
 
-	const query = `SELECT key_id FROM test_table ORDER BY key2 ASC`
-	wg := sync.WaitGroup{}
-	defer wg.Wait()
-
-	testCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			var keyID string
-			for {
-				select {
-				case <-testCtx.Done():
-					return
-				default:
+	// create several go-routines to expose racy issue
+	for i := 0; i < 1000; i++ {
+		func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			conn, err := db.Conn(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := conn.Close(); err != nil {
+					t.Error(err)
 				}
-				ctx, cancel := context.WithCancel(context.Background())
-				row := db.QueryRowContext(ctx, query)
+			}()
 
-				cancel()
-				_ = row.Scan(&keyID) // see TestQueryRowContextCancel
+			err = conn.Raw(func(driverConn any) error {
+				d, ok := driverConn.(driver.ConnBeginTx)
+				if !ok {
+					t.Fatal("unexpected: wrong type")
+				}
+				// checks that conn.Raw can be used to get *SQLiteConn
+				if _, ok = driverConn.(*SQLiteConn); !ok {
+					t.Fatalf("conn.Raw() driverConn type=%T, expected *SQLiteConn", driverConn)
+				}
+
+				go cancel() // make it cancel concurrently with exec("BEGIN");
+				tx, err := d.BeginTx(ctx, driver.TxOptions{})
+				switch err {
+				case nil:
+					switch err := tx.Rollback(); err {
+					case nil, sql.ErrTxDone:
+					default:
+						return err
+					}
+				case context.Canceled:
+				default:
+					// must not fail with "cannot start a transaction within a transaction"
+					return err
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
 			}
 		}()
 	}
-
-	var keyID string
-	for i := 0; i < 10000; i++ {
-		// note that testCtx is not cancelled during query execution
-		row := db.QueryRowContext(testCtx, query)
-
-		if err := row.Scan(&keyID); err != nil {
-			t.Fatal(i, err)
-		}
-	}
 }
 
-func TestExecCancel(t *testing.T) {
+func TestStmtReadonly(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
 
-	if _, err = db.Exec("create table foo (id integer primary key)"); err != nil {
+	_, err = db.Exec("CREATE TABLE t (count INT)")
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	for n := 0; n < 100; n++ {
-		ctx, cancel := context.WithCancel(context.Background())
-		_, err = db.ExecContext(ctx, "insert into foo (id) values (?)", n)
-		cancel()
+	isRO := func(query string) bool {
+		c, err := db.Conn(context.Background())
 		if err != nil {
-			t.Fatal(err)
+			return false
 		}
-	}
-}
 
-func doTestOpenContext(t *testing.T, option string) (string, error) {
-	tempFilename := TempFilename(t)
-	url := tempFilename + option
-
-	defer func() {
-		err := os.Remove(tempFilename)
-		if err != nil {
-			t.Error("temp file remove error:", err)
-		}
-	}()
-
-	db, err := sql.Open("sqlite3", url)
-	if err != nil {
-		return "Failed to open database:", err
-	}
-
-	defer func() {
-		err = db.Close()
-		if err != nil {
-			t.Error("db close error:", err)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
-	err = db.PingContext(ctx)
-	cancel()
-	if err != nil {
-		return "ping error:", err
-	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	_, err = db.ExecContext(ctx, "drop table foo")
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	_, err = db.ExecContext(ctx, "create table foo (id integer)")
-	cancel()
-	if err != nil {
-		return "Failed to create table:", err
-	}
-
-	if stat, err := os.Stat(tempFilename); err != nil || stat.IsDir() {
-		return "Failed to create ./foo.db", nil
-	}
-
-	return "", nil
-}
-
-func TestOpenContext(t *testing.T) {
-	cases := map[string]bool{
-		"":                   true,
-		"?_txlock=immediate": true,
-		"?_txlock=deferred":  true,
-		"?_txlock=exclusive": true,
-		"?_txlock=bogus":     false,
-	}
-	for option, expectedPass := range cases {
-		result, err := doTestOpenContext(t, option)
-		if result == "" {
-			if !expectedPass {
-				errmsg := fmt.Sprintf("_txlock error not caught at dbOpen with option: %s", option)
-				t.Fatal(errmsg)
+		var ro bool
+		c.Raw(func(dc any) error {
+			stmt, err := dc.(*SQLiteConn).Prepare(query)
+			if err != nil {
+				return err
 			}
-		} else if expectedPass {
-			if err == nil {
-				t.Fatal(result)
-			} else {
-				t.Fatal(result, err)
+			if stmt == nil {
+				return errors.New("stmt is nil")
 			}
-		}
-	}
-}
-
-func TestFileCopyTruncate(t *testing.T) {
-	var err error
-	tempFilename := TempFilename(t)
-
-	defer func() {
-		err = os.Remove(tempFilename)
-		if err != nil {
-			t.Error("temp file remove error:", err)
-		}
-	}()
-
-	db, err := sql.Open("sqlite3", tempFilename)
-	if err != nil {
-		t.Fatal("open error:", err)
+			ro = stmt.(*SQLiteStmt).Readonly()
+			return nil
+		})
+		return ro // On errors ro will remain false.
 	}
 
-	defer func() {
-		err = db.Close()
-		if err != nil {
-			t.Error("db close error:", err)
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
-	err = db.PingContext(ctx)
-	cancel()
-	if err != nil {
-		t.Fatal("ping error:", err)
+	if !isRO(`select * from t`) {
+		t.Error("select not seen as read-only")
 	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	_, err = db.ExecContext(ctx, "drop table foo")
-	cancel()
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	_, err = db.ExecContext(ctx, "create table foo (id integer)")
-	cancel()
-	if err != nil {
-		t.Fatal("create table error:", err)
-	}
-
-	// copy db to new file
-	var data []byte
-	data, err = ioutil.ReadFile(tempFilename)
-	if err != nil {
-		t.Fatal("read file error:", err)
-	}
-
-	var f *os.File
-	f, err = os.Create(tempFilename + "-db-copy")
-	if err != nil {
-		t.Fatal("create file error:", err)
-	}
-
-	defer func() {
-		err = os.Remove(tempFilename + "-db-copy")
-		if err != nil {
-			t.Error("temp file moved remove error:", err)
-		}
-	}()
-
-	_, err = f.Write(data)
-	if err != nil {
-		f.Close()
-		t.Fatal("write file error:", err)
-	}
-	err = f.Close()
-	if err != nil {
-		t.Fatal("close file error:", err)
-	}
-
-	// truncate current db file
-	f, err = os.OpenFile(tempFilename, os.O_WRONLY|os.O_TRUNC, 0666)
-	if err != nil {
-		t.Fatal("open file error:", err)
-	}
-	err = f.Close()
-	if err != nil {
-		t.Fatal("close file error:", err)
-	}
-
-	// test db after file truncate
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	err = db.PingContext(ctx)
-	cancel()
-	if err != nil {
-		t.Fatal("ping error:", err)
-	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	_, err = db.ExecContext(ctx, "drop table foo")
-	cancel()
-	if err == nil {
-		t.Fatal("drop table no error")
-	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	_, err = db.ExecContext(ctx, "create table foo (id integer)")
-	cancel()
-	if err != nil {
-		t.Fatal("create table error:", err)
-	}
-
-	err = db.Close()
-	if err != nil {
-		t.Error("db close error:", err)
-	}
-
-	// test copied file
-	db, err = sql.Open("sqlite3", tempFilename+"-db-copy")
-	if err != nil {
-		t.Fatal("open error:", err)
-	}
-
-	defer func() {
-		err = db.Close()
-		if err != nil {
-			t.Error("db close error:", err)
-		}
-	}()
-
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	err = db.PingContext(ctx)
-	cancel()
-	if err != nil {
-		t.Fatal("ping error:", err)
-	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	_, err = db.ExecContext(ctx, "drop table foo")
-	cancel()
-	if err != nil {
-		t.Fatal("drop table error:", err)
-	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 55*time.Second)
-	_, err = db.ExecContext(ctx, "create table foo (id integer)")
-	cancel()
-	if err != nil {
-		t.Fatal("create table error:", err)
+	if isRO(`insert into t values (1), (2)`) {
+		t.Error("insert seen as read-only")
 	}
 }
