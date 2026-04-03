@@ -78,6 +78,42 @@ _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
   return sqlite3_bind_blob(stmt, n, p, np, SQLITE_TRANSIENT);
 }
 
+typedef struct {
+  int typ;
+  sqlite3_int64 i64;
+  double f64;
+  const void *ptr;
+  int n;
+} sqlite3_go_col;
+
+static void
+_sqlite3_column_values(sqlite3_stmt *stmt, int ncol, sqlite3_go_col *cols) {
+  for (int i = 0; i < ncol; i++) {
+    sqlite3_go_col *col = &cols[i];
+    col->typ = sqlite3_column_type(stmt, i);
+    col->ptr = 0;
+    col->n = 0;
+    switch (col->typ) {
+    case SQLITE_INTEGER:
+      col->i64 = sqlite3_column_int64(stmt, i);
+      break;
+    case SQLITE_FLOAT:
+      col->f64 = sqlite3_column_double(stmt, i);
+      break;
+    case SQLITE_BLOB:
+      col->ptr = sqlite3_column_blob(stmt, i);
+      col->n = sqlite3_column_bytes(stmt, i);
+      break;
+    case SQLITE_TEXT:
+      col->ptr = sqlite3_column_text(stmt, i);
+      col->n = sqlite3_column_bytes(stmt, i);
+      break;
+    default:
+      break;
+    }
+  }
+}
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -210,6 +246,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"reflect"
 	"runtime"
@@ -397,6 +434,7 @@ type SQLiteRows struct {
 	cls      bool  // True if we need to close the parent statement in Close
 	cols     []string
 	decltype []string
+	colvals  *C.sqlite3_go_col
 	ctx      context.Context // no better alternative to pass context into Next() method
 	closemu  sync.Mutex
 }
@@ -2107,7 +2145,14 @@ func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (drive
 		cls:      s.cls,
 		cols:     nil,
 		decltype: nil,
+		colvals:  nil,
 		ctx:      ctx,
+	}
+	if rows.nc > 0 {
+		rows.colvals = (*C.sqlite3_go_col)(C.malloc(C.size_t(rows.nc) * C.size_t(unsafe.Sizeof(C.sqlite3_go_col{}))))
+		if rows.colvals == nil {
+			return nil, errors.New("sqlite3: failed to allocate row buffer")
+		}
 	}
 
 	return rows, nil
@@ -2209,9 +2254,17 @@ func (rc *SQLiteRows) Close() error {
 	defer rc.closemu.Unlock()
 	s := rc.s
 	if s == nil {
+		if rc.colvals != nil {
+			C.free(unsafe.Pointer(rc.colvals))
+			rc.colvals = nil
+		}
 		return nil
 	}
 	rc.s = nil // remove reference to SQLiteStmt
+	if rc.colvals != nil {
+		C.free(unsafe.Pointer(rc.colvals))
+		rc.colvals = nil
+	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -2307,13 +2360,19 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 	}
 
 	rc.declTypes()
+	if len(dest) == 0 {
+		return nil
+	}
+	C._sqlite3_column_values(rc.s.s, C.int(len(dest)), rc.colvals)
+	colvals := (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.sqlite3_go_col{})]C.sqlite3_go_col)(unsafe.Pointer(rc.colvals))[:len(dest):len(dest)]
 
 	decltype := rc.decltype
 	_ = decltype[len(dest)-1]
 	for i := range dest {
-		switch C.sqlite3_column_type(rc.s.s, C.int(i)) {
+		col := &colvals[i]
+		switch col.typ {
 		case C.SQLITE_INTEGER:
-			val := int64(C.sqlite3_column_int64(rc.s.s, C.int(i)))
+			val := int64(col.i64)
 			switch decltype[i] {
 			case columnTimestamp, columnDatetime, columnDate:
 				var t time.Time
@@ -2336,14 +2395,14 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 				dest[i] = val
 			}
 		case C.SQLITE_FLOAT:
-			dest[i] = float64(C.sqlite3_column_double(rc.s.s, C.int(i)))
+			dest[i] = float64(col.f64)
 		case C.SQLITE_BLOB:
-			p := C.sqlite3_column_blob(rc.s.s, C.int(i))
+			p := col.ptr
 			if p == nil {
 				dest[i] = []byte{}
 				continue
 			}
-			n := C.sqlite3_column_bytes(rc.s.s, C.int(i))
+			n := col.n
 			dest[i] = C.GoBytes(p, n)
 		case C.SQLITE_NULL:
 			dest[i] = nil
@@ -2351,8 +2410,8 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 			var err error
 			var timeVal time.Time
 
-			n := int(C.sqlite3_column_bytes(rc.s.s, C.int(i)))
-			s := C.GoStringN((*C.char)(unsafe.Pointer(C.sqlite3_column_text(rc.s.s, C.int(i)))), C.int(n))
+			n := int(col.n)
+			s := C.GoStringN((*C.char)(unsafe.Pointer(col.ptr)), C.int(n))
 
 			switch decltype[i] {
 			case columnTimestamp, columnDatetime, columnDate:
