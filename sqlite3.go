@@ -78,16 +78,6 @@ _sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
   return sqlite3_bind_blob(stmt, n, p, np, SQLITE_TRANSIENT);
 }
 
-static int
-_sqlite3_prepare_v2_nolen(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail)
-{
-#ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
-  return _sqlite3_prepare_v2_blocking(db, zSql, nBytes, ppStmt, pzTail);
-#else
-  return sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
-#endif
-}
-
 typedef struct {
   int typ;
   sqlite3_int64 i64;
@@ -136,6 +126,21 @@ _sqlite3_exec(sqlite3* db, const char* pcmd, long long* rowid, long long* change
   return rv;
 }
 
+// Combined reset + clear_bindings in a single C call to reduce CGO crossings.
+static int
+_sqlite3_reset_clear(sqlite3_stmt* stmt)
+{
+  int rv = sqlite3_reset(stmt);
+  sqlite3_clear_bindings(stmt);
+  return rv;
+}
+
+#ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
+extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
+extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
+extern int _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail);
+#endif
+
 // Combined prepare+step+finalize for simple exec without parameters.
 // Reduces CGO crossings from ~6 to 1 for the common no-args exec case.
 static int
@@ -171,19 +176,7 @@ _sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowi
   return rv;
 }
 
-// Combined reset + clear_bindings in a single C call to reduce CGO crossings.
-static int
-_sqlite3_reset_clear(sqlite3_stmt* stmt)
-{
-  int rv = sqlite3_reset(stmt);
-  sqlite3_clear_bindings(stmt);
-  return rv;
-}
-
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
-extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
-extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
-extern int _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail);
 
 static int
 _sqlite3_step_internal(sqlite3_stmt *stmt)
