@@ -413,12 +413,13 @@ type SQLiteTx struct {
 
 // SQLiteStmt implements driver.Stmt.
 type SQLiteStmt struct {
-	mu     sync.Mutex
-	c      *SQLiteConn
-	s      *C.sqlite3_stmt
-	t      string
-	closed bool
-	cls    bool // True if the statement was created by SQLiteConn.Query
+	mu          sync.Mutex
+	c           *SQLiteConn
+	s           *C.sqlite3_stmt
+	t           string
+	closed      bool
+	cls         bool // True if the statement was created by SQLiteConn.Query
+	namedParams map[string][3]int
 }
 
 // SQLiteResult implements sql.Result.
@@ -1969,6 +1970,62 @@ func (s *SQLiteStmt) NumInput() int {
 
 var placeHolder = []byte{0}
 
+func bindText(s *C.sqlite3_stmt, n C.int, v string) C.int {
+	if len(v) == 0 {
+		return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.int(0))
+	}
+	return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(unsafe.StringData(v))), C.int(len(v)))
+}
+
+func bindValue(s *C.sqlite3_stmt, n C.int, value driver.Value) C.int {
+	switch v := value.(type) {
+	case nil:
+		return C.sqlite3_bind_null(s, n)
+	case string:
+		return bindText(s, n, v)
+	case int64:
+		return C.sqlite3_bind_int64(s, n, C.sqlite3_int64(v))
+	case bool:
+		if v {
+			return C.sqlite3_bind_int(s, n, 1)
+		}
+		return C.sqlite3_bind_int(s, n, 0)
+	case float64:
+		return C.sqlite3_bind_double(s, n, C.double(v))
+	case []byte:
+		if v == nil {
+			return C.sqlite3_bind_null(s, n)
+		}
+		ln := len(v)
+		if ln == 0 {
+			v = placeHolder
+		}
+		return C._sqlite3_bind_blob(s, n, unsafe.Pointer(&v[0]), C.int(ln))
+	case time.Time:
+		return bindText(s, n, v.Format(SQLiteTimestampFormats[0]))
+	default:
+		return C.SQLITE_MISUSE
+	}
+}
+
+func (s *SQLiteStmt) bindNamedIndices(name string) [3]int {
+	if s.namedParams == nil {
+		s.namedParams = make(map[string][3]int)
+	} else if indices, ok := s.namedParams[name]; ok {
+		return indices
+	}
+
+	prefixes := [3]string{":", "@", "$"}
+	var indices [3]int
+	for i := range prefixes {
+		cname := C.CString(prefixes[i] + name)
+		indices[i] = int(C.sqlite3_bind_parameter_index(s.s, cname))
+		C.free(unsafe.Pointer(cname))
+	}
+	s.namedParams[name] = indices
+	return indices
+}
+
 func stmtArgs(args []driver.NamedValue, start, na int) []driver.NamedValue {
 	if na == 0 {
 		return nil
@@ -2018,40 +2075,7 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 	if !hasNamed {
 		for _, arg := range args {
 			n := C.int(arg.Ordinal)
-			switch v := arg.Value.(type) {
-			case nil:
-				rv = C.sqlite3_bind_null(s.s, n)
-			case string:
-				if len(v) == 0 {
-					rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.int(0))
-				} else {
-					b := []byte(v)
-					rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
-				}
-			case int64:
-				rv = C.sqlite3_bind_int64(s.s, n, C.sqlite3_int64(v))
-			case bool:
-				if v {
-					rv = C.sqlite3_bind_int(s.s, n, 1)
-				} else {
-					rv = C.sqlite3_bind_int(s.s, n, 0)
-				}
-			case float64:
-				rv = C.sqlite3_bind_double(s.s, n, C.double(v))
-			case []byte:
-				if v == nil {
-					rv = C.sqlite3_bind_null(s.s, n)
-				} else {
-					ln := len(v)
-					if ln == 0 {
-						v = placeHolder
-					}
-					rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(&v[0]), C.int(ln))
-				}
-			case time.Time:
-				b := []byte(v.Format(SQLiteTimestampFormats[0]))
-				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
-			}
+			rv = bindValue(s.s, n, arg.Value)
 			if rv != C.SQLITE_OK {
 				return s.c.lastError()
 			}
@@ -2059,19 +2083,14 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 		return nil
 	}
 
-	bindIndices := make([][3]int, len(args))
-	prefixes := [3]string{":", "@", "$"}
+	bindIndices := make([][4]int, len(args))
 	for i, v := range args {
-		bindIndices[i][0] = v.Ordinal
 		if v.Name == "" {
+			bindIndices[i][0] = v.Ordinal
 			continue
 		}
-		for j := range prefixes {
-			cname := C.CString(prefixes[j] + v.Name)
-			bindIndices[i][j] = int(C.sqlite3_bind_parameter_index(s.s, cname))
-			C.free(unsafe.Pointer(cname))
-		}
-		args[i].Ordinal = bindIndices[i][0]
+		indices := s.bindNamedIndices(v.Name)
+		copy(bindIndices[i][1:], indices[:])
 	}
 
 	for i, arg := range args {
@@ -2080,40 +2099,7 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 				continue
 			}
 			n := C.int(idx)
-			switch v := arg.Value.(type) {
-			case nil:
-				rv = C.sqlite3_bind_null(s.s, n)
-			case string:
-				if len(v) == 0 {
-					rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.int(0))
-				} else {
-					b := []byte(v)
-					rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
-				}
-			case int64:
-				rv = C.sqlite3_bind_int64(s.s, n, C.sqlite3_int64(v))
-			case bool:
-				if v {
-					rv = C.sqlite3_bind_int(s.s, n, 1)
-				} else {
-					rv = C.sqlite3_bind_int(s.s, n, 0)
-				}
-			case float64:
-				rv = C.sqlite3_bind_double(s.s, n, C.double(v))
-			case []byte:
-				if v == nil {
-					rv = C.sqlite3_bind_null(s.s, n)
-				} else {
-					ln := len(v)
-					if ln == 0 {
-						v = placeHolder
-					}
-					rv = C._sqlite3_bind_blob(s.s, n, unsafe.Pointer(&v[0]), C.int(ln))
-				}
-			case time.Time:
-				b := []byte(v.Format(SQLiteTimestampFormats[0]))
-				rv = C._sqlite3_bind_text(s.s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
-			}
+			rv = bindValue(s.s, n, arg.Value)
 			if rv != C.SQLITE_OK {
 				return s.c.lastError()
 			}
