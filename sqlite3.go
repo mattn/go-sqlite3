@@ -126,10 +126,57 @@ _sqlite3_exec(sqlite3* db, const char* pcmd, long long* rowid, long long* change
   return rv;
 }
 
+// Combined reset + clear_bindings in a single C call to reduce CGO crossings.
+static int
+_sqlite3_reset_clear(sqlite3_stmt* stmt)
+{
+  int rv = sqlite3_reset(stmt);
+  sqlite3_clear_bindings(stmt);
+  return rv;
+}
+
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
 extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
 extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
 extern int _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nBytes, sqlite3_stmt **ppStmt, const char **pzTail);
+#endif
+
+// Combined prepare+step+finalize for simple exec without parameters.
+// Reduces CGO crossings from ~6 to 1 for the common no-args exec case.
+static int
+_sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowid, long long* changes, const char** pzTail)
+{
+  sqlite3_stmt *stmt = 0;
+  const char *tail = 0;
+#ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
+  int rv = _sqlite3_prepare_v2_blocking(db, zSql, nBytes, &stmt, &tail);
+#else
+  int rv = sqlite3_prepare_v2(db, zSql, nBytes, &stmt, &tail);
+#endif
+  if (rv != SQLITE_OK) {
+    *pzTail = 0;
+    return rv;
+  }
+  if (stmt == 0) {
+    // Empty statement
+    *rowid = 0;
+    *changes = 0;
+    *pzTail = tail;
+    return SQLITE_OK;
+  }
+#ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
+  rv = _sqlite3_step_row_blocking(stmt, rowid, changes);
+#else
+  rv = sqlite3_step(stmt);
+  *rowid = (long long) sqlite3_last_insert_rowid(db);
+  *changes = (long long) sqlite3_changes(db);
+#endif
+  sqlite3_finalize(stmt);
+  *pzTail = tail;
+  return rv;
+}
+
+#ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
 
 static int
 _sqlite3_step_internal(sqlite3_stmt *stmt)
@@ -886,17 +933,15 @@ func lastError(db *C.sqlite3) error {
 
 // Exec implements Execer.
 func (c *SQLiteConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	list := make([]driver.NamedValue, len(args))
-	for i, v := range args {
-		list[i] = driver.NamedValue{
-			Ordinal: i + 1,
-			Value:   v,
-		}
-	}
-	return c.exec(context.Background(), query, list)
+	return c.exec(context.Background(), query, valueToNamedValue(args))
 }
 
 func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	// Fast path: no args, no context cancellation → single CGO call per statement
+	if len(args) == 0 && ctx.Done() == nil {
+		return c.execNoArgs(query)
+	}
+
 	start := 0
 	for {
 		s, err := c.prepare(ctx, query)
@@ -931,16 +976,34 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 	}
 }
 
+// execNoArgs executes a query with no parameters in a single CGO call per statement.
+func (c *SQLiteConn) execNoArgs(query string) (driver.Result, error) {
+	var res *SQLiteResult
+	for len(query) > 0 {
+		var rowid, changes C.longlong
+		var tail *C.char
+		pquery := C.CString(query)
+		rv := C._sqlite3_exec_no_args(c.db, pquery, C.int(len(query)), &rowid, &changes, &tail)
+		if tail != nil && *tail != '\000' {
+			query = strings.TrimSpace(C.GoString(tail))
+		} else {
+			query = ""
+		}
+		C.free(unsafe.Pointer(pquery))
+		if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
+			return nil, c.lastError()
+		}
+		res = &SQLiteResult{id: int64(rowid), changes: int64(changes)}
+	}
+	if res == nil {
+		res = &SQLiteResult{0, 0}
+	}
+	return res, nil
+}
+
 // Query implements Queryer.
 func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	list := make([]driver.NamedValue, len(args))
-	for i, v := range args {
-		list[i] = driver.NamedValue{
-			Ordinal: i + 1,
-			Value:   v,
-		}
-	}
-	return c.query(context.Background(), query, list)
+	return c.query(context.Background(), query, valueToNamedValue(args))
 }
 
 func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
@@ -1830,7 +1893,7 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 	defer C.free(unsafe.Pointer(pquery))
 	var s *C.sqlite3_stmt
 	var tail *C.char
-	rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(-1), &s, &tail)
+	rv := C._sqlite3_prepare_v2_internal(c.db, pquery, C.int(len(query)), &s, &tail)
 	if rv != C.SQLITE_OK {
 		return nil, c.lastError()
 	}
@@ -2002,7 +2065,12 @@ func bindValue(s *C.sqlite3_stmt, n C.int, value driver.Value) C.int {
 		}
 		return C._sqlite3_bind_blob(s, n, unsafe.Pointer(&v[0]), C.int(ln))
 	case time.Time:
-		return bindText(s, n, v.Format(SQLiteTimestampFormats[0]))
+		var buf [64]byte
+		b := v.AppendFormat(buf[:0], SQLiteTimestampFormats[0])
+		if len(b) == 0 {
+			return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.int(0))
+		}
+		return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
 	default:
 		return C.SQLITE_MISUSE
 	}
@@ -2015,12 +2083,17 @@ func (s *SQLiteStmt) bindNamedIndices(name string) [3]int {
 		return indices
 	}
 
-	prefixes := [3]string{":", "@", "$"}
+	// Build ":name\0" once and rewrite prefix byte to avoid 3 C.CString allocs.
+	buf := make([]byte, 1+len(name)+1) // prefix + name + null terminator
+	copy(buf[1:], name)
+	buf[len(buf)-1] = 0
+	cname := (*C.char)(unsafe.Pointer(&buf[0]))
+
 	var indices [3]int
-	for i := range prefixes {
-		cname := C.CString(prefixes[i] + name)
+	prefixes := [3]byte{':', '@', '$'}
+	for i, p := range prefixes {
+		buf[0] = p
 		indices[i] = int(C.sqlite3_bind_parameter_index(s.s, cname))
-		C.free(unsafe.Pointer(cname))
 	}
 	s.namedParams[name] = indices
 	return indices
@@ -2057,12 +2130,10 @@ func stmtArgs(args []driver.NamedValue, start, na int) []driver.NamedValue {
 }
 
 func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
-	rv := C.sqlite3_reset(s.s)
+	rv := C._sqlite3_reset_clear(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return s.c.lastError()
 	}
-
-	C.sqlite3_clear_bindings(s.s)
 
 	hasNamed := false
 	for i := range args {
@@ -2083,23 +2154,20 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 		return nil
 	}
 
-	bindIndices := make([][4]int, len(args))
-	for i, v := range args {
-		if v.Name == "" {
-			bindIndices[i][0] = v.Ordinal
+	for _, arg := range args {
+		if arg.Name == "" {
+			rv = bindValue(s.s, C.int(arg.Ordinal), arg.Value)
+			if rv != C.SQLITE_OK {
+				return s.c.lastError()
+			}
 			continue
 		}
-		indices := s.bindNamedIndices(v.Name)
-		copy(bindIndices[i][1:], indices[:])
-	}
-
-	for i, arg := range args {
-		for _, idx := range bindIndices[i] {
+		indices := s.bindNamedIndices(arg.Name)
+		for _, idx := range indices {
 			if idx == 0 {
 				continue
 			}
-			n := C.int(idx)
-			rv = bindValue(s.s, n, arg.Value)
+			rv = bindValue(s.s, C.int(idx), arg.Value)
 			if rv != C.SQLITE_OK {
 				return s.c.lastError()
 			}
@@ -2110,14 +2178,7 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 
 // Query the statement with arguments. Return records.
 func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
-	list := make([]driver.NamedValue, len(args))
-	for i, v := range args {
-		list[i] = driver.NamedValue{
-			Ordinal: i + 1,
-			Value:   v,
-		}
-	}
-	return s.query(context.Background(), list)
+	return s.query(context.Background(), valueToNamedValue(args))
 }
 
 func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
@@ -2156,6 +2217,10 @@ func (r *SQLiteResult) RowsAffected() (int64, error) {
 
 // Exec execute the statement with arguments. Return result object.
 func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
+	return s.exec(context.Background(), valueToNamedValue(args))
+}
+
+func valueToNamedValue(args []driver.Value) []driver.NamedValue {
 	list := make([]driver.NamedValue, len(args))
 	for i, v := range args {
 		list[i] = driver.NamedValue{
@@ -2163,7 +2228,7 @@ func (s *SQLiteStmt) Exec(args []driver.Value) (driver.Result, error) {
 			Value:   v,
 		}
 	}
-	return s.exec(context.Background(), list)
+	return list
 }
 
 func isInterruptErr(err error) bool {
@@ -2180,38 +2245,35 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []driver.NamedValue) (driver
 		return s.execSync(args)
 	}
 
-	type result struct {
-		r   driver.Result
-		err error
-	}
-	resultCh := make(chan result)
-	defer close(resultCh)
+	sema := make(chan struct{})
+	var r driver.Result
+	var err error
 	go func() {
-		r, err := s.execSync(args)
-		resultCh <- result{r, err}
+		r, err = s.execSync(args)
+		close(sema)
 	}()
-	var rv result
 	select {
-	case rv = <-resultCh:
+	case <-sema:
+		return r, err
 	case <-ctx.Done():
 		select {
-		case rv = <-resultCh: // no need to interrupt, operation completed in db
+		case <-sema: // no need to interrupt, operation completed in db
+			return r, err
 		default:
 			// this is still racy and can be no-op if executed between sqlite3_* calls in execSync.
 			C.sqlite3_interrupt(s.c.db)
-			rv = <-resultCh // wait for goroutine completed
-			if isInterruptErr(rv.err) {
+			<-sema // wait for goroutine completed
+			if isInterruptErr(err) {
 				return nil, ctx.Err()
 			}
+			return r, err
 		}
 	}
-	return rv.r, rv.err
 }
 
 func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
-		C.sqlite3_reset(s.s)
-		C.sqlite3_clear_bindings(s.s)
+		C._sqlite3_reset_clear(s.s)
 		return nil, err
 	}
 
@@ -2219,8 +2281,7 @@ func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 	rv := C._sqlite3_step_row_internal(s.s, &rowid, &changes)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		err := s.c.lastError()
-		C.sqlite3_reset(s.s)
-		C.sqlite3_clear_bindings(s.s)
+		C._sqlite3_reset_clear(s.s)
 		return nil, err
 	}
 
@@ -2311,21 +2372,22 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	if rc.ctx.Done() == nil {
 		return rc.nextSyncLocked(dest)
 	}
-	resultCh := make(chan error)
-	defer close(resultCh)
+	sema := make(chan struct{})
+	var err error
 	go func() {
-		resultCh <- rc.nextSyncLocked(dest)
+		err = rc.nextSyncLocked(dest)
+		close(sema)
 	}()
 	select {
-	case err := <-resultCh:
+	case <-sema:
 		return err
 	case <-rc.ctx.Done():
 		select {
-		case <-resultCh: // no need to interrupt
+		case <-sema: // no need to interrupt
 		default:
 			// this is still racy and can be no-op if executed between sqlite3_* calls in nextSyncLocked.
 			C.sqlite3_interrupt(rc.s.c.db)
-			<-resultCh // ensure goroutine completed
+			<-sema // ensure goroutine completed
 		}
 		return rc.ctx.Err()
 	}
