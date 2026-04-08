@@ -948,7 +948,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 
 	start := 0
 	for {
-		s, err := c.prepareWithCache(ctx, query, true)
+		s, err := c.prepareWithCache(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -1013,7 +1013,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	start := 0
 	for {
-		s, err := c.prepareWithCache(ctx, query, true)
+		s, err := c.prepareWithCache(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -1969,16 +1969,6 @@ func (c *SQLiteConn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, error) {
-	return c.prepareWithCache(ctx, query, false)
-}
-
-func (c *SQLiteConn) prepareWithCache(ctx context.Context, query string, useCache bool) (driver.Stmt, error) {
-	if useCache {
-		if stmt := c.takeCachedStmt(query); stmt != nil {
-			return stmt, nil
-		}
-	}
-
 	pquery := C.CString(query)
 	defer C.free(unsafe.Pointer(pquery))
 	var s *C.sqlite3_stmt
@@ -1992,10 +1982,22 @@ func (c *SQLiteConn) prepareWithCache(ctx context.Context, query string, useCach
 		t = strings.TrimSpace(C.GoString(tail))
 	}
 	ss := &SQLiteStmt{c: c, s: s, t: t}
-	if useCache && t == "" {
+	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
+	return ss, nil
+}
+
+func (c *SQLiteConn) prepareWithCache(ctx context.Context, query string) (driver.Stmt, error) {
+	if stmt := c.takeCachedStmt(query); stmt != nil {
+		return stmt, nil
+	}
+	stmt, err := c.prepare(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	ss := stmt.(*SQLiteStmt)
+	if ss.t == "" {
 		ss.cacheKey = query
 	}
-	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
 	return ss, nil
 }
 
