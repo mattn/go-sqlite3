@@ -1941,7 +1941,7 @@ func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.db == nil || c.stmtCacheSize <= 0 || c.stmtCacheCount >= c.stmtCacheSize {
+	if c.db == nil || c.stmtCacheCount >= c.stmtCacheSize {
 		return false
 	}
 	c.stmtCache[s.cacheKey] = append(c.stmtCache[s.cacheKey], s)
