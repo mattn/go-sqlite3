@@ -1884,9 +1884,7 @@ func (c *SQLiteConn) Close() error {
 		return nil
 	}
 	runtime.SetFinalizer(c, nil)
-	if err := c.closeCachedStmtsLocked(); err != nil {
-		return err
-	}
+	c.closeCachedStmtsLocked()
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
 		return lastError(c.db)
@@ -1949,23 +1947,20 @@ func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
 	return true
 }
 
-func (c *SQLiteConn) closeCachedStmtsLocked() error {
+func (c *SQLiteConn) closeCachedStmtsLocked() {
 	for key, stmts := range c.stmtCache {
 		for _, s := range stmts {
 			if s == nil || s.s == nil {
 				continue
 			}
 			runtime.SetFinalizer(s, nil)
-			if rv := C.sqlite3_finalize(s.s); rv != C.SQLITE_OK {
-				return lastError(c.db)
-			}
+			C.sqlite3_finalize(s.s)
 			s.s = nil
 			s.c = nil
 		}
 		delete(c.stmtCache, key)
 	}
 	c.stmtCacheCount = 0
-	return nil
 }
 
 // Prepare the query string. Return a new statement.
