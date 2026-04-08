@@ -445,12 +445,15 @@ type SQLiteDriver struct {
 
 // SQLiteConn implements driver.Conn.
 type SQLiteConn struct {
-	mu          sync.Mutex
-	db          *C.sqlite3
-	loc         *time.Location
-	txlock      string
-	funcs       []*functionInfo
-	aggregators []*aggInfo
+	mu             sync.Mutex
+	db             *C.sqlite3
+	loc            *time.Location
+	txlock         string
+	funcs          []*functionInfo
+	aggregators    []*aggInfo
+	stmtCache      map[string][]*SQLiteStmt
+	stmtCacheSize  int
+	stmtCacheCount int
 }
 
 // SQLiteTx implements driver.Tx.
@@ -467,6 +470,7 @@ type SQLiteStmt struct {
 	closed      bool
 	cls         bool // True if the statement was created by SQLiteConn.Query
 	namedParams map[string][3]int
+	cacheKey    string
 }
 
 // SQLiteResult implements sql.Result.
@@ -944,7 +948,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 
 	start := 0
 	for {
-		s, err := c.prepare(ctx, query)
+		s, err := c.prepareWithCache(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -1009,7 +1013,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	start := 0
 	for {
-		s, err := c.prepare(ctx, query)
+		s, err := c.prepareWithCache(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -1185,6 +1189,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	writableSchema := -1
 	vfsName := ""
 	var cacheSize *int64
+	stmtCacheSize := 0
 
 	pos := strings.IndexRune(dsn, '?')
 	if pos >= 1 {
@@ -1520,6 +1525,20 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			cacheSize = &iv
 		}
 
+		// _stmt_cache_size sets the maximum number of prepared statements
+		// cached per connection. Note that sql.DB is a connection pool, so
+		// each connection maintains its own independent cache.
+		if val := params.Get("_stmt_cache_size"); val != "" {
+			iv, err := strconv.Atoi(val)
+			if err != nil {
+				return nil, fmt.Errorf("Invalid _stmt_cache_size: %v: %v", val, err)
+			}
+			if iv < 0 {
+				return nil, fmt.Errorf("Invalid _stmt_cache_size: %v, expecting non-negative integer", val)
+			}
+			stmtCacheSize = iv
+		}
+
 		if val := params.Get("vfs"); val != "" {
 			vfsName = val
 		}
@@ -1592,7 +1611,10 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	//
 
 	// Create connection to SQLite
-	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
+	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock, stmtCacheSize: stmtCacheSize}
+	if stmtCacheSize > 0 {
+		conn.stmtCache = make(map[string][]*SQLiteStmt)
+	}
 
 	// Password Cipher has to be registered before authentication
 	if len(authCrypt) > 0 {
@@ -1865,6 +1887,7 @@ func (c *SQLiteConn) Close() error {
 		return nil
 	}
 	runtime.SetFinalizer(c, nil)
+	c.closeCachedStmtsLocked()
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
 		return lastError(c.db)
@@ -1881,6 +1904,70 @@ func (c *SQLiteConn) dbConnOpen() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.db != nil
+}
+
+func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
+	if c == nil || query == "" || c.stmtCacheSize <= 0 {
+		return nil
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.db == nil {
+		return nil
+	}
+	stmts := c.stmtCache[query]
+	if len(stmts) == 0 {
+		return nil
+	}
+	s := stmts[len(stmts)-1]
+	if len(stmts) == 1 {
+		delete(c.stmtCache, query)
+	} else {
+		c.stmtCache[query] = stmts[:len(stmts)-1]
+	}
+	c.stmtCacheCount--
+	s.closed = false
+	s.cls = false
+	s.t = ""
+	return s
+}
+
+func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
+	if c == nil || s == nil || s.s == nil || s.cacheKey == "" {
+		return false
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.db == nil || c.stmtCacheCount >= c.stmtCacheSize {
+		return false
+	}
+	rv := C._sqlite3_reset_clear(s.s)
+	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
+		return false
+	}
+	c.stmtCache[s.cacheKey] = append(c.stmtCache[s.cacheKey], s)
+	c.stmtCacheCount++
+	return true
+}
+
+func (c *SQLiteConn) closeCachedStmtsLocked() {
+	for key, stmts := range c.stmtCache {
+		for _, s := range stmts {
+			if s == nil || s.s == nil {
+				continue
+			}
+			runtime.SetFinalizer(s, nil)
+			C.sqlite3_finalize(s.s)
+			s.s = nil
+			s.c = nil
+		}
+		delete(c.stmtCache, key)
+	}
+	c.stmtCacheCount = 0
 }
 
 // Prepare the query string. Return a new statement.
@@ -1903,6 +1990,21 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 	}
 	ss := &SQLiteStmt{c: c, s: s, t: t}
 	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
+	return ss, nil
+}
+
+func (c *SQLiteConn) prepareWithCache(ctx context.Context, query string) (driver.Stmt, error) {
+	if stmt := c.takeCachedStmt(query); stmt != nil {
+		return stmt, nil
+	}
+	stmt, err := c.prepare(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	ss := stmt.(*SQLiteStmt)
+	if ss.t == "" {
+		ss.cacheKey = query
+	}
 	return ss, nil
 }
 
@@ -2014,11 +2116,18 @@ func (s *SQLiteStmt) Close() error {
 	runtime.SetFinalizer(s, nil)
 	conn := s.c
 	stmt := s.s
-	s.s = nil
-	s.c = nil
+	if stmt == nil {
+		s.c = nil
+		return nil
+	}
 	if !conn.dbConnOpen() {
 		return errors.New("sqlite statement with already closed database connection")
 	}
+	if s.cacheKey != "" && conn.putCachedStmt(s) {
+		return nil
+	}
+	s.s = nil
+	s.c = nil
 	rv := C.sqlite3_finalize(stmt)
 	if rv != C.SQLITE_OK {
 		return conn.lastError()
