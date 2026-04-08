@@ -1942,6 +1942,10 @@ func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
 	if c.db == nil || c.stmtCacheCount >= c.stmtCacheSize {
 		return false
 	}
+	rv := C._sqlite3_reset_clear(s.s)
+	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
+		return false
+	}
 	c.stmtCache[s.cacheKey] = append(c.stmtCache[s.cacheKey], s)
 	c.stmtCacheCount++
 	return true
@@ -2116,16 +2120,8 @@ func (s *SQLiteStmt) Close() error {
 	if !conn.dbConnOpen() {
 		return errors.New("sqlite statement with already closed database connection")
 	}
-	if s.cacheKey != "" {
-		rv := C._sqlite3_reset_clear(stmt)
-		if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
-			s.s = nil
-			s.c = nil
-			return conn.lastError()
-		}
-		if conn.putCachedStmt(s) {
-			return nil
-		}
+	if s.cacheKey != "" && conn.putCachedStmt(s) {
+		return nil
 	}
 	s.s = nil
 	s.c = nil
