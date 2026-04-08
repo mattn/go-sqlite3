@@ -1525,6 +1525,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			cacheSize = &iv
 		}
 
+		// _stmt_cache_size sets the maximum number of prepared statements
+		// cached per connection. Note that sql.DB is a connection pool, so
+		// each connection maintains its own independent cache.
 		if val := params.Get("_stmt_cache_size"); val != "" {
 			iv, err := strconv.Atoi(val)
 			if err != nil {
