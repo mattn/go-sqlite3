@@ -1906,14 +1906,14 @@ func (c *SQLiteConn) dbConnOpen() bool {
 }
 
 func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
-	if c == nil || query == "" {
+	if c == nil || query == "" || c.stmtCacheSize <= 0 {
 		return nil
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.db == nil || c.stmtCacheSize <= 0 {
+	if c.db == nil {
 		return nil
 	}
 	stmts := c.stmtCache[query]
