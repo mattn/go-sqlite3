@@ -451,7 +451,13 @@ type SQLiteConn struct {
 	txlock         string
 	funcs          []*functionInfo
 	aggregators    []*aggInfo
-	stmtCache      map[string][]*SQLiteStmt
+	// Prepared-statement cache. stmtCacheBuf is a preallocated slice of
+	// length stmtCacheSize holding up to stmtCacheCount live entries at
+	// indices [0, stmtCacheCount). Ordering is LRU-first: index 0 is the
+	// oldest (next to be evicted), index stmtCacheCount-1 is the most
+	// recently put. put at the tail is O(1) when not full; eviction shifts
+	// the remaining entries left by one.
+	stmtCacheBuf   []*SQLiteStmt
 	stmtCacheSize  int
 	stmtCacheCount int
 }
@@ -1613,7 +1619,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Create connection to SQLite
 	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock, stmtCacheSize: stmtCacheSize}
 	if stmtCacheSize > 0 {
-		conn.stmtCache = make(map[string][]*SQLiteStmt)
+		conn.stmtCacheBuf = make([]*SQLiteStmt, stmtCacheSize)
 	}
 
 	// Password Cipher has to be registered before authentication
@@ -1917,55 +1923,73 @@ func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
 	if c.db == nil {
 		return nil
 	}
-	stmts := c.stmtCache[query]
-	if len(stmts) == 0 {
-		return nil
+	// Scan from the MRU end (tail) so that a stmt put just before is
+	// found immediately.
+	for i := c.stmtCacheCount - 1; i >= 0; i-- {
+		s := c.stmtCacheBuf[i]
+		if s.cacheKey != query {
+			continue
+		}
+		// Remove s from the buffer by shifting subsequent entries left.
+		if i != c.stmtCacheCount-1 {
+			copy(c.stmtCacheBuf[i:c.stmtCacheCount-1], c.stmtCacheBuf[i+1:c.stmtCacheCount])
+		}
+		c.stmtCacheCount--
+		c.stmtCacheBuf[c.stmtCacheCount] = nil
+		s.closed = false
+		s.cls = false
+		s.t = ""
+		return s
 	}
-	s := stmts[len(stmts)-1]
-	if len(stmts) == 1 {
-		delete(c.stmtCache, query)
-	} else {
-		c.stmtCache[query] = stmts[:len(stmts)-1]
-	}
-	c.stmtCacheCount--
-	s.closed = false
-	s.cls = false
-	s.t = ""
-	return s
+	return nil
 }
 
 func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
-	if c == nil || s == nil || s.s == nil || s.cacheKey == "" {
+	if c == nil || s == nil || s.s == nil || s.cacheKey == "" || c.stmtCacheSize <= 0 {
 		return false
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.db == nil || c.stmtCacheCount >= c.stmtCacheSize {
+	if c.db == nil {
 		return false
 	}
 	rv := C._sqlite3_reset_clear(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return false
 	}
-	c.stmtCache[s.cacheKey] = append(c.stmtCache[s.cacheKey], s)
+	// If full, finalize the least-recently-used entry at index 0 and
+	// compact the remaining entries left by one.
+	if c.stmtCacheCount == c.stmtCacheSize {
+		victim := c.stmtCacheBuf[0]
+		runtime.SetFinalizer(victim, nil)
+		if victim.s != nil {
+			C.sqlite3_finalize(victim.s)
+			victim.s = nil
+		}
+		victim.c = nil
+		victim.closed = true
+		copy(c.stmtCacheBuf[0:c.stmtCacheCount-1], c.stmtCacheBuf[1:c.stmtCacheCount])
+		c.stmtCacheCount--
+	}
+	// Append at the MRU tail.
+	c.stmtCacheBuf[c.stmtCacheCount] = s
 	c.stmtCacheCount++
 	return true
 }
 
 func (c *SQLiteConn) closeCachedStmtsLocked() {
-	for key, stmts := range c.stmtCache {
-		for _, s := range stmts {
-			if s == nil || s.s == nil {
-				continue
-			}
-			runtime.SetFinalizer(s, nil)
-			C.sqlite3_finalize(s.s)
-			s.s = nil
-			s.c = nil
+	for i := 0; i < c.stmtCacheCount; i++ {
+		s := c.stmtCacheBuf[i]
+		c.stmtCacheBuf[i] = nil
+		if s == nil || s.s == nil {
+			continue
 		}
-		delete(c.stmtCache, key)
+		runtime.SetFinalizer(s, nil)
+		C.sqlite3_finalize(s.s)
+		s.s = nil
+		s.c = nil
 	}
 	c.stmtCacheCount = 0
 }
