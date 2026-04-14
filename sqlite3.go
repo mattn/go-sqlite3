@@ -1943,7 +1943,7 @@ func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
 }
 
 func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
-	if c == nil || s == nil || s.s == nil || s.cacheKey == "" || !c.stmtCacheEnabled {
+	if c == nil || s == nil || s.s == nil || s.cacheKey == "" {
 		return false
 	}
 
@@ -2021,7 +2021,7 @@ func (c *SQLiteConn) prepareWithCache(ctx context.Context, query string) (driver
 		return nil, err
 	}
 	ss := stmt.(*SQLiteStmt)
-	if ss.t == "" {
+	if ss.t == "" && c.stmtCacheEnabled {
 		ss.cacheKey = query
 	}
 	return ss, nil
