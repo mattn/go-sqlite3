@@ -47,8 +47,8 @@ func TestStmtCacheLRUEviction(t *testing.T) {
 	// Fill the cache with q1 and q2.
 	prepareAndClose(q1)
 	prepareAndClose(q2)
-	if got, want := c.stmtCacheCount, 2; got != want {
-		t.Fatalf("after filling: stmtCacheCount = %d, want %d", got, want)
+	if got, want := len(c.stmtCache), 2; got != want {
+		t.Fatalf("after filling: len(stmtCache) = %d, want %d", got, want)
 	}
 	if cacheCount(c, q1) != 1 || cacheCount(c, q2) != 1 {
 		t.Fatalf("after filling: expected q1 and q2 cached, got %#v", cacheKeys(c))
@@ -56,8 +56,8 @@ func TestStmtCacheLRUEviction(t *testing.T) {
 
 	// Insert q3. q1 is the oldest entry and should be evicted.
 	prepareAndClose(q3)
-	if got, want := c.stmtCacheCount, 2; got != want {
-		t.Fatalf("after q3: stmtCacheCount = %d, want %d", got, want)
+	if got, want := len(c.stmtCache), 2; got != want {
+		t.Fatalf("after q3: len(stmtCache) = %d, want %d", got, want)
 	}
 	if cacheCount(c, q1) != 0 {
 		t.Fatalf("after q3: q1 should have been evicted, cache=%#v", cacheKeys(c))
@@ -66,14 +66,14 @@ func TestStmtCacheLRUEviction(t *testing.T) {
 		t.Fatalf("after q3: expected q2 and q3 cached, got %#v", cacheKeys(c))
 	}
 
-	// Touching q2 should make q3 the oldest (the entry at buf[0]).
+	// Touching q2 should make q3 the oldest (the entry at index 0).
 	prepareAndClose(q2)
-	if c.stmtCacheCount == 0 || c.stmtCacheBuf[0].cacheKey != q3 {
+	if len(c.stmtCache) == 0 || c.stmtCache[0].cacheKey != q3 {
 		var head string
-		if c.stmtCacheCount > 0 {
-			head = c.stmtCacheBuf[0].cacheKey
+		if len(c.stmtCache) > 0 {
+			head = c.stmtCache[0].cacheKey
 		}
-		t.Fatalf("after touching q2: expected q3 at buf[0] (LRU), got %q", head)
+		t.Fatalf("after touching q2: expected q3 at stmtCache[0] (LRU), got %q", head)
 	}
 
 	// Insert q1 again. Now q3 should be evicted (q2 is newer).
@@ -84,14 +84,15 @@ func TestStmtCacheLRUEviction(t *testing.T) {
 	if cacheCount(c, q1) != 1 || cacheCount(c, q2) != 1 {
 		t.Fatalf("after reinserting q1: expected q1 and q2 cached, got %#v", cacheKeys(c))
 	}
-	if got, want := c.stmtCacheCount, 2; got != want {
-		t.Fatalf("after reinserting q1: stmtCacheCount = %d, want %d", got, want)
+	if got, want := len(c.stmtCache), 2; got != want {
+		t.Fatalf("after reinserting q1: len(stmtCache) = %d, want %d", got, want)
 	}
 
-	// Sanity-check: no dangling entries past stmtCacheCount.
-	for i := c.stmtCacheCount; i < len(c.stmtCacheBuf); i++ {
-		if c.stmtCacheBuf[i] != nil {
-			t.Fatalf("stmtCacheBuf[%d] = %p, expected nil tail slot", i, c.stmtCacheBuf[i])
+	// Sanity-check: no dangling entries past len(stmtCache).
+	tail := c.stmtCache[:cap(c.stmtCache)]
+	for i := len(c.stmtCache); i < len(tail); i++ {
+		if tail[i] != nil {
+			t.Fatalf("stmtCache tail slot %d = %p, expected nil", i, tail[i])
 		}
 	}
 }
@@ -135,16 +136,16 @@ func TestStmtCacheReuseReturnsSameHandle(t *testing.T) {
 
 func cacheKeys(c *SQLiteConn) map[string]int {
 	out := make(map[string]int)
-	for i := 0; i < c.stmtCacheCount; i++ {
-		out[c.stmtCacheBuf[i].cacheKey]++
+	for _, s := range c.stmtCache {
+		out[s.cacheKey]++
 	}
 	return out
 }
 
 func cacheCount(c *SQLiteConn, q string) int {
 	n := 0
-	for i := 0; i < c.stmtCacheCount; i++ {
-		if c.stmtCacheBuf[i].cacheKey == q {
+	for _, s := range c.stmtCache {
+		if s.cacheKey == q {
 			n++
 		}
 	}
