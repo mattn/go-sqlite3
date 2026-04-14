@@ -1934,9 +1934,11 @@ func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
 		copy(c.stmtCache[i:n-1], c.stmtCache[i+1:n])
 		c.stmtCache[n-1] = nil
 		c.stmtCache = c.stmtCache[:n-1]
+		// The stmt was marked closed by Close before being cached, and
+		// cls may have been set if Query opened it; reset both so the
+		// caller gets a stmt equivalent to a fresh Prepare.
 		s.closed = false
 		s.cls = false
-		s.t = ""
 		return s
 	}
 	return nil
@@ -1960,14 +1962,7 @@ func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
 	// If full, finalize the LRU entry at index 0 and shift left; the
 	// freed tail slot is immediately reused by the append below.
 	if len(c.stmtCache) == cap(c.stmtCache) {
-		victim := c.stmtCache[0]
-		runtime.SetFinalizer(victim, nil)
-		if victim.s != nil {
-			C.sqlite3_finalize(victim.s)
-			victim.s = nil
-		}
-		victim.c = nil
-		victim.closed = true
+		finalizeCachedStmt(c.stmtCache[0])
 		copy(c.stmtCache, c.stmtCache[1:])
 		c.stmtCache = c.stmtCache[:len(c.stmtCache)-1]
 	}
@@ -1978,15 +1973,25 @@ func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
 func (c *SQLiteConn) closeCachedStmtsLocked() {
 	for i, s := range c.stmtCache {
 		c.stmtCache[i] = nil
-		if s == nil || s.s == nil {
-			continue
-		}
-		runtime.SetFinalizer(s, nil)
-		C.sqlite3_finalize(s.s)
-		s.s = nil
-		s.c = nil
+		finalizeCachedStmt(s)
 	}
 	c.stmtCache = c.stmtCache[:0]
+}
+
+// finalizeCachedStmt tears down a stmt that was sitting in the connection's
+// stmt cache. The caller must hold c.mu. It is safe to pass a nil stmt or a
+// stmt whose handle has already been released.
+func finalizeCachedStmt(s *SQLiteStmt) {
+	if s == nil {
+		return
+	}
+	runtime.SetFinalizer(s, nil)
+	if s.s != nil {
+		C.sqlite3_finalize(s.s)
+		s.s = nil
+	}
+	s.c = nil
+	s.closed = true
 }
 
 // Prepare the query string. Return a new statement.
