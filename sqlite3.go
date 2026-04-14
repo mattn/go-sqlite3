@@ -451,9 +451,14 @@ type SQLiteConn struct {
 	txlock         string
 	funcs          []*functionInfo
 	aggregators    []*aggInfo
-	stmtCache      map[string][]*SQLiteStmt
-	stmtCacheSize  int
-	stmtCacheCount int
+	// Prepared-statement cache. The slice is allocated at Open with a
+	// fixed capacity equal to the configured cache size; cap bounds the
+	// cache, len is the live count, and entries are ordered LRU-first
+	// (index 0 is the oldest, the tail is most recently put). Access
+	// requires mu; stmtCacheEnabled is immutable after Open and is the
+	// only field safe to read without the lock.
+	stmtCache        []*SQLiteStmt
+	stmtCacheEnabled bool
 }
 
 // SQLiteTx implements driver.Tx.
@@ -1611,9 +1616,10 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	//
 
 	// Create connection to SQLite
-	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock, stmtCacheSize: stmtCacheSize}
+	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
 	if stmtCacheSize > 0 {
-		conn.stmtCache = make(map[string][]*SQLiteStmt)
+		conn.stmtCache = make([]*SQLiteStmt, 0, stmtCacheSize)
+		conn.stmtCacheEnabled = true
 	}
 
 	// Password Cipher has to be registered before authentication
@@ -1907,7 +1913,7 @@ func (c *SQLiteConn) dbConnOpen() bool {
 }
 
 func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
-	if c == nil || query == "" || c.stmtCacheSize <= 0 {
+	if c == nil || query == "" || !c.stmtCacheEnabled {
 		return nil
 	}
 
@@ -1917,21 +1923,25 @@ func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
 	if c.db == nil {
 		return nil
 	}
-	stmts := c.stmtCache[query]
-	if len(stmts) == 0 {
-		return nil
+	// Scan from the MRU end (tail) so that a stmt put just before is
+	// found immediately.
+	for i := len(c.stmtCache) - 1; i >= 0; i-- {
+		s := c.stmtCache[i]
+		if s.cacheKey != query {
+			continue
+		}
+		n := len(c.stmtCache)
+		copy(c.stmtCache[i:n-1], c.stmtCache[i+1:n])
+		c.stmtCache[n-1] = nil
+		c.stmtCache = c.stmtCache[:n-1]
+		// The stmt was marked closed by Close before being cached, and
+		// cls may have been set if Query opened it; reset both so the
+		// caller gets a stmt equivalent to a fresh Prepare.
+		s.closed = false
+		s.cls = false
+		return s
 	}
-	s := stmts[len(stmts)-1]
-	if len(stmts) == 1 {
-		delete(c.stmtCache, query)
-	} else {
-		c.stmtCache[query] = stmts[:len(stmts)-1]
-	}
-	c.stmtCacheCount--
-	s.closed = false
-	s.cls = false
-	s.t = ""
-	return s
+	return nil
 }
 
 func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
@@ -1942,32 +1952,46 @@ func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.db == nil || c.stmtCacheCount >= c.stmtCacheSize {
+	if c.db == nil {
 		return false
 	}
 	rv := C._sqlite3_reset_clear(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return false
 	}
-	c.stmtCache[s.cacheKey] = append(c.stmtCache[s.cacheKey], s)
-	c.stmtCacheCount++
+	// If full, finalize the LRU entry at index 0 and shift left; the
+	// freed tail slot is immediately reused by the append below.
+	if len(c.stmtCache) == cap(c.stmtCache) {
+		finalizeCachedStmt(c.stmtCache[0])
+		copy(c.stmtCache, c.stmtCache[1:])
+		c.stmtCache = c.stmtCache[:len(c.stmtCache)-1]
+	}
+	c.stmtCache = append(c.stmtCache, s)
 	return true
 }
 
 func (c *SQLiteConn) closeCachedStmtsLocked() {
-	for key, stmts := range c.stmtCache {
-		for _, s := range stmts {
-			if s == nil || s.s == nil {
-				continue
-			}
-			runtime.SetFinalizer(s, nil)
-			C.sqlite3_finalize(s.s)
-			s.s = nil
-			s.c = nil
-		}
-		delete(c.stmtCache, key)
+	for i, s := range c.stmtCache {
+		c.stmtCache[i] = nil
+		finalizeCachedStmt(s)
 	}
-	c.stmtCacheCount = 0
+	c.stmtCache = c.stmtCache[:0]
+}
+
+// finalizeCachedStmt tears down a stmt that was sitting in the connection's
+// stmt cache. The caller must hold c.mu. It is safe to pass a nil stmt or a
+// stmt whose handle has already been released.
+func finalizeCachedStmt(s *SQLiteStmt) {
+	if s == nil {
+		return
+	}
+	runtime.SetFinalizer(s, nil)
+	if s.s != nil {
+		C.sqlite3_finalize(s.s)
+		s.s = nil
+	}
+	s.c = nil
+	s.closed = true
 }
 
 // Prepare the query string. Return a new statement.
@@ -2002,7 +2026,7 @@ func (c *SQLiteConn) prepareWithCache(ctx context.Context, query string) (driver
 		return nil, err
 	}
 	ss := stmt.(*SQLiteStmt)
-	if ss.t == "" {
+	if ss.t == "" && c.stmtCacheEnabled {
 		ss.cacheKey = query
 	}
 	return ss, nil
