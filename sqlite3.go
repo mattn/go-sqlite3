@@ -1017,25 +1017,37 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 		if err != nil {
 			return nil, err
 		}
-		s.(*SQLiteStmt).cls = true
+		ss := s.(*SQLiteStmt)
+		ss.cls = true
+		// sqlite3_prepare_v2 returns SQLITE_OK with a NULL statement handle
+		// when the input is empty or contains only whitespace/comments.
+		if ss.s == nil {
+			tail := ss.t
+			ss.Close()
+			if tail == "" {
+				return &SQLiteRows{cls: true, ctx: ctx}, nil
+			}
+			query = tail
+			continue
+		}
 		na := s.NumInput()
 		if len(args)-start < na {
-			s.Close()
+			ss.Close()
 			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args)-start)
 		}
 		stmtArgs := stmtArgs(args, start, na)
-		rows, err := s.(*SQLiteStmt).query(ctx, stmtArgs)
+		rows, err := ss.query(ctx, stmtArgs)
 		if err != nil && err != driver.ErrSkip {
-			s.Close()
+			ss.Close()
 			return rows, err
 		}
 		start += na
-		tail := s.(*SQLiteStmt).t
+		tail := ss.t
 		if tail == "" {
 			return rows, nil
 		}
 		rows.Close()
-		s.Close()
+		ss.Close()
 		query = tail
 	}
 }
@@ -2441,6 +2453,9 @@ func (rc *SQLiteRows) Close() error {
 
 // Columns return column names.
 func (rc *SQLiteRows) Columns() []string {
+	if rc.s == nil {
+		return rc.cols
+	}
 	rc.s.mu.Lock()
 	defer rc.s.mu.Unlock()
 	if rc.s.s != nil && int(rc.nc) != len(rc.cols) {
@@ -2464,6 +2479,9 @@ func (rc *SQLiteRows) declTypes() []string {
 
 // DeclTypes return column types.
 func (rc *SQLiteRows) DeclTypes() []string {
+	if rc.s == nil {
+		return rc.decltype
+	}
 	rc.s.mu.Lock()
 	defer rc.s.mu.Unlock()
 	return rc.declTypes()
@@ -2471,6 +2489,9 @@ func (rc *SQLiteRows) DeclTypes() []string {
 
 // Next move cursor to next. Attempts to honor context timeout from QueryContext call.
 func (rc *SQLiteRows) Next(dest []driver.Value) error {
+	if rc.s == nil {
+		return io.EOF
+	}
 	rc.s.mu.Lock()
 	defer rc.s.mu.Unlock()
 
