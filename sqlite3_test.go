@@ -2065,6 +2065,40 @@ func TestNamedParamClearBindings(t *testing.T) {
 	}
 }
 
+// https://github.com/mattn/go-sqlite3/issues/1390
+// sqlite3_prepare_v2 returns SQLITE_OK with a NULL statement handle when the
+// input contains no SQL (only whitespace or comments). Querying such input
+// must not panic.
+func TestQueryCommentOnly(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	cases := []string{"", "   ", "-- comment", "---- comment\n", "/* block */"}
+	for _, q := range cases {
+		var x int
+		if err := db.QueryRow(q).Scan(&x); err != sql.ErrNoRows {
+			t.Errorf("QueryRow(%q): expected ErrNoRows, got %v", q, err)
+		}
+
+		rows, err := db.Query(q)
+		if err != nil {
+			t.Errorf("Query(%q): unexpected error: %v", q, err)
+			continue
+		}
+		if rows.Next() {
+			t.Errorf("Query(%q): expected no rows", q)
+		}
+		rows.Close()
+
+		if _, err := db.Exec(q); err != nil {
+			t.Errorf("Exec(%q): unexpected error: %v", q, err)
+		}
+	}
+}
+
 var customFunctionOnce sync.Once
 
 func BenchmarkCustomFunctions(b *testing.B) {
