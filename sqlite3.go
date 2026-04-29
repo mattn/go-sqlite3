@@ -2239,6 +2239,9 @@ func stmtArgs(args []driver.NamedValue, start, na int) []driver.NamedValue {
 }
 
 func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
+	if s.s == nil {
+		return nil
+	}
 	rv := C._sqlite3_reset_clear(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		return s.c.lastError()

@@ -2063,6 +2063,16 @@ func TestNamedParamClearBindings(t *testing.T) {
 	if z.Valid {
 		t.Errorf("Expected z to be NULL, got %d", z.Int64)
 	}
+
+	// Ensure empty statements don't cause panics.
+	_, err = db.Exec("---- comment")
+	if err != nil {
+		t.Fatal("Failed to exec comment only:", err)
+	}
+	_, err = db.Query("---- comment")
+	if err != nil {
+		t.Fatal("Failed to query comment only:", err)
+	}
 }
 
 var customFunctionOnce sync.Once
