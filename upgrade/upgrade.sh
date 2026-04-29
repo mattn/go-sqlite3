@@ -26,8 +26,8 @@ git commit -m "Upgrade SQLite to version $VERSION" sqlite3-binding.c sqlite3-bin
 git push origin HEAD
 
 MAJOR=$(echo $VERSION | cut -c1)
-MINOR=$(echo $VERSION | cut -c2-4 | sed 's/^0*//')
-PATCH=$(echo $VERSION | cut -c5-7 | sed 's/^0*//')
+MINOR=$(echo $VERSION | cut -c2-4 | sed 's/^0*\([0-9]\)/\1/')
+PATCH=$(echo $VERSION | cut -c5-7 | sed 's/^0*\([0-9]\)/\1/')
 CHANGELOG_URL="https://www.sqlite.org/releaselog/${MAJOR}_${MINOR}_${PATCH}.html"
 
 gh pr create --title "Upgrade SQLite to version $VERSION" --body "Automated SQLite upgrade to version $VERSION
