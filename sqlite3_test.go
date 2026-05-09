@@ -18,6 +18,7 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -1783,6 +1784,46 @@ func TestUpdateAndTransactionHooks(t *testing.T) {
 	}
 	if !reflect.DeepEqual(events, expected) {
 		t.Errorf("Expected notifications %v but got %v", expected, events)
+	}
+}
+
+func TestWalHook(t *testing.T) {
+	var walHookCalled bool
+	sql.Register("sqlite3_WalHook", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			conn.RegisterWalHook(func(dbName string, nPages int) int {
+				walHookCalled = true
+				if dbName != "main" {
+					t.Errorf("Expected dbName to be 'main', got %q", dbName)
+				}
+				if nPages <= 0 {
+					t.Errorf("Expected nPages to be positive, got %d", nPages)
+				}
+				return SQLITE_OK
+			})
+			return nil
+		},
+	})
+
+	dbPath := filepath.Join(t.TempDir(), "test.db?cache=shared&_journal_mode=WAL")
+	db, err := sql.Open("sqlite3_WalHook", dbPath)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE foo (id integer primary key)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	_, err = db.Exec("INSERT INTO foo VALUES (1)")
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	if !walHookCalled {
+		t.Error("Expected wal hook to be called, but it wasn't")
 	}
 }
 
