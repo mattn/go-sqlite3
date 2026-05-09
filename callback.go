@@ -16,6 +16,7 @@ package sqlite3
 #else
 #include <sqlite3.h>
 #endif
+#include <stdint.h>
 #include <stdlib.h>
 
 void _sqlite3_result_text(sqlite3_context* ctx, const char* s);
@@ -29,8 +30,16 @@ import (
 	"math"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
+
+var errorLogCallback atomic.Value
+
+//export errorLogTrampoline
+func errorLogTrampoline(_ C.uintptr_t, errCode C.int, msg *C.char) {
+	errorLogCallback.Load().(func(Error, string))(errorFromCode(errCode), C.GoString(msg))
+}
 
 //export callbackTrampoline
 func callbackTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
