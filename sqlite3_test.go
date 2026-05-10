@@ -2065,6 +2065,36 @@ func TestNamedParamClearBindings(t *testing.T) {
 	}
 }
 
+func TestNotEnoughArgsErrorMessage(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	const want = "not enough args to execute query: want 1 got 0"
+
+	t.Run("exec", func(t *testing.T) {
+		_, err := db.Exec("SELECT ?; SELECT ?", "hello")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if err.Error() != want {
+			t.Errorf("got %q, want %q", err.Error(), want)
+		}
+	})
+
+	t.Run("query", func(t *testing.T) {
+		_, err := db.Query("SELECT ?; SELECT ?", "hello")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if err.Error() != want {
+			t.Errorf("got %q, want %q", err.Error(), want)
+		}
+	})
+}
+
 // https://github.com/mattn/go-sqlite3/issues/1390
 // sqlite3_prepare_v2 returns SQLITE_OK with a NULL statement handle when the
 // input contains no SQL (only whitespace or comments). Querying such input
