@@ -270,7 +270,6 @@ import "C"
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"unsafe"
 )
 
@@ -329,11 +328,7 @@ type InfoOrderBy struct {
 }
 
 func constraints(info *C.sqlite3_index_info) []InfoConstraint {
-	slice := *(*[]C.struct_sqlite3_index_constraint)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(info.aConstraint)),
-		Len:  int(info.nConstraint),
-		Cap:  int(info.nConstraint),
-	}))
+	slice := unsafe.Slice(info.aConstraint, int(info.nConstraint))
 
 	cst := make([]InfoConstraint, 0, len(slice))
 	for _, c := range slice {
@@ -351,11 +346,7 @@ func constraints(info *C.sqlite3_index_info) []InfoConstraint {
 }
 
 func orderBys(info *C.sqlite3_index_info) []InfoOrderBy {
-	slice := *(*[]C.struct_sqlite3_index_orderby)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(info.aOrderBy)),
-		Len:  int(info.nOrderBy),
-		Cap:  int(info.nOrderBy),
-	}))
+	slice := unsafe.Slice(info.aOrderBy, int(info.nOrderBy))
 
 	ob := make([]InfoOrderBy, 0, len(slice))
 	for _, c := range slice {
@@ -400,10 +391,7 @@ func goMInit(db, pClientData unsafe.Pointer, argc C.int, argv **C.char, pzErr **
 		return 0
 	}
 	args := make([]string, argc)
-	var A []*C.char
-	slice := reflect.SliceHeader{Data: uintptr(unsafe.Pointer(argv)), Len: int(argc), Cap: int(argc)}
-	a := reflect.NewAt(reflect.TypeOf(A), unsafe.Pointer(&slice)).Elem().Interface()
-	for i, s := range a.([]*C.char) {
+	for i, s := range unsafe.Slice(argv, int(argc)) {
 		args[i] = C.GoString(s)
 	}
 	var vTab VTab
@@ -466,11 +454,7 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 
 	// Get a pointer to constraint_usage struct so we can update in place.
 
-	slice := *(*[]C.struct_sqlite3_index_constraint_usage)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(info.aConstraintUsage)),
-		Len:  int(info.nConstraint),
-		Cap:  int(info.nConstraint),
-	}))
+	slice := unsafe.Slice(info.aConstraintUsage, int(info.nConstraint))
 	index := 1
 	for i := range slice {
 		if res.Used[i] {
@@ -488,11 +472,7 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	}
 	info.needToFreeIdxStr = C.int(1)
 
-	idxStr := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(info.idxStr)),
-		Len:  len(res.IdxStr) + 1,
-		Cap:  len(res.IdxStr) + 1,
-	}))
+	idxStr := unsafe.Slice((*byte)(unsafe.Pointer(info.idxStr)), len(res.IdxStr)+1)
 	copy(idxStr, res.IdxStr)
 	idxStr[len(idxStr)-1] = 0 // null-terminated string
 
