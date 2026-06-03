@@ -90,6 +90,10 @@ func (c *SQLiteContext) ResultNull() {
 // ResultText sets the result of an SQL function.
 // See: sqlite3_result_text, http://sqlite.org/c3ref/result_blob.html
 func (c *SQLiteContext) ResultText(s string) {
+	if i64 && len(s) > math.MaxInt32 {
+		C.sqlite3_result_error_toobig((*C.sqlite3_context)(c))
+		return
+	}
 	if len(s) == 0 {
 		C.my_result_text((*C.sqlite3_context)(c), (*C.char)(unsafe.Pointer(&placeHolder[0])), 0)
 		return
