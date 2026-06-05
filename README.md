@@ -9,8 +9,6 @@ go-sqlite3
 
 Latest stable version is v1.14 or later, not v2.
 
-~~**NOTE:** The increase to v2 was an accident. There were no major changes or features.~~
-
 # Description
 
 A sqlite3 driver that conforms to the built-in database/sql interface.
