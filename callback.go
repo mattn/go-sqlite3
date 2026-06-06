@@ -336,6 +336,10 @@ func callbackRetBlob(ctx *C.sqlite3_context, v reflect.Value) error {
 		C.sqlite3_result_null(ctx)
 	} else {
 		bs := i.([]byte)
+		if i64 && len(bs) > math.MaxInt32 {
+			C.sqlite3_result_error_toobig(ctx)
+			return nil
+		}
 		C._sqlite3_result_blob(ctx, unsafe.Pointer(&bs[0]), C.int(len(bs)))
 	}
 	return nil
