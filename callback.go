@@ -18,7 +18,7 @@ package sqlite3
 #endif
 #include <stdlib.h>
 
-void _sqlite3_result_text(sqlite3_context* ctx, const char* s);
+void _sqlite3_result_text(sqlite3_context* ctx, const char* s, int n);
 void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l);
 */
 import "C"
@@ -208,8 +208,9 @@ func callbackArgString(v *C.sqlite3_value) (reflect.Value, error) {
 		p := (*C.char)(C.sqlite3_value_blob(v))
 		return reflect.ValueOf(C.GoStringN(p, l)), nil
 	case C.SQLITE_TEXT:
+		l := C.sqlite3_value_bytes(v)
 		c := (*C.char)(unsafe.Pointer(C.sqlite3_value_text(v)))
-		return reflect.ValueOf(C.GoString(c)), nil
+		return reflect.ValueOf(C.GoStringN(c, l)), nil
 	default:
 		return reflect.Value{}, fmt.Errorf("argument must be BLOB or TEXT")
 	}
@@ -349,8 +350,13 @@ func callbackRetText(ctx *C.sqlite3_context, v reflect.Value) error {
 	if v.Type().Kind() != reflect.String {
 		return fmt.Errorf("cannot convert %s to TEXT", v.Type())
 	}
-	cstr := C.CString(v.Interface().(string))
-	C._sqlite3_result_text(ctx, cstr)
+	s := v.Interface().(string)
+	if i64 && len(s) > math.MaxInt32 {
+		C.sqlite3_result_error_toobig(ctx)
+		return nil
+	}
+	cstr := C.CString(s)
+	C._sqlite3_result_text(ctx, cstr, C.int(len(s)))
 	return nil
 }
 
