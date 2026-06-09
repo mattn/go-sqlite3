@@ -208,8 +208,8 @@ func callbackArgString(v *C.sqlite3_value) (reflect.Value, error) {
 		p := (*C.char)(C.sqlite3_value_blob(v))
 		return reflect.ValueOf(C.GoStringN(p, l)), nil
 	case C.SQLITE_TEXT:
-		l := C.sqlite3_value_bytes(v)
 		c := (*C.char)(unsafe.Pointer(C.sqlite3_value_text(v)))
+		l := C.sqlite3_value_bytes(v)
 		return reflect.ValueOf(C.GoStringN(c, l)), nil
 	default:
 		return reflect.Value{}, fmt.Errorf("argument must be BLOB or TEXT")
