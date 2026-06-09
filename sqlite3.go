@@ -220,8 +220,8 @@ _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_
 }
 #endif
 
-void _sqlite3_result_text(sqlite3_context* ctx, const char* s) {
-  sqlite3_result_text(ctx, s, -1, &free);
+void _sqlite3_result_text(sqlite3_context* ctx, const char* s, int n) {
+  sqlite3_result_text(ctx, s, n, &free);
 }
 
 void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l) {
