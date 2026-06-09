@@ -204,8 +204,8 @@ func callbackArgBytes(v *C.sqlite3_value) (reflect.Value, error) {
 func callbackArgString(v *C.sqlite3_value) (reflect.Value, error) {
 	switch C.sqlite3_value_type(v) {
 	case C.SQLITE_BLOB:
-		l := C.sqlite3_value_bytes(v)
 		p := (*C.char)(C.sqlite3_value_blob(v))
+		l := C.sqlite3_value_bytes(v)
 		return reflect.ValueOf(C.GoStringN(p, l)), nil
 	case C.SQLITE_TEXT:
 		c := (*C.char)(unsafe.Pointer(C.sqlite3_value_text(v)))
