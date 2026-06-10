@@ -1206,6 +1206,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	writableSchema := -1
 	vfsName := ""
 	var cacheSize *int64
+	var pragmas []string
 	stmtCacheSize := 0
 
 	pos := strings.IndexRune(dsn, '?')
@@ -1294,6 +1295,9 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 				return nil, fmt.Errorf("Invalid _auto_vacuum: %v, expecting value of '0 NONE 1 FULL 2 INCREMENTAL'", val)
 			}
 		}
+
+		// _pragma (generic, repeatable — executed in order on every connection)
+		pragmas = params["_pragma"]
 
 		// Busy Timeout (_busy_timeout)
 		//
@@ -1875,6 +1879,14 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Cache Size
 	if cacheSize != nil {
 		if err := exec(fmt.Sprintf("PRAGMA cache_size = %d;", *cacheSize)); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	// Generic _pragma parameters — run last so they override specific defaults
+	for _, p := range pragmas {
+		if err := exec(fmt.Sprintf("PRAGMA %s;", p)); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
 		}
