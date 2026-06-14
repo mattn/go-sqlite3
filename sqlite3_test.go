@@ -615,7 +615,7 @@ func TestTimestamp(t *testing.T) {
 	defer db.Close()
 
 	_, err = db.Exec("DROP TABLE foo")
-	_, err = db.Exec("CREATE TABLE foo(id INTEGER, ts timeSTAMP, dt DATETIME)")
+	_, err = db.Exec("CREATE TABLE foo(id INTEGER, ts timeSTAMP, dt DATETIME, dt6 DATETIME(6))")
 	if err != nil {
 		t.Fatal("Failed to create table:", err)
 	}
@@ -660,13 +660,13 @@ func TestTimestamp(t *testing.T) {
 		{"2012-11-04T00:00:00.000Z", timestamp3},
 	}
 	for i := range tests {
-		_, err = db.Exec("INSERT INTO foo(id, ts, dt) VALUES(?, ?, ?)", i, tests[i].value, tests[i].value)
+		_, err = db.Exec("INSERT INTO foo(id, ts, dt, dt6) VALUES(?, ?, ?, ?)", i, tests[i].value, tests[i].value, tests[i].value)
 		if err != nil {
 			t.Fatal("Failed to insert timestamp:", err)
 		}
 	}
 
-	rows, err := db.Query("SELECT id, ts, dt FROM foo ORDER BY id ASC")
+	rows, err := db.Query("SELECT id, ts, dt, dt6 FROM foo ORDER BY id ASC")
 	if err != nil {
 		t.Fatal("Unable to query foo table:", err)
 	}
@@ -675,9 +675,9 @@ func TestTimestamp(t *testing.T) {
 	seen := 0
 	for rows.Next() {
 		var id int
-		var ts, dt time.Time
+		var ts, dt, dt6 time.Time
 
-		if err := rows.Scan(&id, &ts, &dt); err != nil {
+		if err := rows.Scan(&id, &ts, &dt, &dt6); err != nil {
 			t.Error("Unable to scan results:", err)
 			continue
 		}
@@ -687,10 +687,13 @@ func TestTimestamp(t *testing.T) {
 		}
 		seen++
 		if !tests[id].expected.Equal(ts) {
-			t.Errorf("Timestamp value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt)
+			t.Errorf("Timestamp value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, ts)
 		}
 		if !tests[id].expected.Equal(dt) {
 			t.Errorf("Datetime value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt)
+		}
+		if !tests[id].expected.Equal(dt6) {
+			t.Errorf("Datetime(6) value for id %v (%v) should be %v, not %v", id, tests[id].value, tests[id].expected, dt6)
 		}
 		if timezone(tests[id].expected) != timezone(ts) {
 			t.Errorf("Timezone for id %v (%v) should be %v, not %v", id, tests[id].value,
@@ -699,6 +702,10 @@ func TestTimestamp(t *testing.T) {
 		if timezone(tests[id].expected) != timezone(dt) {
 			t.Errorf("Timezone for id %v (%v) should be %v, not %v", id, tests[id].value,
 				timezone(tests[id].expected), timezone(dt))
+		}
+		if timezone(tests[id].expected) != timezone(dt6) {
+			t.Errorf("Timezone for id %v (%v) should be %v, not %v", id, tests[id].value,
+				timezone(tests[id].expected), timezone(dt6))
 		}
 	}
 
