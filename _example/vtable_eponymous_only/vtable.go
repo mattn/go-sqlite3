@@ -40,7 +40,7 @@ func (v *seriesTable) Open() (sqlite3.VTabCursor, error) {
 	return &seriesCursor{v, 0}, nil
 }
 
-func (v *seriesTable) BestIndex(csts []sqlite3.InfoConstraint, ob []sqlite3.InfoOrderBy) (*sqlite3.IndexResult, error) {
+func (v *seriesTable) BestIndex(csts []sqlite3.InfoConstraint, ob []sqlite3.InfoOrderBy, colsUsed uint64) (*sqlite3.IndexResult, error) {
 	used := make([]bool, len(csts))
 	for c, cst := range csts {
 		if cst.Usable && cst.Op == sqlite3.OpEQ {
