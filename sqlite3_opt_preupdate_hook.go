@@ -74,12 +74,12 @@ func (d *SQLitePreUpdateData) row(dest []any, new bool) error {
 		case C.SQLITE_FLOAT:
 			src = float64(C.sqlite3_value_double(val))
 		case C.SQLITE_BLOB:
-			len := C.sqlite3_value_bytes(val)
 			blobptr := C.sqlite3_value_blob(val)
+			len := C.sqlite3_value_bytes(val)
 			src = C.GoBytes(blobptr, len)
 		case C.SQLITE_TEXT:
-			len := C.sqlite3_value_bytes(val)
 			cstrptr := unsafe.Pointer(C.sqlite3_value_text(val))
+			len := C.sqlite3_value_bytes(val)
 			src = C.GoBytes(cstrptr, len)
 		case C.SQLITE_NULL:
 			src = nil

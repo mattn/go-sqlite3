@@ -189,12 +189,12 @@ func callbackArgFloat64(v *C.sqlite3_value) (reflect.Value, error) {
 func callbackArgBytes(v *C.sqlite3_value) (reflect.Value, error) {
 	switch C.sqlite3_value_type(v) {
 	case C.SQLITE_BLOB:
-		l := C.sqlite3_value_bytes(v)
 		p := C.sqlite3_value_blob(v)
+		l := C.sqlite3_value_bytes(v)
 		return reflect.ValueOf(C.GoBytes(p, l)), nil
 	case C.SQLITE_TEXT:
-		l := C.sqlite3_value_bytes(v)
 		c := unsafe.Pointer(C.sqlite3_value_text(v))
+		l := C.sqlite3_value_bytes(v)
 		return reflect.ValueOf(C.GoBytes(c, l)), nil
 	default:
 		return reflect.Value{}, fmt.Errorf("argument must be BLOB or TEXT")
