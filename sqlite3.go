@@ -476,6 +476,12 @@ type SQLiteStmt struct {
 	cls         bool // True if the statement was created by SQLiteConn.Query
 	namedParams map[string][3]int
 	cacheKey    string
+	metadata    *sqliteStmtMetadata
+}
+
+type sqliteStmtMetadata struct {
+	cols     []string
+	decltype []string
 }
 
 // SQLiteResult implements sql.Result.
@@ -2475,6 +2481,36 @@ func (rc *SQLiteRows) Close() error {
 	return nil
 }
 
+func (s *SQLiteStmt) cacheMetadata() bool {
+	return !s.cls || s.cacheKey != ""
+}
+
+func (s *SQLiteStmt) columnNamesLocked(n int) []string {
+	if s.metadata == nil {
+		s.metadata = &sqliteStmtMetadata{}
+	}
+	if len(s.metadata.cols) != n {
+		s.metadata.cols = make([]string, n)
+		for i := range s.metadata.cols {
+			s.metadata.cols[i] = C.GoString(C.sqlite3_column_name(s.s, C.int(i)))
+		}
+	}
+	return s.metadata.cols
+}
+
+func (s *SQLiteStmt) declTypesLocked(n int) []string {
+	if s.metadata == nil {
+		s.metadata = &sqliteStmtMetadata{}
+	}
+	if len(s.metadata.decltype) != n {
+		s.metadata.decltype = make([]string, n)
+		for i := range s.metadata.decltype {
+			s.metadata.decltype[i] = strings.ToLower(C.GoString(C.sqlite3_column_decltype(s.s, C.int(i))))
+		}
+	}
+	return s.metadata.decltype
+}
+
 // Columns return column names.
 func (rc *SQLiteRows) Columns() []string {
 	if rc.s == nil {
@@ -2483,9 +2519,13 @@ func (rc *SQLiteRows) Columns() []string {
 	rc.s.mu.Lock()
 	defer rc.s.mu.Unlock()
 	if rc.s.s != nil && int(rc.nc) != len(rc.cols) {
-		rc.cols = make([]string, rc.nc)
-		for i := range rc.cols {
-			rc.cols[i] = C.GoString(C.sqlite3_column_name(rc.s.s, C.int(i)))
+		if rc.s.cacheMetadata() {
+			rc.cols = rc.s.columnNamesLocked(int(rc.nc))
+		} else {
+			rc.cols = make([]string, rc.nc)
+			for i := range rc.cols {
+				rc.cols[i] = C.GoString(C.sqlite3_column_name(rc.s.s, C.int(i)))
+			}
 		}
 	}
 	return rc.cols
@@ -2493,9 +2533,13 @@ func (rc *SQLiteRows) Columns() []string {
 
 func (rc *SQLiteRows) declTypes() []string {
 	if rc.s.s != nil && rc.decltype == nil {
-		rc.decltype = make([]string, rc.nc)
-		for i := range rc.decltype {
-			rc.decltype[i] = strings.ToLower(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
+		if rc.s.cacheMetadata() {
+			rc.decltype = rc.s.declTypesLocked(int(rc.nc))
+		} else {
+			rc.decltype = make([]string, rc.nc)
+			for i := range rc.decltype {
+				rc.decltype[i] = strings.ToLower(C.GoString(C.sqlite3_column_decltype(rc.s.s, C.int(i))))
+			}
 		}
 	}
 	return rc.decltype
