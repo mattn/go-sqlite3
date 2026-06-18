@@ -1440,6 +1440,42 @@ func TestFunctionRegistration(t *testing.T) {
 	}
 }
 
+func TestFunctionArgStringContainingZero(t *testing.T) {
+	sql.Register("sqlite3_FunctionArgZero", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			// arglen reports how many bytes of the text argument reached the
+			// Go side; echo returns the string result verbatim.
+			if err := conn.RegisterFunc("arglen", func(s string) int64 { return int64(len(s)) }, true); err != nil {
+				return err
+			}
+			return conn.RegisterFunc("echo", func(s string) string { return s }, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_FunctionArgZero", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	const text = "foo\x00bar"
+
+	var n int64
+	if err := db.QueryRow("SELECT arglen(?)", text).Scan(&n); err != nil {
+		t.Fatal("Failed to call db.QueryRow:", err)
+	}
+	if n != int64(len(text)) {
+		t.Errorf("text argument truncated at embedded NUL: got len %d, want %d", n, len(text))
+	}
+
+	var got string
+	if err := db.QueryRow("SELECT echo(?)", text).Scan(&got); err != nil {
+		t.Fatal("Failed to call db.QueryRow:", err)
+	}
+	if got != text {
+		t.Errorf("text result truncated at embedded NUL: got %q (len %d), want %q (len %d)", got, len(got), text, len(text))
+	}
+}
+
 type sumAggregator int64
 
 func (s *sumAggregator) Step(x int64) {

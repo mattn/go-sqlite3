@@ -78,13 +78,13 @@ _sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zV
 }
 
 static int
-_sqlite3_bind_text(sqlite3_stmt *stmt, int n, char *p, int np) {
-  return sqlite3_bind_text(stmt, n, p, np, SQLITE_TRANSIENT);
+_sqlite3_bind_text(sqlite3_stmt *stmt, int n, char *p, sqlite3_uint64 np) {
+  return sqlite3_bind_text64(stmt, n, p, np, SQLITE_TRANSIENT, SQLITE_UTF8);
 }
 
 static int
-_sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, int np) {
-  return sqlite3_bind_blob(stmt, n, p, np, SQLITE_TRANSIENT);
+_sqlite3_bind_blob(sqlite3_stmt *stmt, int n, void *p, sqlite3_uint64 np) {
+  return sqlite3_bind_blob64(stmt, n, p, np, SQLITE_TRANSIENT);
 }
 
 static int
@@ -235,8 +235,8 @@ _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_
 }
 #endif
 
-void _sqlite3_result_text(sqlite3_context* ctx, const char* s) {
-  sqlite3_result_text(ctx, s, -1, &free);
+void _sqlite3_result_text(sqlite3_context* ctx, const char* s, int n) {
+  sqlite3_result_text(ctx, s, n, &free);
 }
 
 void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l) {
@@ -2205,9 +2205,9 @@ var placeHolder = []byte{0}
 
 func bindText(s *C.sqlite3_stmt, n C.int, v string) C.int {
 	if len(v) == 0 {
-		return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.int(0))
+		return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.sqlite3_uint64(0))
 	}
-	return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(unsafe.StringData(v))), C.int(len(v)))
+	return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(unsafe.StringData(v))), C.sqlite3_uint64(len(v)))
 }
 
 func bindValue(s *C.sqlite3_stmt, n C.int, value driver.Value) C.int {
@@ -2233,14 +2233,14 @@ func bindValue(s *C.sqlite3_stmt, n C.int, value driver.Value) C.int {
 		if ln == 0 {
 			v = placeHolder
 		}
-		return C._sqlite3_bind_blob(s, n, unsafe.Pointer(&v[0]), C.int(ln))
+		return C._sqlite3_bind_blob(s, n, unsafe.Pointer(&v[0]), C.sqlite3_uint64(ln))
 	case time.Time:
 		var buf [64]byte
 		b := v.AppendFormat(buf[:0], SQLiteTimestampFormats[0])
 		if len(b) == 0 {
-			return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.int(0))
+			return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&placeHolder[0])), C.sqlite3_uint64(0))
 		}
-		return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)))
+		return C._sqlite3_bind_text(s, n, (*C.char)(unsafe.Pointer(&b[0])), C.sqlite3_uint64(len(b)))
 	default:
 		return C.SQLITE_MISUSE
 	}
