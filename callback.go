@@ -29,6 +29,7 @@ import (
 	"math"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -104,24 +105,26 @@ type handleVal struct {
 }
 
 var handleLock sync.Mutex
-var handleVals = make(map[unsafe.Pointer]handleVal)
+var handleVals atomic.Value // stores map[unsafe.Pointer]handleVal
 
 func newHandle(db *SQLiteConn, v any) unsafe.Pointer {
-	handleLock.Lock()
-	defer handleLock.Unlock()
 	val := handleVal{db: db, val: v}
 	var p unsafe.Pointer = C.malloc(C.size_t(1))
 	if p == nil {
 		panic("can't allocate 'cgo-pointer hack index pointer': ptr == nil")
 	}
-	handleVals[p] = val
+
+	handleLock.Lock()
+	defer handleLock.Unlock()
+
+	next := cloneHandleVals(len(loadHandleVals()) + 1)
+	next[p] = val
+	handleVals.Store(next)
 	return p
 }
 
 func lookupHandleVal(handle unsafe.Pointer) handleVal {
-	handleLock.Lock()
-	defer handleLock.Unlock()
-	return handleVals[handle]
+	return loadHandleVals()[handle]
 }
 
 func lookupHandle(handle unsafe.Pointer) any {
@@ -131,12 +134,34 @@ func lookupHandle(handle unsafe.Pointer) any {
 func deleteHandles(db *SQLiteConn) {
 	handleLock.Lock()
 	defer handleLock.Unlock()
-	for handle, val := range handleVals {
-		if val.db == db {
-			delete(handleVals, handle)
-			C.free(handle)
-		}
+
+	current := loadHandleVals()
+	if len(current) == 0 {
+		return
 	}
+
+	next := make(map[unsafe.Pointer]handleVal, len(current))
+	for handle, val := range current {
+		if val.db == db {
+			C.free(handle)
+			continue
+		}
+		next[handle] = val
+	}
+	handleVals.Store(next)
+}
+
+func loadHandleVals() map[unsafe.Pointer]handleVal {
+	m, _ := handleVals.Load().(map[unsafe.Pointer]handleVal)
+	return m
+}
+
+func cloneHandleVals(size int) map[unsafe.Pointer]handleVal {
+	next := make(map[unsafe.Pointer]handleVal, size)
+	for handle, val := range loadHandleVals() {
+		next[handle] = val
+	}
+	return next
 }
 
 // This is only here so that tests can refer to it.
