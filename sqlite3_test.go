@@ -1090,6 +1090,25 @@ func TestExecer(t *testing.T) {
 	}
 }
 
+func TestDBStatus(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+
+	d := SQLiteDriver{}
+	conn, err := d.Open(tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer conn.Close()
+
+	for i := 0; i <= SQLITE_DBSTATUS_MAX; i++ {
+		_, _, err := conn.(*SQLiteConn).GetDBStatus(SqliteDBStatusOption(i), false)
+		if err != nil {
+			t.Fatal("Failed to get db status:", err)
+		}
+	}
+}
+
 func TestQueryer(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
