@@ -8,8 +8,11 @@
 
 package sqlite3
 
-import (
-	"C"
+import "errors"
+
+var (
+	ErrUnauthorized  = errors.New("SQLITE_AUTH: Unauthorized")
+	ErrAdminRequired = errors.New("SQLITE_AUTH: Unauthorized; Admin Privileges Required")
 )
 
 // Authenticate will perform an authentication of the provided username
@@ -153,6 +156,11 @@ func (c *SQLiteConn) AuthEnabled() (exists bool) {
 func (c *SQLiteConn) authEnabled() int {
 	// NOOP
 	return 0
+}
+
+func (c *SQLiteConn) registerAuthFunc(_ string, _ any, _ bool) error {
+	// NOOP
+	return nil
 }
 
 // EOF
