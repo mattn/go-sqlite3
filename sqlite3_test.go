@@ -2167,6 +2167,87 @@ func BenchmarkCustomFunctions(b *testing.B) {
 	}
 }
 
+func TestGenericPragma(t *testing.T) {
+	// Single _pragma applied correctly
+	t.Run("single", func(t *testing.T) {
+		tempFilename := TempFilename(t)
+		defer os.Remove(tempFilename)
+		db, err := sql.Open("sqlite3", tempFilename+"?_pragma=synchronous(NORMAL)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		var mode int
+		if err := db.QueryRow("PRAGMA synchronous").Scan(&mode); err != nil {
+			t.Fatal(err)
+		}
+		if mode != 1 { // 1 = NORMAL
+			t.Errorf("expected synchronous=1 (NORMAL), got %d", mode)
+		}
+	})
+
+	// Multiple _pragma values applied in order
+	t.Run("multiple", func(t *testing.T) {
+		tempFilename := TempFilename(t)
+		defer os.Remove(tempFilename)
+		db, err := sql.Open("sqlite3", tempFilename+"?_pragma=synchronous(NORMAL)&_pragma=busy_timeout(1234)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		var sync, timeout int
+		if err := db.QueryRow("PRAGMA synchronous").Scan(&sync); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.QueryRow("PRAGMA busy_timeout").Scan(&timeout); err != nil {
+			t.Fatal(err)
+		}
+		if sync != 1 {
+			t.Errorf("expected synchronous=1 (NORMAL), got %d", sync)
+		}
+		if timeout != 1234 {
+			t.Errorf("expected busy_timeout=1234, got %d", timeout)
+		}
+	})
+
+	// PRAGMAs are re-applied on every connection the pool opens
+	t.Run("pool_reapply", func(t *testing.T) {
+		tempFilename := TempFilename(t)
+		defer os.Remove(tempFilename)
+		db, err := sql.Open("sqlite3", tempFilename+"?_pragma=synchronous(NORMAL)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		// Force the pool to open multiple distinct connections
+		db.SetMaxOpenConns(4)
+
+		const workers = 4
+		errc := make(chan error, workers)
+		for i := 0; i < workers; i++ {
+			go func() {
+				var mode int
+				if err := db.QueryRow("PRAGMA synchronous").Scan(&mode); err != nil {
+					errc <- err
+					return
+				}
+				if mode != 1 {
+					errc <- fmt.Errorf("connection got synchronous=%d, want 1 (NORMAL)", mode)
+					return
+				}
+				errc <- nil
+			}()
+		}
+		for i := 0; i < workers; i++ {
+			if err := <-errc; err != nil {
+				t.Error(err)
+			}
+		}
+	})
+}
+
 func TestSuite(t *testing.T) {
 	initializeTestDB(t)
 	defer freeTestDB()
