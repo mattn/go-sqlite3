@@ -59,10 +59,10 @@ func CryptEncoderSHA1(pass []byte, hash any) []byte {
 // configured salt.
 func CryptEncoderSSHA1(salt string) func(pass []byte, hash any) []byte {
 	return func(pass []byte, hash any) []byte {
-		s := []byte(salt)
-		p := append(pass, s...)
-		h := sha1.Sum(p)
-		return h[:]
+		h := sha1.New()
+		h.Write(pass)
+		h.Write([]byte(salt))
+		return h.Sum(nil)
 	}
 }
 
@@ -76,10 +76,10 @@ func CryptEncoderSHA256(pass []byte, hash any) []byte {
 // with the configured salt
 func CryptEncoderSSHA256(salt string) func(pass []byte, hash any) []byte {
 	return func(pass []byte, hash any) []byte {
-		s := []byte(salt)
-		p := append(pass, s...)
-		h := sha256.Sum256(p)
-		return h[:]
+		h := sha256.New()
+		h.Write(pass)
+		h.Write([]byte(salt))
+		return h.Sum(nil)
 	}
 }
 
@@ -93,10 +93,10 @@ func CryptEncoderSHA384(pass []byte, hash any) []byte {
 // with the configured salt
 func CryptEncoderSSHA384(salt string) func(pass []byte, hash any) []byte {
 	return func(pass []byte, hash any) []byte {
-		s := []byte(salt)
-		p := append(pass, s...)
-		h := sha512.Sum384(p)
-		return h[:]
+		h := sha512.New384()
+		h.Write(pass)
+		h.Write([]byte(salt))
+		return h.Sum(nil)
 	}
 }
 
@@ -110,10 +110,10 @@ func CryptEncoderSHA512(pass []byte, hash any) []byte {
 // with the configured salt
 func CryptEncoderSSHA512(salt string) func(pass []byte, hash any) []byte {
 	return func(pass []byte, hash any) []byte {
-		s := []byte(salt)
-		p := append(pass, s...)
-		h := sha512.Sum512(p)
-		return h[:]
+		h := sha512.New()
+		h.Write(pass)
+		h.Write([]byte(salt))
+		return h.Sum(nil)
 	}
 }
 
