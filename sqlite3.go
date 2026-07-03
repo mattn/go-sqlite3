@@ -2448,6 +2448,14 @@ func (s *SQLiteStmt) Readonly() bool {
 	return C.sqlite3_stmt_readonly(s.s) == 1
 }
 
+// ColumnCount returns the number of columns in the result set returned by
+// the prepared statement, or 0 if it returns no data (e.g. plain INSERT).
+//
+// See: https://sqlite.org/c3ref/column_count.html
+func (s *SQLiteStmt) ColumnCount() int {
+	return int(C.sqlite3_column_count(s.s))
+}
+
 // Close the rows.
 func (rc *SQLiteRows) Close() error {
 	rc.closemu.Lock()
