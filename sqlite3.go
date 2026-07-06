@@ -445,12 +445,12 @@ type SQLiteDriver struct {
 
 // SQLiteConn implements driver.Conn.
 type SQLiteConn struct {
-	mu             sync.Mutex
-	db             *C.sqlite3
-	loc            *time.Location
-	txlock         string
-	funcs          []*functionInfo
-	aggregators    []*aggInfo
+	mu          sync.Mutex
+	db          *C.sqlite3
+	loc         *time.Location
+	txlock      string
+	funcs       []*functionInfo
+	aggregators []*aggInfo
 	// Prepared-statement cache. The slice is allocated at Open with a
 	// fixed capacity equal to the configured cache size; cap bounds the
 	// cache, len is the live count, and entries are ordered LRU-first
@@ -1970,6 +1970,10 @@ func (c *SQLiteConn) putCachedStmt(s *SQLiteStmt) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	return c.putCachedStmtLocked(s)
+}
+
+func (c *SQLiteConn) putCachedStmtLocked(s *SQLiteStmt) bool {
 	if c.db == nil {
 		return false
 	}
@@ -2164,11 +2168,19 @@ func (s *SQLiteStmt) Close() error {
 		s.c = nil
 		return nil
 	}
-	if !conn.dbConnOpen() {
+	if s.cacheKey != "" {
+		conn.mu.Lock()
+		if conn.db == nil {
+			conn.mu.Unlock()
+			return errors.New("sqlite statement with already closed database connection")
+		}
+		if conn.putCachedStmtLocked(s) {
+			conn.mu.Unlock()
+			return nil
+		}
+		conn.mu.Unlock()
+	} else if !conn.dbConnOpen() {
 		return errors.New("sqlite statement with already closed database connection")
-	}
-	if s.cacheKey != "" && conn.putCachedStmt(s) {
-		return nil
 	}
 	s.s = nil
 	s.c = nil
