@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,36 +16,49 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"time"
-
-	"github.com/PuerkitoBio/goquery"
 )
 
 func download(prefix string) (url string, content []byte, err error) {
-	year := time.Now().Year()
-
-	site := "https://www.sqlite.org/download.html"
-	//fmt.Printf("scraping %v\n", site)
-	doc, err := goquery.NewDocument(site)
+	resp, err := http.Get("https://www.sqlite.org/download.html")
 	if err != nil {
-		log.Fatal(err)
+		return "", nil, err
 	}
+	defer resp.Body.Close()
 
-	doc.Find("a").Each(func(_ int, s *goquery.Selection) {
-		if strings.HasPrefix(s.Text(), prefix) {
-			url = fmt.Sprintf("https://www.sqlite.org/%d/", year) + s.Text()
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", nil, err
+	}
+	html := string(b)
+	start := strings.Index(html, `<!-- Download product data for scripts to read`)
+	if start == -1 {
+		return "", nil, errors.New("Unable to find download section on sqlite.org")
+	}
+	html = html[start:]
+	end := strings.Index(html, `-->`)
+	if end == -1 {
+		return "", nil, errors.New("Unable to find download section on sqlite.org")
+	}
+	html = html[:end]
+	for _, line := range strings.Split(html, "\n") {
+		if strings.Contains(line, prefix) {
+			if tok := strings.Split(line, ","); len(tok) >= 5 {
+				url = fmt.Sprintf("https://www.sqlite.org/%s", tok[2])
+				break
+			}
 		}
-	})
+	}
 
 	if url == "" {
 		return "", nil, fmt.Errorf("Unable to find prefix '%s' on sqlite.org", prefix)
 	}
 
 	fmt.Printf("Downloading %v\n", url)
-	resp, err := http.Get(url)
+	resp, err = http.Get(url)
 	if err != nil {
-		log.Fatal(err)
+		return "", nil, err
 	}
 
 	// Ready Body Content
@@ -98,14 +112,11 @@ func mergeFile(src string, dst string) error {
 func main() {
 	fmt.Println("Go-SQLite3 Upgrade Tool")
 
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		log.Fatal("could not get current file info")
 	}
-	if filepath.Base(wd) != "upgrade" {
-		log.Printf("Current directory is %q but should run in upgrade directory", wd)
-		os.Exit(1)
-	}
+	basedir := filepath.Dir(filepath.Dir(file))
 
 	// Download Amalgamation
 	_, amalgamation, err := download("sqlite-amalgamation-")
@@ -136,11 +147,11 @@ func main() {
 		var f *os.File
 		switch path.Base(zf.Name) {
 		case "sqlite3.c":
-			f, err = os.Create("../sqlite3-binding.c")
+			f, err = os.Create(filepath.Join(basedir, "sqlite3-binding.c"))
 		case "sqlite3.h":
-			f, err = os.Create("../sqlite3-binding.h")
+			f, err = os.Create(filepath.Join(basedir, "sqlite3-binding.h"))
 		case "sqlite3ext.h":
-			f, err = os.Create("../sqlite3ext.h")
+			f, err = os.Create(filepath.Join(basedir, "sqlite3ext.h"))
 		default:
 			continue
 		}

@@ -18,7 +18,7 @@ package sqlite3
 #endif
 #include <stdlib.h>
 
-void _sqlite3_result_text(sqlite3_context* ctx, const char* s);
+void _sqlite3_result_text(sqlite3_context* ctx, const char* s, int n);
 void _sqlite3_result_blob(sqlite3_context* ctx, const void* b, int l);
 */
 import "C"
@@ -29,6 +29,7 @@ import (
 	"math"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -110,24 +111,26 @@ type handleVal struct {
 }
 
 var handleLock sync.Mutex
-var handleVals = make(map[unsafe.Pointer]handleVal)
+var handleVals atomic.Value // stores map[unsafe.Pointer]handleVal
 
 func newHandle(db *SQLiteConn, v any) unsafe.Pointer {
-	handleLock.Lock()
-	defer handleLock.Unlock()
 	val := handleVal{db: db, val: v}
 	var p unsafe.Pointer = C.malloc(C.size_t(1))
 	if p == nil {
 		panic("can't allocate 'cgo-pointer hack index pointer': ptr == nil")
 	}
-	handleVals[p] = val
+
+	handleLock.Lock()
+	defer handleLock.Unlock()
+
+	next := cloneHandleVals(len(loadHandleVals()) + 1)
+	next[p] = val
+	handleVals.Store(next)
 	return p
 }
 
 func lookupHandleVal(handle unsafe.Pointer) handleVal {
-	handleLock.Lock()
-	defer handleLock.Unlock()
-	return handleVals[handle]
+	return loadHandleVals()[handle]
 }
 
 func lookupHandle(handle unsafe.Pointer) any {
@@ -137,12 +140,34 @@ func lookupHandle(handle unsafe.Pointer) any {
 func deleteHandles(db *SQLiteConn) {
 	handleLock.Lock()
 	defer handleLock.Unlock()
-	for handle, val := range handleVals {
-		if val.db == db {
-			delete(handleVals, handle)
-			C.free(handle)
-		}
+
+	current := loadHandleVals()
+	if len(current) == 0 {
+		return
 	}
+
+	next := make(map[unsafe.Pointer]handleVal, len(current))
+	for handle, val := range current {
+		if val.db == db {
+			C.free(handle)
+			continue
+		}
+		next[handle] = val
+	}
+	handleVals.Store(next)
+}
+
+func loadHandleVals() map[unsafe.Pointer]handleVal {
+	m, _ := handleVals.Load().(map[unsafe.Pointer]handleVal)
+	return m
+}
+
+func cloneHandleVals(size int) map[unsafe.Pointer]handleVal {
+	next := make(map[unsafe.Pointer]handleVal, size)
+	for handle, val := range loadHandleVals() {
+		next[handle] = val
+	}
+	return next
 }
 
 // This is only here so that tests can refer to it.
@@ -210,12 +235,13 @@ func callbackArgBytes(v *C.sqlite3_value) (reflect.Value, error) {
 func callbackArgString(v *C.sqlite3_value) (reflect.Value, error) {
 	switch C.sqlite3_value_type(v) {
 	case C.SQLITE_BLOB:
-		l := C.sqlite3_value_bytes(v)
 		p := (*C.char)(C.sqlite3_value_blob(v))
+		l := C.sqlite3_value_bytes(v)
 		return reflect.ValueOf(C.GoStringN(p, l)), nil
 	case C.SQLITE_TEXT:
 		c := (*C.char)(unsafe.Pointer(C.sqlite3_value_text(v)))
-		return reflect.ValueOf(C.GoString(c)), nil
+		l := C.sqlite3_value_bytes(v)
+		return reflect.ValueOf(C.GoStringN(c, l)), nil
 	default:
 		return reflect.Value{}, fmt.Errorf("argument must be BLOB or TEXT")
 	}
@@ -342,6 +368,10 @@ func callbackRetBlob(ctx *C.sqlite3_context, v reflect.Value) error {
 		C.sqlite3_result_null(ctx)
 	} else {
 		bs := i.([]byte)
+		if i64 && len(bs) > math.MaxInt32 {
+			C.sqlite3_result_error_toobig(ctx)
+			return nil
+		}
 		C._sqlite3_result_blob(ctx, unsafe.Pointer(&bs[0]), C.int(len(bs)))
 	}
 	return nil
@@ -351,8 +381,13 @@ func callbackRetText(ctx *C.sqlite3_context, v reflect.Value) error {
 	if v.Type().Kind() != reflect.String {
 		return fmt.Errorf("cannot convert %s to TEXT", v.Type())
 	}
-	cstr := C.CString(v.Interface().(string))
-	C._sqlite3_result_text(ctx, cstr)
+	s := v.Interface().(string)
+	if i64 && len(s) > math.MaxInt32 {
+		C.sqlite3_result_error_toobig(ctx)
+		return nil
+	}
+	cstr := C.CString(s)
+	C._sqlite3_result_text(ctx, cstr, C.int(len(s)))
 	return nil
 }
 

@@ -1440,6 +1440,42 @@ func TestFunctionRegistration(t *testing.T) {
 	}
 }
 
+func TestFunctionArgStringContainingZero(t *testing.T) {
+	sql.Register("sqlite3_FunctionArgZero", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			// arglen reports how many bytes of the text argument reached the
+			// Go side; echo returns the string result verbatim.
+			if err := conn.RegisterFunc("arglen", func(s string) int64 { return int64(len(s)) }, true); err != nil {
+				return err
+			}
+			return conn.RegisterFunc("echo", func(s string) string { return s }, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_FunctionArgZero", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	const text = "foo\x00bar"
+
+	var n int64
+	if err := db.QueryRow("SELECT arglen(?)", text).Scan(&n); err != nil {
+		t.Fatal("Failed to call db.QueryRow:", err)
+	}
+	if n != int64(len(text)) {
+		t.Errorf("text argument truncated at embedded NUL: got len %d, want %d", n, len(text))
+	}
+
+	var got string
+	if err := db.QueryRow("SELECT echo(?)", text).Scan(&got); err != nil {
+		t.Fatal("Failed to call db.QueryRow:", err)
+	}
+	if got != text {
+		t.Errorf("text result truncated at embedded NUL: got %q (len %d), want %q (len %d)", got, len(got), text, len(text))
+	}
+}
+
 type sumAggregator int64
 
 func (s *sumAggregator) Step(x int64) {
@@ -2061,6 +2097,82 @@ func TestNamedParam(t *testing.T) {
 	rows.Scan(&id, &name, &amount)
 	if id != 2 || name != "grault" || amount != 123 {
 		t.Errorf("Expected %d, %q, %d for fetched result, but got %d, %q, %d:", 2, "grault", 123, id, name, amount)
+	}
+}
+
+func TestNamedParamClearBindings(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("create table foo (x integer, y integer, z text)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	// First insert with all named params specified
+	_, err = db.Exec("insert into foo(x, y, z) values($x, $y, $z)",
+		sql.Named("x", 1), sql.Named("y", 2), sql.Named("z", "three"))
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	// Second insert: $y should be NULL since we pass nil explicitly
+	_, err = db.Exec("insert into foo(x, y, z) values($x, $y, $z)",
+		sql.Named("x", 10), sql.Named("y", nil), sql.Named("z", nil))
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	var x int
+	var y, z sql.NullInt64
+	err = db.QueryRow("select x, y, z from foo where x = 10").Scan(&x, &y, &z)
+	if err != nil {
+		t.Fatal("Failed to query:", err)
+	}
+	if y.Valid {
+		t.Errorf("Expected y to be NULL, got %d", y.Int64)
+	}
+	if z.Valid {
+		t.Errorf("Expected z to be NULL, got %d", z.Int64)
+	}
+}
+
+// https://github.com/mattn/go-sqlite3/issues/1390
+// sqlite3_prepare_v2 returns SQLITE_OK with a NULL statement handle when the
+// input contains no SQL (only whitespace or comments). Querying such input
+// must not panic.
+func TestQueryCommentOnly(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	cases := []string{"", "   ", "-- comment", "---- comment\n", "/* block */"}
+	for _, q := range cases {
+		var x int
+		if err := db.QueryRow(q).Scan(&x); err != sql.ErrNoRows {
+			t.Errorf("QueryRow(%q): expected ErrNoRows, got %v", q, err)
+		}
+
+		rows, err := db.Query(q)
+		if err != nil {
+			t.Errorf("Query(%q): unexpected error: %v", q, err)
+			continue
+		}
+		if rows.Next() {
+			t.Errorf("Query(%q): expected no rows", q)
+		}
+		rows.Close()
+
+		if _, err := db.Exec(q); err != nil {
+			t.Errorf("Exec(%q): unexpected error: %v", q, err)
+		}
 	}
 }
 
