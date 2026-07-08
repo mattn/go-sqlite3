@@ -7,6 +7,17 @@ go-sqlite3
 [![codecov](https://codecov.io/gh/mattn/go-sqlite3/branch/master/graph/badge.svg)](https://codecov.io/gh/mattn/go-sqlite3)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mattn/go-sqlite3)](https://goreportcard.com/report/github.com/mattn/go-sqlite3)
 
+## Sponsors
+
+This project is proudly sponsored by:
+
+<a href="https://coderabbit.link/mattn">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://victorious-bubble-f69a016683.media.strapiapp.com/White_Typemark_79b9189d19.svg">
+    <img src="https://victorious-bubble-f69a016683.media.strapiapp.com/Orange_Typemark_43bf516c9d.svg" alt="CodeRabbit" width="320">
+  </picture>
+</a>
+
 Latest stable version is v1.14 or later, not v2.
 
 # Description
