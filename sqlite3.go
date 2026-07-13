@@ -2294,6 +2294,17 @@ func stmtArgs(args []driver.NamedValue, start, na int) []driver.NamedValue {
 	return stmtArgs
 }
 
+// bindError converts a non-OK return code from bindValue into an error.
+// The synthetic SQLITE_MISUSE returned for unsupported Go types is never
+// recorded in the database handle, so lastError may report no error; fall
+// back to an explicit message instead of silently ignoring the failure.
+func (s *SQLiteStmt) bindError(v driver.Value) error {
+	if err := s.c.lastError(); err != nil {
+		return err
+	}
+	return fmt.Errorf("sqlite3: unsupported bind type %T", v)
+}
+
 func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 	rv := C._sqlite3_reset_clear(s.s)
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
@@ -2313,7 +2324,7 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 			n := C.int(arg.Ordinal)
 			rv = bindValue(s.s, n, arg.Value)
 			if rv != C.SQLITE_OK {
-				return s.c.lastError()
+				return s.bindError(arg.Value)
 			}
 		}
 		return nil
@@ -2323,7 +2334,7 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 		if arg.Name == "" {
 			rv = bindValue(s.s, C.int(arg.Ordinal), arg.Value)
 			if rv != C.SQLITE_OK {
-				return s.c.lastError()
+				return s.bindError(arg.Value)
 			}
 			continue
 		}
@@ -2334,7 +2345,7 @@ func (s *SQLiteStmt) bind(args []driver.NamedValue) error {
 			}
 			rv = bindValue(s.s, C.int(idx), arg.Value)
 			if rv != C.SQLITE_OK {
-				return s.c.lastError()
+				return s.bindError(arg.Value)
 			}
 		}
 	}
