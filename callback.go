@@ -326,8 +326,7 @@ func callbackRetInteger(ctx *C.sqlite3_context, v reflect.Value) error {
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Int, reflect.Uint:
 		v = v.Convert(reflect.TypeOf(int64(0)))
 	case reflect.Bool:
-		b := v.Interface().(bool)
-		if b {
+		if v.Bool() {
 			v = reflect.ValueOf(int64(1))
 		} else {
 			v = reflect.ValueOf(int64(0))
@@ -336,7 +335,7 @@ func callbackRetInteger(ctx *C.sqlite3_context, v reflect.Value) error {
 		return fmt.Errorf("cannot convert %s to INTEGER", v.Type())
 	}
 
-	C.sqlite3_result_int64(ctx, C.sqlite3_int64(v.Interface().(int64)))
+	C.sqlite3_result_int64(ctx, C.sqlite3_int64(v.Int()))
 	return nil
 }
 
@@ -349,7 +348,7 @@ func callbackRetFloat(ctx *C.sqlite3_context, v reflect.Value) error {
 		return fmt.Errorf("cannot convert %s to FLOAT", v.Type())
 	}
 
-	C.sqlite3_result_double(ctx, C.double(v.Interface().(float64)))
+	C.sqlite3_result_double(ctx, C.double(v.Float()))
 	return nil
 }
 
@@ -357,11 +356,10 @@ func callbackRetBlob(ctx *C.sqlite3_context, v reflect.Value) error {
 	if v.Type().Kind() != reflect.Slice || v.Type().Elem().Kind() != reflect.Uint8 {
 		return fmt.Errorf("cannot convert %s to BLOB", v.Type())
 	}
-	i := v.Interface()
-	if i == nil || len(i.([]byte)) == 0 {
+	bs := v.Bytes()
+	if len(bs) == 0 {
 		C.sqlite3_result_null(ctx)
 	} else {
-		bs := i.([]byte)
 		if i64 && len(bs) > math.MaxInt32 {
 			C.sqlite3_result_error_toobig(ctx)
 			return nil
@@ -375,7 +373,7 @@ func callbackRetText(ctx *C.sqlite3_context, v reflect.Value) error {
 	if v.Type().Kind() != reflect.String {
 		return fmt.Errorf("cannot convert %s to TEXT", v.Type())
 	}
-	s := v.Interface().(string)
+	s := v.String()
 	if i64 && len(s) > math.MaxInt32 {
 		C.sqlite3_result_error_toobig(ctx)
 		return nil
