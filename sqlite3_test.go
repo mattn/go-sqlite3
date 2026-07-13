@@ -1439,6 +1439,71 @@ func TestFunctionRegistration(t *testing.T) {
 	}
 }
 
+func TestFunctionRegistrationNamedTypes(t *testing.T) {
+	type NInt int64
+	type NFloat float64
+	type NString string
+	type NBlob []byte
+	type NBool bool
+
+	dur := func(n int64) time.Duration { return time.Duration(n) }
+	nint := func(a, b NInt) NInt { return a + b }
+	nfloat := func(a, b NFloat) NFloat { return a + b }
+	nstring := func(s NString) NString { return s + "!" }
+	nblob := func(s string) NBlob { return NBlob(s) }
+	nbool := func(b NBool) NBool { return !b }
+
+	sql.Register("sqlite3_FunctionRegistrationNamedTypes", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			if err := conn.RegisterFunc("dur", dur, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nint", nint, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nfloat", nfloat, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nstring", nstring, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nblob", nblob, true); err != nil {
+				return err
+			}
+			return conn.RegisterFunc("nbool", nbool, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_FunctionRegistrationNamedTypes", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	ops := []struct {
+		query    string
+		expected any
+	}{
+		{"SELECT dur(42)", int64(42)},
+		{"SELECT nint(1,2)", int64(3)},
+		{"SELECT nfloat(1.5,1.5)", float64(3)},
+		{`SELECT nstring('foo')`, "foo!"},
+		{`SELECT nblob('xy')`, []byte("xy")},
+		// An empty blob result is mapped to SQL NULL.
+		{`SELECT nblob('') IS NULL`, true},
+		{"SELECT nbool(0)", true},
+	}
+
+	for _, op := range ops {
+		ret := reflect.New(reflect.TypeOf(op.expected))
+		err = db.QueryRow(op.query).Scan(ret.Interface())
+		if err != nil {
+			t.Errorf("Query %q failed: %s", op.query, err)
+		} else if !reflect.DeepEqual(ret.Elem().Interface(), op.expected) {
+			t.Errorf("Query %q returned wrong value: got %v (%T), want %v (%T)", op.query, ret.Elem().Interface(), ret.Elem().Interface(), op.expected, op.expected)
+		}
+	}
+}
+
 func TestFunctionArgStringContainingZero(t *testing.T) {
 	sql.Register("sqlite3_FunctionArgZero", &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
