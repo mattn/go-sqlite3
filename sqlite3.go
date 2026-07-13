@@ -1595,6 +1595,20 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, errors.New("sqlite succeeded without returning a database")
 	}
 
+	// Create connection to SQLite
+	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
+	if stmtCacheSize > 0 {
+		conn.stmtCache = make([]*SQLiteStmt, 0, stmtCacheSize)
+		conn.stmtCacheEnabled = true
+	}
+
+	// fail closes the connection so no error path leaks the database
+	// handle or any callback handles registered on it.
+	fail := func(err error) (driver.Conn, error) {
+		conn.Close()
+		return nil, err
+	}
+
 	exec := func(s string) error {
 		cs := C.CString(s)
 		rv := C.sqlite3_exec(db, cs, nil, nil, nil)
@@ -1607,8 +1621,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 
 	// Busy timeout
 	if err := exec(fmt.Sprintf("PRAGMA busy_timeout = %d;", busyTimeout)); err != nil {
-		C.sqlite3_close_v2(db)
-		return nil, err
+		return fail(err)
 	}
 
 	// USER AUTHENTICATION
@@ -1633,66 +1646,59 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	//		NO				=> Continue
 	//
 
-	// Create connection to SQLite
-	conn := &SQLiteConn{db: db, loc: loc, txlock: txlock}
-	if stmtCacheSize > 0 {
-		conn.stmtCache = make([]*SQLiteStmt, 0, stmtCacheSize)
-		conn.stmtCacheEnabled = true
-	}
-
 	// Password Cipher has to be registered before authentication
 	if len(authCrypt) > 0 {
 		switch strings.ToUpper(authCrypt) {
 		case "SHA1":
 			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA1, true); err != nil {
-				return nil, fmt.Errorf("CryptEncoderSHA1: %s", err)
+				return fail(fmt.Errorf("CryptEncoderSHA1: %s", err))
 			}
 		case "SSHA1":
 			if len(authSalt) == 0 {
-				return nil, fmt.Errorf("_auth_crypt=ssha1, requires _auth_salt")
+				return fail(fmt.Errorf("_auth_crypt=ssha1, requires _auth_salt"))
 			}
 			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA1(authSalt), true); err != nil {
-				return nil, fmt.Errorf("CryptEncoderSSHA1: %s", err)
+				return fail(fmt.Errorf("CryptEncoderSSHA1: %s", err))
 			}
 		case "SHA256":
 			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA256, true); err != nil {
-				return nil, fmt.Errorf("CryptEncoderSHA256: %s", err)
+				return fail(fmt.Errorf("CryptEncoderSHA256: %s", err))
 			}
 		case "SSHA256":
 			if len(authSalt) == 0 {
-				return nil, fmt.Errorf("_auth_crypt=ssha256, requires _auth_salt")
+				return fail(fmt.Errorf("_auth_crypt=ssha256, requires _auth_salt"))
 			}
 			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA256(authSalt), true); err != nil {
-				return nil, fmt.Errorf("CryptEncoderSSHA256: %s", err)
+				return fail(fmt.Errorf("CryptEncoderSSHA256: %s", err))
 			}
 		case "SHA384":
 			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA384, true); err != nil {
-				return nil, fmt.Errorf("CryptEncoderSHA384: %s", err)
+				return fail(fmt.Errorf("CryptEncoderSHA384: %s", err))
 			}
 		case "SSHA384":
 			if len(authSalt) == 0 {
-				return nil, fmt.Errorf("_auth_crypt=ssha384, requires _auth_salt")
+				return fail(fmt.Errorf("_auth_crypt=ssha384, requires _auth_salt"))
 			}
 			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA384(authSalt), true); err != nil {
-				return nil, fmt.Errorf("CryptEncoderSSHA384: %s", err)
+				return fail(fmt.Errorf("CryptEncoderSSHA384: %s", err))
 			}
 		case "SHA512":
 			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSHA512, true); err != nil {
-				return nil, fmt.Errorf("CryptEncoderSHA512: %s", err)
+				return fail(fmt.Errorf("CryptEncoderSHA512: %s", err))
 			}
 		case "SSHA512":
 			if len(authSalt) == 0 {
-				return nil, fmt.Errorf("_auth_crypt=ssha512, requires _auth_salt")
+				return fail(fmt.Errorf("_auth_crypt=ssha512, requires _auth_salt"))
 			}
 			if err := conn.RegisterFunc("sqlite_crypt", CryptEncoderSSHA512(authSalt), true); err != nil {
-				return nil, fmt.Errorf("CryptEncoderSSHA512: %s", err)
+				return fail(fmt.Errorf("CryptEncoderSSHA512: %s", err))
 			}
 		}
 	}
 
 	// Preform Authentication
 	if err := conn.Authenticate(authUser, authPass); err != nil {
-		return nil, err
+		return fail(err)
 	}
 
 	// Register: authenticate
@@ -1710,7 +1716,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// If the SQLITE_USER table is not present in the database file, then
 	// this interface is a harmless no-op returnning SQLITE_OK.
 	if err := conn.RegisterFunc("authenticate", conn.authenticate, true); err != nil {
-		return nil, err
+		return fail(err)
 	}
 	//
 	// Register: auth_user_add
@@ -1723,7 +1729,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// for any ATTACH-ed databases. Any call to AuthUserAdd by a
 	// non-admin user results in an error.
 	if err := conn.RegisterFunc("auth_user_add", conn.authUserAdd, true); err != nil {
-		return nil, err
+		return fail(err)
 	}
 	//
 	// Register: auth_user_change
@@ -1733,7 +1739,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// credentials or admin privilege setting. No user may change their own
 	// admin privilege setting.
 	if err := conn.RegisterFunc("auth_user_change", conn.authUserChange, true); err != nil {
-		return nil, err
+		return fail(err)
 	}
 	//
 	// Register: auth_user_delete
@@ -1743,13 +1749,13 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// the database cannot be converted into a no-authentication-required
 	// database.
 	if err := conn.RegisterFunc("auth_user_delete", conn.authUserDelete, true); err != nil {
-		return nil, err
+		return fail(err)
 	}
 
 	// Register: auth_enabled
 	// auth_enabled can be used to check if user authentication is enabled
 	if err := conn.RegisterFunc("auth_enabled", conn.authEnabled, true); err != nil {
-		return nil, err
+		return fail(err)
 	}
 
 	// Auto Vacuum
@@ -1760,8 +1766,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// and activating user authentication creates the internal table `sqlite_user`.
 	if autoVacuum > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA auto_vacuum = %d;", autoVacuum)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
@@ -1771,17 +1776,17 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		// has provided an username and password within the DSN.
 		// We are not allowed to continue.
 		if len(authUser) == 0 {
-			return nil, fmt.Errorf("Missing '_auth_user' while user authentication was requested with '_auth'")
+			return fail(fmt.Errorf("Missing '_auth_user' while user authentication was requested with '_auth'"))
 		}
 		if len(authPass) == 0 {
-			return nil, fmt.Errorf("Missing '_auth_pass' while user authentication was requested with '_auth'")
+			return fail(fmt.Errorf("Missing '_auth_pass' while user authentication was requested with '_auth'"))
 		}
 
 		// Check if User Authentication is Enabled
 		authExists := conn.AuthEnabled()
 		if !authExists {
 			if err := conn.AuthUserAdd(authUser, authPass, true); err != nil {
-				return nil, err
+				return fail(err)
 			}
 		}
 	}
@@ -1789,40 +1794,35 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Case Sensitive LIKE
 	if caseSensitiveLike > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA case_sensitive_like = %d;", caseSensitiveLike)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
 	// Defer Foreign Keys
 	if deferForeignKeys > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA defer_foreign_keys = %d;", deferForeignKeys)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
 	// Foreign Keys
 	if foreignKeys > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA foreign_keys = %d;", foreignKeys)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
 	// Ignore CHECK Constraints
 	if ignoreCheckConstraints > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA ignore_check_constraints = %d;", ignoreCheckConstraints)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
 	// Journal Mode
 	if journalMode != "" {
 		if err := exec(fmt.Sprintf("PRAGMA journal_mode = %s;", journalMode)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
@@ -1830,23 +1830,20 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// Because the default is NORMAL and this is not changed in this package
 	// by using the compile time SQLITE_DEFAULT_LOCKING_MODE this PRAGMA can always be executed
 	if err := exec(fmt.Sprintf("PRAGMA locking_mode = %s;", lockingMode)); err != nil {
-		C.sqlite3_close_v2(db)
-		return nil, err
+		return fail(err)
 	}
 
 	// Query Only
 	if queryOnly > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA query_only = %d;", queryOnly)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
 	// Recursive Triggers
 	if recursiveTriggers > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA recursive_triggers = %d;", recursiveTriggers)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
@@ -1857,8 +1854,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	// you can compile with secure_delete 'ON' and disable it for a specific database connection.
 	if secureDelete != "DEFAULT" {
 		if err := exec(fmt.Sprintf("PRAGMA secure_delete = %s;", secureDelete)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
@@ -1866,37 +1862,32 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	//
 	// Because default is NORMAL this statement is always executed
 	if err := exec(fmt.Sprintf("PRAGMA synchronous = %s;", synchronousMode)); err != nil {
-		conn.Close()
-		return nil, err
+		return fail(err)
 	}
 
 	// Writable Schema
 	if writableSchema > -1 {
 		if err := exec(fmt.Sprintf("PRAGMA writable_schema = %d;", writableSchema)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
 	// Cache Size
 	if cacheSize != nil {
 		if err := exec(fmt.Sprintf("PRAGMA cache_size = %d;", *cacheSize)); err != nil {
-			C.sqlite3_close_v2(db)
-			return nil, err
+			return fail(err)
 		}
 	}
 
 	if len(d.Extensions) > 0 {
 		if err := conn.loadExtensions(d.Extensions); err != nil {
-			conn.Close()
-			return nil, err
+			return fail(err)
 		}
 	}
 
 	if d.ConnectHook != nil {
 		if err := d.ConnectHook(conn); err != nil {
-			conn.Close()
-			return nil, err
+			return fail(err)
 		}
 	}
 	runtime.SetFinalizer(conn, (*SQLiteConn).Close)
