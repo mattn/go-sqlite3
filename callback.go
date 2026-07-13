@@ -34,8 +34,8 @@ import (
 )
 
 //export callbackTrampoline
-func callbackTrampoline(ctx *C.sqlite3_context, argc int, argv **C.sqlite3_value) {
-	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:argc:argc]
+func callbackTrampoline(ctx *C.sqlite3_context, argc C.int, argv **C.sqlite3_value) {
+	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:int(argc):int(argc)]
 	fi := lookupHandle(C.sqlite3_user_data(ctx)).(*functionInfo)
 	fi.Call(ctx, args)
 }
@@ -60,9 +60,9 @@ func compareTrampoline(handlePtr unsafe.Pointer, la C.int, a *C.char, lb C.int, 
 }
 
 //export commitHookTrampoline
-func commitHookTrampoline(handle unsafe.Pointer) int {
+func commitHookTrampoline(handle unsafe.Pointer) C.int {
 	callback := lookupHandle(handle).(func() int)
-	return callback()
+	return C.int(callback())
 }
 
 //export rollbackHookTrampoline
@@ -72,23 +72,23 @@ func rollbackHookTrampoline(handle unsafe.Pointer) {
 }
 
 //export updateHookTrampoline
-func updateHookTrampoline(handle unsafe.Pointer, op int, db *C.char, table *C.char, rowid int64) {
+func updateHookTrampoline(handle unsafe.Pointer, op C.int, db *C.char, table *C.char, rowid int64) {
 	callback := lookupHandle(handle).(func(int, string, string, int64))
-	callback(op, C.GoString(db), C.GoString(table), rowid)
+	callback(int(op), C.GoString(db), C.GoString(table), rowid)
 }
 
 //export authorizerTrampoline
-func authorizerTrampoline(handle unsafe.Pointer, op int, arg1 *C.char, arg2 *C.char, arg3 *C.char) int {
+func authorizerTrampoline(handle unsafe.Pointer, op C.int, arg1 *C.char, arg2 *C.char, arg3 *C.char) C.int {
 	callback := lookupHandle(handle).(func(int, string, string, string) int)
-	return callback(op, C.GoString(arg1), C.GoString(arg2), C.GoString(arg3))
+	return C.int(callback(int(op), C.GoString(arg1), C.GoString(arg2), C.GoString(arg3)))
 }
 
 //export preUpdateHookTrampoline
-func preUpdateHookTrampoline(handle unsafe.Pointer, dbHandle uintptr, op int, db *C.char, table *C.char, oldrowid int64, newrowid int64) {
+func preUpdateHookTrampoline(handle unsafe.Pointer, dbHandle uintptr, op C.int, db *C.char, table *C.char, oldrowid int64, newrowid int64) {
 	hval := lookupHandleVal(handle)
 	data := SQLitePreUpdateData{
 		Conn:         hval.db,
-		Op:           op,
+		Op:           int(op),
 		DatabaseName: C.GoString(db),
 		TableName:    C.GoString(table),
 		OldRowID:     oldrowid,
