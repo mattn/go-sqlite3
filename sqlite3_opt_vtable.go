@@ -113,6 +113,9 @@ uintptr_t goVOpen(void *pVTab, char **pzErr);
 
 static int cXOpen(sqlite3_vtab *pVTab, sqlite3_vtab_cursor **ppCursor) {
 	void *vTabCursor = (void *)goVOpen(((goVTab*)pVTab)->vTab, &(pVTab->zErrMsg));
+	if (!vTabCursor) {
+		return SQLITE_ERROR;
+	}
 	goVTabCursor *pCursor = (goVTabCursor *)sqlite3_malloc(sizeof(goVTabCursor));
 	if (!pCursor) {
 		return SQLITE_NOMEM;
