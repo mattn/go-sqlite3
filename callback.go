@@ -260,6 +260,16 @@ func callbackArgGeneric(v *C.sqlite3_value) (reflect.Value, error) {
 	}
 }
 
+// callbackArgConvert returns conv as-is when the parameter type is the
+// canonical type conv produces, and wraps it with a cast for named types
+// (e.g. time.Duration), which reflect.Call would otherwise panic on.
+func callbackArgConvert(conv callbackArgConverter, typ, canonical reflect.Type) callbackArgConverter {
+	if typ == canonical {
+		return conv
+	}
+	return callbackArgCast{conv, typ}.Run
+}
+
 func callbackArg(typ reflect.Type) (callbackArgConverter, error) {
 	switch typ.Kind() {
 	case reflect.Interface:
@@ -271,18 +281,18 @@ func callbackArg(typ reflect.Type) (callbackArgConverter, error) {
 		if typ.Elem().Kind() != reflect.Uint8 {
 			return nil, errors.New("the only supported slice type is []byte")
 		}
-		return callbackArgBytes, nil
+		return callbackArgConvert(callbackArgBytes, typ, reflect.TypeOf([]byte(nil))), nil
 	case reflect.String:
-		return callbackArgString, nil
+		return callbackArgConvert(callbackArgString, typ, reflect.TypeOf("")), nil
 	case reflect.Bool:
-		return callbackArgBool, nil
+		return callbackArgConvert(callbackArgBool, typ, reflect.TypeOf(false)), nil
 	case reflect.Int64:
-		return callbackArgInt64, nil
+		return callbackArgConvert(callbackArgInt64, typ, reflect.TypeOf(int64(0))), nil
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Int, reflect.Uint:
 		c := callbackArgCast{callbackArgInt64, typ}
 		return c.Run, nil
 	case reflect.Float64:
-		return callbackArgFloat64, nil
+		return callbackArgConvert(callbackArgFloat64, typ, reflect.TypeOf(float64(0))), nil
 	case reflect.Float32:
 		c := callbackArgCast{callbackArgFloat64, typ}
 		return c.Run, nil
