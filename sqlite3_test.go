@@ -1324,6 +1324,50 @@ func TestDateTimeNow(t *testing.T) {
 	}
 }
 
+func TestBindErrorPaths(t *testing.T) {
+	d := &SQLiteDriver{}
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer conn.Close()
+	c := conn.(*SQLiteConn)
+
+	if _, err := c.Exec("CREATE TABLE t (v)", nil); err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	// An unsupported Go type must report an explicit error instead of
+	// silently binding NULL: positional parameter.
+	_, err = c.Exec("INSERT INTO t VALUES (?)", []driver.Value{int32(1)})
+	if err == nil || !strings.Contains(err.Error(), "unsupported bind type int32") {
+		t.Errorf("positional bind of unsupported type: got %v, want unsupported bind type error", err)
+	}
+
+	// The same for a named parameter.
+	stmt, err := c.Prepare("INSERT INTO t VALUES (:x)")
+	if err != nil {
+		t.Fatal("Failed to prepare:", err)
+	}
+	err = stmt.(*SQLiteStmt).bind([]driver.NamedValue{{Name: "x", Ordinal: 1, Value: int32(1)}})
+	if err == nil || !strings.Contains(err.Error(), "unsupported bind type int32") {
+		t.Errorf("named bind of unsupported type: got %v, want unsupported bind type error", err)
+	}
+	stmt.Close()
+
+	// A genuine SQLite bind failure must preserve the recorded error.
+	stmt, err = c.Prepare("INSERT INTO t VALUES (?)")
+	if err != nil {
+		t.Fatal("Failed to prepare:", err)
+	}
+	err = stmt.(*SQLiteStmt).bind([]driver.NamedValue{{Ordinal: 2, Value: int64(1)}})
+	var serr Error
+	if !errors.As(err, &serr) || serr.Code != ErrRange {
+		t.Errorf("out-of-range bind: got %v, want SQLITE_RANGE error", err)
+	}
+	stmt.Close()
+}
+
 func TestFunctionRegistration(t *testing.T) {
 	addi8_16_32 := func(a int8, b int16) int32 { return int32(a) + int32(b) }
 	addi64 := func(a, b int64) int64 { return a + b }
