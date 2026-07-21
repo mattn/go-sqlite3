@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build cgo
-// +build cgo
 
 package sqlite3
 
@@ -468,7 +467,7 @@ func TestUpdate(t *testing.T) {
 		t.Fatal("Failed to get LastInsertId:", err)
 	}
 	if expected != lastID {
-		t.Errorf("Expected %q for last Id, but %q:", expected, lastID)
+		t.Errorf("Expected %d for last Id, but %d:", expected, lastID)
 	}
 	affected, _ = res.RowsAffected()
 	if err != nil {
@@ -521,7 +520,7 @@ func TestDelete(t *testing.T) {
 		t.Fatal("Failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
-		t.Errorf("Expected %d for cout of affected rows, but %q:", 1, affected)
+		t.Errorf("Expected %d for cout of affected rows, but %d:", 1, affected)
 	}
 
 	res, err = db.Exec("delete from foo where id = 123")
@@ -533,14 +532,14 @@ func TestDelete(t *testing.T) {
 		t.Fatal("Failed to get LastInsertId:", err)
 	}
 	if expected != lastID {
-		t.Errorf("Expected %q for last Id, but %q:", expected, lastID)
+		t.Errorf("Expected %d for last Id, but %d:", expected, lastID)
 	}
 	affected, err = res.RowsAffected()
 	if err != nil {
 		t.Fatal("Failed to get RowsAffected:", err)
 	}
 	if affected != 1 {
-		t.Errorf("Expected %d for cout of affected rows, but %q:", 1, affected)
+		t.Errorf("Expected %d for cout of affected rows, but %d:", 1, affected)
 	}
 
 	rows, err := db.Query("select id from foo")
