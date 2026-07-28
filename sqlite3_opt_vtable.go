@@ -514,7 +514,14 @@ func goVFilter(pCursor unsafe.Pointer, idxNum C.int, idxName *C.char, argc C.int
 		if err != nil {
 			return mPrintf("%s", err.Error())
 		}
-		vals = append(vals, conv.Interface())
+
+		// work around for SQLITE_NULL
+		x := conv.Interface()
+		if z, ok := x.([]byte); ok && z == nil {
+			x = nil
+		}
+
+		vals = append(vals, x)
 	}
 	err := vtc.vTabCursor.Filter(int(idxNum), C.GoString(idxName), vals)
 	if err != nil {
