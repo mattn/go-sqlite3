@@ -423,6 +423,9 @@ func goVRelease(pVTab unsafe.Pointer, isDestroy C.int) *C.char {
 	} else {
 		err = vt.vTab.Disconnect()
 	}
+	// The vtab is gone as far as SQLite is concerned regardless of the
+	// callback result, so release the handle either way.
+	deleteHandle(pVTab)
 	if err != nil {
 		return mPrintf("%s", err.Error())
 	}
@@ -492,6 +495,9 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 func goVClose(pCursor unsafe.Pointer) *C.char {
 	vtc := lookupHandle(pCursor).(*sqliteVTabCursor)
 	err := vtc.vTabCursor.Close()
+	// The cursor is gone as far as SQLite is concerned regardless of the
+	// callback result, so release the handle either way.
+	deleteHandle(pCursor)
 	if err != nil {
 		return mPrintf("%s", err.Error())
 	}
@@ -502,6 +508,7 @@ func goVClose(pCursor unsafe.Pointer) *C.char {
 func goMDestroy(pClientData unsafe.Pointer) {
 	m := lookupHandle(pClientData).(*sqliteModule)
 	m.module.DestroyModule()
+	deleteHandle(pClientData)
 }
 
 //export goVFilter
