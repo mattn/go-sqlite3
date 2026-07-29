@@ -4,16 +4,23 @@ package sqlite3
 
 import (
 	"database/sql"
+	"fmt"
+	"sync/atomic"
 	"testing"
 )
 
+var leakCheckDriverSeq int32
+
 func TestVtabCursorHandleRelease(t *testing.T) {
-	sql.Register("sqlite3_HandleLeakCheck", &SQLiteDriver{
+	// Use a unique driver name so repeated runs (e.g. -count=2) do not
+	// panic on duplicate registration.
+	driverName := fmt.Sprintf("sqlite3_HandleLeakCheck_%d", atomic.AddInt32(&leakCheckDriverSeq, 1))
+	sql.Register(driverName, &SQLiteDriver{
 		ConnectHook: func(conn *SQLiteConn) error {
 			return conn.CreateModule("test", &testModule{t: t, intarray: []int{1, 2, 3}})
 		},
 	})
-	db, err := sql.Open("sqlite3_HandleLeakCheck", ":memory:")
+	db, err := sql.Open(driverName, ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
