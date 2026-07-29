@@ -454,6 +454,9 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	if err != nil {
 		return mPrintf("%s", err.Error())
 	}
+	if res == nil {
+		return mPrintf("%s", "BestIndex returned a nil IndexResult")
+	}
 	if len(res.Used) != len(csts) {
 		return mPrintf("Result.Used != expected value", "")
 	}
@@ -749,5 +752,5 @@ func (c *SQLiteConn) CreateModule(moduleName string, module Module) error {
 		}
 		return nil
 	}
-	return nil
+	return fmt.Errorf("sqlite3: CreateModule requires a non-nil module")
 }
