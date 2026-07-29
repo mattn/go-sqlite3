@@ -83,21 +83,29 @@ func mergeFile(src string, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer fdst.Close()
 
 	// Read source content
 	content, err := ioutil.ReadFile(src)
 	if err != nil {
+		fdst.Close()
 		return err
 	}
 
 	// Add Additional newline
 	if _, err := fdst.WriteString("\n"); err != nil {
+		fdst.Close()
 		return err
 	}
 
 	fmt.Printf("Merging: %s into %s\n", src, dst)
 	if _, err = fdst.Write(content); err != nil {
+		fdst.Close()
+		return err
+	}
+
+	// Close may surface deferred write errors; the source must survive
+	// unless the merge fully reached the destination.
+	if err := fdst.Close(); err != nil {
 		return err
 	}
 
