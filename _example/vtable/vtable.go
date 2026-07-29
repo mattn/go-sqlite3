@@ -20,13 +20,19 @@ type githubModule struct {
 }
 
 func (m *githubModule) Create(c *sqlite3.SQLiteConn, args []string) (sqlite3.VTab, error) {
+	// args holds the raw xCreate arguments: args[0] is the module name,
+	// args[1] the database name, args[2] the virtual table name, and any
+	// user arguments follow.
+	if len(args) < 3 {
+		return nil, fmt.Errorf("githubModule: unexpected arguments: %v", args)
+	}
 	err := c.DeclareVTab(fmt.Sprintf(`
 		CREATE TABLE %s (
 			id INT,
 			full_name TEXT,
 			description TEXT,
 			html_url TEXT
-		)`, args[0]))
+		)`, args[2]))
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +55,9 @@ func (v *ghRepoTable) Open() (sqlite3.VTabCursor, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetching repositories: %s", resp.Status)
+	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
