@@ -608,7 +608,9 @@ func goVUpdate(pVTab unsafe.Pointer, argc C.int, argv **C.sqlite3_value, pRowid 
 			}
 
 		case argc > 1:
-			err = v.Update(vals[1], vals[2:])
+			// Per the xUpdate contract argv[0] identifies the row being
+			// updated while argv[1] is its (possibly changed) new rowid.
+			err = v.Update(vals[0], vals[2:])
 		}
 	}
 
