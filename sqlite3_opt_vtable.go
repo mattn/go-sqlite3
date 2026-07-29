@@ -493,8 +493,9 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 		var rows int64
 		if res.EstimatedRows >= float64(math.MaxInt64) {
 			rows = math.MaxInt64
-		} else {
-			rows = int64(res.EstimatedRows)
+		} else if rows = int64(res.EstimatedRows); rows < 1 {
+			// A positive fractional estimate must not truncate to 0.
+			rows = 1
 		}
 		info.estimatedRows = C.sqlite3_int64(rows)
 	}
