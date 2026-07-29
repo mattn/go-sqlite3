@@ -609,8 +609,14 @@ func goVUpdate(pVTab unsafe.Pointer, argc C.int, argv **C.sqlite3_value, pRowid 
 
 		case argc > 1:
 			// Per the xUpdate contract argv[0] identifies the row being
-			// updated while argv[1] is its (possibly changed) new rowid.
-			err = v.Update(vals[0], vals[2:])
+			// updated while argv[1] is its new rowid. VTabUpdater has no
+			// way to convey a rowid change, so reject it instead of
+			// silently updating values under the old rowid.
+			if vals[0] != vals[1] {
+				err = fmt.Errorf("virtual %s table %sdoes not support changing the rowid", vt.module.name, tname)
+			} else {
+				err = v.Update(vals[0], vals[2:])
+			}
 		}
 	}
 
