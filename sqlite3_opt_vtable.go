@@ -485,8 +485,23 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	if res.AlreadyOrdered {
 		info.orderByConsumed = C.int(1)
 	}
-	info.estimatedCost = C.double(res.EstimatedCost)
-	info.estimatedRows = C.sqlite3_int64(res.EstimatedRows)
+	// SQLite pre-initializes estimatedCost and estimatedRows with sensible
+	// defaults; overwriting them with the Go zero value would make every
+	// candidate plan look free and break query planning, so only pass
+	// values the implementation actually set.
+	if res.EstimatedCost > 0 {
+		info.estimatedCost = C.double(res.EstimatedCost)
+	}
+	if res.EstimatedRows > 0 {
+		var rows int64
+		if res.EstimatedRows >= float64(math.MaxInt64) {
+			rows = math.MaxInt64
+		} else if rows = int64(res.EstimatedRows); rows < 1 {
+			// A positive fractional estimate must not truncate to 0.
+			rows = 1
+		}
+		info.estimatedRows = C.sqlite3_int64(rows)
+	}
 
 	return nil
 }
