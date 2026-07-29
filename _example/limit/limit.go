@@ -93,6 +93,9 @@ func main() {
 	if err == nil {
 		log.Fatal("expected failure since SQLITE_LIMIT_VARIABLE_NUMBER is too small, but insert succeeded")
 	}
+	if !strings.Contains(err.Error(), "too many SQL variables") {
+		log.Fatalf("expected too many SQL variables error, got: %v", err)
+	}
 	log.Printf("expect failed since SQLITE_LIMIT_VARIABLE_NUMBER is too small: %v", err)
 
 	bigLimitVariableNumber := 999999
