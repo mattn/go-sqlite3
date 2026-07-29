@@ -460,7 +460,11 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	slice := unsafe.Slice(info.aConstraintUsage, int(info.nConstraint))
 	index := 1
 	for i := range slice {
-		if res.Used[i] {
+		// SQLite returns "xBestIndex malfunction" when an argvIndex is
+		// assigned to a constraint it marked as not usable, so ignore
+		// Used for those; they may become usable on a later xBestIndex
+		// invocation for a different plan.
+		if res.Used[i] && csts[i].Usable {
 			slice[i].argvIndex = C.int(index)
 			slice[i].omit = C.uchar(1)
 			index++
