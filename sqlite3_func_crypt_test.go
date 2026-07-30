@@ -55,3 +55,29 @@ func TestCryptEncoders(t *testing.T) {
 		}
 	}
 }
+
+// TestSaltedCryptEncoderNoAliasing checks that the salted encoders do not write
+// back through the caller's pass slice. A pass slice with spare capacity used to
+// have the salt appended into its backing array, corrupting neighbouring data the
+// caller still held over the same array.
+func TestSaltedCryptEncoderNoAliasing(t *testing.T) {
+	encoders := map[string]func(string) func([]byte, any) []byte{
+		"ssha1":   CryptEncoderSSHA1,
+		"ssha256": CryptEncoderSSHA256,
+		"ssha384": CryptEncoderSSHA384,
+		"ssha512": CryptEncoderSSHA512,
+	}
+
+	for name, mk := range encoders {
+		backing := make([]byte, 10)
+		copy(backing, []byte("adminXXXXX"))
+		pass := backing[:5]
+		neighbour := backing[5:10]
+
+		mk("salt")(pass, nil)
+
+		if string(neighbour) != "XXXXX" {
+			t.Fatalf("%s mutated caller memory beyond pass: neighbour=%q, want %q", name, neighbour, "XXXXX")
+		}
+	}
+}
