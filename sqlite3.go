@@ -220,6 +220,18 @@ _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_
 }
 #endif
 
+// Combined step + column value collection in a single C call to reduce
+// CGO crossings while iterating rows.
+static int
+_sqlite3_step_column_values_internal(sqlite3_stmt *stmt, int ncol, sqlite3_go_col *cols)
+{
+  int rv = _sqlite3_step_internal(stmt);
+  if (rv == SQLITE_ROW && ncol > 0) {
+    _sqlite3_column_values(stmt, ncol, cols);
+  }
+  return rv;
+}
+
 void _sqlite3_result_text(sqlite3_context* ctx, const char* s, int n) {
   sqlite3_result_text(ctx, s, n, &free);
 }
@@ -2624,7 +2636,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 	if rc.stopCancellation == nil {
 		if rc.ctx.Done() == nil {
-			rv := C._sqlite3_step_internal(rc.s.s)
+			rv := C._sqlite3_step_column_values_internal(rc.s.s, C.int(len(dest)), rc.colvals)
 			return rc.readStepResultLocked(dest, rv)
 		}
 		conn := rc.s.c
@@ -2635,7 +2647,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	if err := rc.ctx.Err(); err != nil {
 		return err
 	}
-	rv := rc.stepCancellableLocked()
+	rv := rc.stepCancellableLocked(dest)
 	err := rc.readStepResultLocked(dest, rv)
 	if ctxErr := rc.ctx.Err(); ctxErr != nil {
 		return ctxErr
@@ -2643,10 +2655,10 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	return err
 }
 
-func (rc *SQLiteRows) stepCancellableLocked() C.int {
+func (rc *SQLiteRows) stepCancellableLocked(dest []driver.Value) C.int {
 	rc.startStepping()
 	defer rc.finishStepping()
-	return C._sqlite3_step_internal(rc.s.s)
+	return C._sqlite3_step_column_values_internal(rc.s.s, C.int(len(dest)), rc.colvals)
 }
 
 func (rc *SQLiteRows) readStepResultLocked(dest []driver.Value, rv C.int) error {
@@ -2665,7 +2677,6 @@ func (rc *SQLiteRows) readStepResultLocked(dest []driver.Value, rv C.int) error 
 	if len(dest) == 0 {
 		return nil
 	}
-	C._sqlite3_column_values(rc.s.s, C.int(len(dest)), rc.colvals)
 	colvals := (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.sqlite3_go_col{})]C.sqlite3_go_col)(unsafe.Pointer(rc.colvals))[:len(dest):len(dest)]
 
 	decltype := rc.decltype
