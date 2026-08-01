@@ -220,6 +220,18 @@ _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_
 }
 #endif
 
+// Combined step + column value collection in a single C call to reduce
+// CGO crossings while iterating rows.
+static int
+_sqlite3_step_column_values_internal(sqlite3_stmt *stmt, int ncol, sqlite3_go_col *cols)
+{
+  int rv = _sqlite3_step_internal(stmt);
+  if (rv == SQLITE_ROW && ncol > 0) {
+    _sqlite3_column_values(stmt, ncol, cols);
+  }
+  return rv;
+}
+
 void _sqlite3_result_text(sqlite3_context* ctx, const char* s, int n) {
   sqlite3_result_text(ctx, s, n, &free);
 }
@@ -445,8 +457,11 @@ type SQLiteDriver struct {
 
 // SQLiteConn implements driver.Conn.
 type SQLiteConn struct {
-	mu          sync.Mutex
-	db          *C.sqlite3
+	mu sync.Mutex
+	db *C.sqlite3
+	// activeRows identifies the cancellable Rows currently calling sqlite3_step.
+	// It is guarded by mu so a stale cancellation cannot interrupt later work.
+	activeRows  *SQLiteRows
 	loc         *time.Location
 	txlock      string
 	funcs       []*functionInfo
@@ -492,14 +507,15 @@ type SQLiteResult struct {
 
 // SQLiteRows implements driver.Rows.
 type SQLiteRows struct {
-	s        *SQLiteStmt
-	nc       int32 // Number of columns
-	cls      bool  // True if we need to close the parent statement in Close
-	cols     []string
-	decltype []string
-	colvals  *C.sqlite3_go_col
-	ctx      context.Context // no better alternative to pass context into Next() method
-	closemu  sync.Mutex
+	s                *SQLiteStmt
+	nc               int32 // Number of columns
+	cls              bool  // True if we need to close the parent statement in Close
+	cols             []string
+	decltype         []string
+	colvals          *C.sqlite3_go_col
+	ctx              context.Context // no better alternative to pass context into Next() method
+	stopCancellation func() bool
+	closemu          sync.Mutex
 }
 
 type functionInfo struct {
@@ -2466,6 +2482,7 @@ func (s *SQLiteStmt) Readonly() bool {
 func (rc *SQLiteRows) Close() error {
 	rc.closemu.Lock()
 	defer rc.closemu.Unlock()
+	rc.stopWatchingCancellation()
 	s := rc.s
 	if s == nil {
 		if rc.colvals != nil {
@@ -2495,6 +2512,40 @@ func (rc *SQLiteRows) Close() error {
 	}
 	s.mu.Unlock()
 	return nil
+}
+
+func (c *SQLiteConn) interruptActiveRows(rows *SQLiteRows) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.activeRows == rows && c.db != nil {
+		C.sqlite3_interrupt(c.db)
+	}
+}
+
+func (rc *SQLiteRows) stopWatchingCancellation() {
+	if rc.stopCancellation == nil {
+		return
+	}
+	// A false return is harmless: a callback already in progress can interrupt
+	// only while rc owns conn.activeRows, which is guarded by conn.mu.
+	rc.stopCancellation()
+	rc.stopCancellation = nil
+}
+
+func (rc *SQLiteRows) startStepping() {
+	conn := rc.s.c
+	conn.mu.Lock()
+	conn.activeRows = rc
+	conn.mu.Unlock()
+}
+
+func (rc *SQLiteRows) finishStepping() {
+	conn := rc.s.c
+	conn.mu.Lock()
+	if conn.activeRows == rc {
+		conn.activeRows = nil
+	}
+	conn.mu.Unlock()
 }
 
 func (s *SQLiteStmt) cacheMetadata() bool {
@@ -2583,33 +2634,34 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 
-	if rc.ctx.Done() == nil {
-		return rc.nextSyncLocked(dest)
-	}
-	sema := make(chan struct{})
-	var err error
-	go func() {
-		err = rc.nextSyncLocked(dest)
-		close(sema)
-	}()
-	select {
-	case <-sema:
-		return err
-	case <-rc.ctx.Done():
-		select {
-		case <-sema: // no need to interrupt
-		default:
-			// this is still racy and can be no-op if executed between sqlite3_* calls in nextSyncLocked.
-			C.sqlite3_interrupt(rc.s.c.db)
-			<-sema // ensure goroutine completed
+	if rc.stopCancellation == nil {
+		if rc.ctx.Done() == nil {
+			rv := C._sqlite3_step_column_values_internal(rc.s.s, C.int(len(dest)), rc.colvals)
+			return rc.readStepResultLocked(dest, rv)
 		}
-		return rc.ctx.Err()
+		conn := rc.s.c
+		rc.stopCancellation = context.AfterFunc(rc.ctx, func() {
+			conn.interruptActiveRows(rc)
+		})
 	}
+	if err := rc.ctx.Err(); err != nil {
+		return err
+	}
+	rv := rc.stepCancellableLocked(dest)
+	err := rc.readStepResultLocked(dest, rv)
+	if ctxErr := rc.ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	return err
 }
 
-// nextSyncLocked moves cursor to next; must be called with locked mutex.
-func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
-	rv := C._sqlite3_step_internal(rc.s.s)
+func (rc *SQLiteRows) stepCancellableLocked(dest []driver.Value) C.int {
+	rc.startStepping()
+	defer rc.finishStepping()
+	return C._sqlite3_step_column_values_internal(rc.s.s, C.int(len(dest)), rc.colvals)
+}
+
+func (rc *SQLiteRows) readStepResultLocked(dest []driver.Value, rv C.int) error {
 	if rv == C.SQLITE_DONE {
 		return io.EOF
 	}
@@ -2625,7 +2677,6 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 	if len(dest) == 0 {
 		return nil
 	}
-	C._sqlite3_column_values(rc.s.s, C.int(len(dest)), rc.colvals)
 	colvals := (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.sqlite3_go_col{})]C.sqlite3_go_col)(unsafe.Pointer(rc.colvals))[:len(dest):len(dest)]
 
 	decltype := rc.decltype
