@@ -1090,6 +1090,38 @@ func TestExecer(t *testing.T) {
 	}
 }
 
+func TestExecNotEnoughArgsErrorMessage(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	// Second statement is missing its arg. The "got" count should reflect
+	// the args remaining after the first statement consumed one, not the
+	// total number of args originally passed in.
+	_, err = db.Exec("SELECT ?; SELECT ?", "hello")
+	if err == nil {
+		t.Fatal("expected error for missing arg")
+	}
+	want := "not enough args to execute query: want 1 got 0"
+	if err.Error() != want {
+		t.Errorf("Exec error message:\n got: %q\nwant: %q", err.Error(), want)
+	}
+
+	// Query already reports the right number; check it stays that way so
+	// the two paths don't drift again.
+	_, err = db.Query("SELECT ?; SELECT ?", "hello")
+	if err == nil {
+		t.Fatal("expected error for missing arg")
+	}
+	if err.Error() != want {
+		t.Errorf("Query error message:\n got: %q\nwant: %q", err.Error(), want)
+	}
+}
+
 func TestQueryer(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
