@@ -1368,6 +1368,51 @@ func TestBindErrorPaths(t *testing.T) {
 	stmt.Close()
 }
 
+func TestColumnCount(t *testing.T) {
+	d := &SQLiteDriver{}
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer conn.Close()
+	c := conn.(*SQLiteConn)
+
+	if _, err := c.Exec("CREATE TABLE t (a, b, c)", nil); err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	columnCount := func(query string) int {
+		stmt, err := c.Prepare(query)
+		if err != nil {
+			t.Fatalf("Failed to prepare %q: %v", query, err)
+		}
+		defer stmt.Close()
+		return stmt.(*SQLiteStmt).ColumnCount()
+	}
+
+	if n := columnCount("SELECT * FROM t"); n != 3 {
+		t.Errorf("ColumnCount for SELECT * on 3-column table = %d; want 3", n)
+	}
+
+	if _, err := c.Exec("ALTER TABLE t ADD COLUMN d", nil); err != nil {
+		t.Fatal("Failed to add column:", err)
+	}
+	if n := columnCount("SELECT * FROM t"); n != 4 {
+		t.Errorf("ColumnCount after adding a column = %d; want 4", n)
+	}
+
+	if _, err := c.Exec("ALTER TABLE t DROP COLUMN d", nil); err != nil {
+		t.Fatal("Failed to drop column:", err)
+	}
+	if n := columnCount("SELECT * FROM t"); n != 3 {
+		t.Errorf("ColumnCount after dropping a column = %d; want 3", n)
+	}
+
+	if n := columnCount("INSERT INTO t VALUES (1, 2, 3)"); n != 0 {
+		t.Errorf("ColumnCount for INSERT = %d; want 0", n)
+	}
+}
+
 func TestFunctionRegistration(t *testing.T) {
 	addi8_16_32 := func(a int8, b int16) int32 { return int32(a) + int32(b) }
 	addi64 := func(a, b int64) int64 { return a + b }
