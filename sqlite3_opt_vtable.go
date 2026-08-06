@@ -113,6 +113,9 @@ uintptr_t goVOpen(void *pVTab, char **pzErr);
 
 static int cXOpen(sqlite3_vtab *pVTab, sqlite3_vtab_cursor **ppCursor) {
 	void *vTabCursor = (void *)goVOpen(((goVTab*)pVTab)->vTab, &(pVTab->zErrMsg));
+	if (!vTabCursor) {
+		return SQLITE_ERROR;
+	}
 	goVTabCursor *pCursor = (goVTabCursor *)sqlite3_malloc(sizeof(goVTabCursor));
 	if (!pCursor) {
 		return SQLITE_NOMEM;
@@ -420,6 +423,9 @@ func goVRelease(pVTab unsafe.Pointer, isDestroy C.int) *C.char {
 	} else {
 		err = vt.vTab.Disconnect()
 	}
+	// The vtab is gone as far as SQLite is concerned regardless of the
+	// callback result, so release the handle either way.
+	deleteHandle(pVTab)
 	if err != nil {
 		return mPrintf("%s", err.Error())
 	}
@@ -448,6 +454,9 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	if err != nil {
 		return mPrintf("%s", err.Error())
 	}
+	if res == nil {
+		return mPrintf("%s", "BestIndex returned a nil IndexResult")
+	}
 	if len(res.Used) != len(csts) {
 		return mPrintf("Result.Used != expected value", "")
 	}
@@ -457,7 +466,11 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	slice := unsafe.Slice(info.aConstraintUsage, int(info.nConstraint))
 	index := 1
 	for i := range slice {
-		if res.Used[i] {
+		// SQLite returns "xBestIndex malfunction" when an argvIndex is
+		// assigned to a constraint it marked as not usable, so ignore
+		// Used for those; they may become usable on a later xBestIndex
+		// invocation for a different plan.
+		if res.Used[i] && csts[i].Usable {
 			slice[i].argvIndex = C.int(index)
 			slice[i].omit = C.uchar(1)
 			index++
@@ -479,8 +492,23 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 	if res.AlreadyOrdered {
 		info.orderByConsumed = C.int(1)
 	}
-	info.estimatedCost = C.double(res.EstimatedCost)
-	info.estimatedRows = C.sqlite3_int64(res.EstimatedRows)
+	// SQLite pre-initializes estimatedCost and estimatedRows with sensible
+	// defaults; overwriting them with the Go zero value would make every
+	// candidate plan look free and break query planning, so only pass
+	// values the implementation actually set.
+	if res.EstimatedCost > 0 {
+		info.estimatedCost = C.double(res.EstimatedCost)
+	}
+	if res.EstimatedRows > 0 {
+		var rows int64
+		if res.EstimatedRows >= float64(math.MaxInt64) {
+			rows = math.MaxInt64
+		} else if rows = int64(res.EstimatedRows); rows < 1 {
+			// A positive fractional estimate must not truncate to 0.
+			rows = 1
+		}
+		info.estimatedRows = C.sqlite3_int64(rows)
+	}
 
 	return nil
 }
@@ -489,6 +517,9 @@ func goVBestIndex(pVTab unsafe.Pointer, icp unsafe.Pointer) *C.char {
 func goVClose(pCursor unsafe.Pointer) *C.char {
 	vtc := lookupHandle(pCursor).(*sqliteVTabCursor)
 	err := vtc.vTabCursor.Close()
+	// The cursor is gone as far as SQLite is concerned regardless of the
+	// callback result, so release the handle either way.
+	deleteHandle(pCursor)
 	if err != nil {
 		return mPrintf("%s", err.Error())
 	}
@@ -499,6 +530,7 @@ func goVClose(pCursor unsafe.Pointer) *C.char {
 func goMDestroy(pClientData unsafe.Pointer) {
 	m := lookupHandle(pClientData).(*sqliteModule)
 	m.module.DestroyModule()
+	deleteHandle(pClientData)
 }
 
 //export goVFilter
@@ -511,7 +543,14 @@ func goVFilter(pCursor unsafe.Pointer, idxNum C.int, idxName *C.char, argc C.int
 		if err != nil {
 			return mPrintf("%s", err.Error())
 		}
-		vals = append(vals, conv.Interface())
+
+		// work around for SQLITE_NULL
+		x := conv.Interface()
+		if z, ok := x.([]byte); ok && z == nil {
+			x = nil
+		}
+
+		vals = append(vals, x)
 	}
 	err := vtc.vTabCursor.Filter(int(idxNum), C.GoString(idxName), vals)
 	if err != nil {
@@ -605,7 +644,15 @@ func goVUpdate(pVTab unsafe.Pointer, argc C.int, argv **C.sqlite3_value, pRowid 
 			}
 
 		case argc > 1:
-			err = v.Update(vals[1], vals[2:])
+			// Per the xUpdate contract argv[0] identifies the row being
+			// updated while argv[1] is its new rowid. VTabUpdater has no
+			// way to convey a rowid change, so reject it instead of
+			// silently updating values under the old rowid.
+			if vals[0] != vals[1] {
+				err = fmt.Errorf("virtual %s table %sdoes not support changing the rowid", vt.module.name, tname)
+			} else {
+				err = v.Update(vals[0], vals[2:])
+			}
 		}
 	}
 
@@ -705,5 +752,5 @@ func (c *SQLiteConn) CreateModule(moduleName string, module Module) error {
 		}
 		return nil
 	}
-	return nil
+	return fmt.Errorf("sqlite3: CreateModule requires a non-nil module")
 }

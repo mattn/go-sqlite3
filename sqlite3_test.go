@@ -1324,6 +1324,50 @@ func TestDateTimeNow(t *testing.T) {
 	}
 }
 
+func TestBindErrorPaths(t *testing.T) {
+	d := &SQLiteDriver{}
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer conn.Close()
+	c := conn.(*SQLiteConn)
+
+	if _, err := c.Exec("CREATE TABLE t (v)", nil); err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	// An unsupported Go type must report an explicit error instead of
+	// silently binding NULL: positional parameter.
+	_, err = c.Exec("INSERT INTO t VALUES (?)", []driver.Value{int32(1)})
+	if err == nil || !strings.Contains(err.Error(), "unsupported bind type int32") {
+		t.Errorf("positional bind of unsupported type: got %v, want unsupported bind type error", err)
+	}
+
+	// The same for a named parameter.
+	stmt, err := c.Prepare("INSERT INTO t VALUES (:x)")
+	if err != nil {
+		t.Fatal("Failed to prepare:", err)
+	}
+	err = stmt.(*SQLiteStmt).bind([]driver.NamedValue{{Name: "x", Ordinal: 1, Value: int32(1)}})
+	if err == nil || !strings.Contains(err.Error(), "unsupported bind type int32") {
+		t.Errorf("named bind of unsupported type: got %v, want unsupported bind type error", err)
+	}
+	stmt.Close()
+
+	// A genuine SQLite bind failure must preserve the recorded error.
+	stmt, err = c.Prepare("INSERT INTO t VALUES (?)")
+	if err != nil {
+		t.Fatal("Failed to prepare:", err)
+	}
+	err = stmt.(*SQLiteStmt).bind([]driver.NamedValue{{Ordinal: 2, Value: int64(1)}})
+	var serr Error
+	if !errors.As(err, &serr) || serr.Code != ErrRange {
+		t.Errorf("out-of-range bind: got %v, want SQLITE_RANGE error", err)
+	}
+	stmt.Close()
+}
+
 func TestFunctionRegistration(t *testing.T) {
 	addi8_16_32 := func(a int8, b int16) int32 { return int32(a) + int32(b) }
 	addi64 := func(a, b int64) int64 { return a + b }
@@ -1426,6 +1470,71 @@ func TestFunctionRegistration(t *testing.T) {
 		{"SELECT variadic(1,2,3,4)", int64(10)},
 		{"SELECT variadic(1,1,1,1,1,1,1,1,1,1)", int64(10)},
 		{`SELECT variadicGeneric(1,'foo',2.3, NULL)`, int64(4)},
+	}
+
+	for _, op := range ops {
+		ret := reflect.New(reflect.TypeOf(op.expected))
+		err = db.QueryRow(op.query).Scan(ret.Interface())
+		if err != nil {
+			t.Errorf("Query %q failed: %s", op.query, err)
+		} else if !reflect.DeepEqual(ret.Elem().Interface(), op.expected) {
+			t.Errorf("Query %q returned wrong value: got %v (%T), want %v (%T)", op.query, ret.Elem().Interface(), ret.Elem().Interface(), op.expected, op.expected)
+		}
+	}
+}
+
+func TestFunctionRegistrationNamedTypes(t *testing.T) {
+	type NInt int64
+	type NFloat float64
+	type NString string
+	type NBlob []byte
+	type NBool bool
+
+	dur := func(n int64) time.Duration { return time.Duration(n) }
+	nint := func(a, b NInt) NInt { return a + b }
+	nfloat := func(a, b NFloat) NFloat { return a + b }
+	nstring := func(s NString) NString { return s + "!" }
+	nblob := func(s string) NBlob { return NBlob(s) }
+	nbool := func(b NBool) NBool { return !b }
+
+	sql.Register("sqlite3_FunctionRegistrationNamedTypes", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			if err := conn.RegisterFunc("dur", dur, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nint", nint, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nfloat", nfloat, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nstring", nstring, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nblob", nblob, true); err != nil {
+				return err
+			}
+			return conn.RegisterFunc("nbool", nbool, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_FunctionRegistrationNamedTypes", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	ops := []struct {
+		query    string
+		expected any
+	}{
+		{"SELECT dur(42)", int64(42)},
+		{"SELECT nint(1,2)", int64(3)},
+		{"SELECT nfloat(1.5,1.5)", float64(3)},
+		{`SELECT nstring('foo')`, "foo!"},
+		{`SELECT nblob('xy')`, []byte("xy")},
+		// An empty blob result is mapped to SQL NULL.
+		{`SELECT nblob('') IS NULL`, true},
+		{"SELECT nbool(0)", true},
 	}
 
 	for _, op := range ops {
