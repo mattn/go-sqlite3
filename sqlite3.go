@@ -2470,6 +2470,15 @@ func (s *SQLiteStmt) ColumnCount() int {
 	return int(C.sqlite3_column_count(s.s))
 }
 
+// Tail returns the unprepared remainder of the SQL string this statement was
+// prepared from — everything after the first complete statement, trimmed of
+// whitespace. It is empty when the string held a single statement.
+//
+// See: https://sqlite.org/c3ref/prepare.html (pzTail)
+func (s *SQLiteStmt) Tail() string {
+	return s.t
+}
+
 // Close the rows.
 func (rc *SQLiteRows) Close() error {
 	rc.closemu.Lock()
