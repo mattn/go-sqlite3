@@ -2184,6 +2184,9 @@ func (s *SQLiteStmt) Close() error {
 
 // NumInput return a number of parameters.
 func (s *SQLiteStmt) NumInput() int {
+	if s.s == nil {
+		return 0
+	}
 	return int(C.sqlite3_bind_parameter_count(s.s))
 }
 
@@ -2349,6 +2352,9 @@ func (s *SQLiteStmt) Query(args []driver.Value) (driver.Rows, error) {
 }
 
 func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	if s.s == nil {
+		return &SQLiteRows{s: nil, nc: 0, cls: s.cls, ctx: ctx}, nil
+	}
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
@@ -2439,6 +2445,9 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []driver.NamedValue) (driver
 }
 
 func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
+	if s.s == nil {
+		return &SQLiteResult{id: 0, changes: 0}, nil
+	}
 	if err := s.bind(args); err != nil {
 		C._sqlite3_reset_clear(s.s)
 		return nil, err
@@ -2459,6 +2468,9 @@ func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 //
 // See: https://sqlite.org/c3ref/stmt_readonly.html
 func (s *SQLiteStmt) Readonly() bool {
+	if s.s == nil {
+		return true
+	}
 	return C.sqlite3_stmt_readonly(s.s) == 1
 }
 
@@ -2618,7 +2630,7 @@ func (rc *SQLiteRows) nextSyncLocked(dest []driver.Value) error {
 		if rv != C.SQLITE_OK {
 			return rc.s.c.lastError()
 		}
-		return nil
+		return io.EOF
 	}
 
 	rc.declTypes()
