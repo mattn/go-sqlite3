@@ -978,8 +978,10 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 			}
 			start += na
 		}
+		current := query
 		tail := s.(*SQLiteStmt).t
 		s.Close()
+		c.dropStmtCacheIfSchemaChanged(current)
 		if tail == "" {
 			if res == nil {
 				// https://github.com/mattn/go-sqlite3/issues/963
@@ -995,6 +997,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 func (c *SQLiteConn) execNoArgs(query string) (driver.Result, error) {
 	var res *SQLiteResult
 	for len(query) > 0 {
+		current := query
 		var rowid, changes C.longlong
 		var tail *C.char
 		pquery := C.CString(query)
@@ -1009,6 +1012,7 @@ func (c *SQLiteConn) execNoArgs(query string) (driver.Result, error) {
 			return nil, c.lastError()
 		}
 		res = &SQLiteResult{id: int64(rowid), changes: int64(changes)}
+		c.dropStmtCacheIfSchemaChanged(current)
 	}
 	if res == nil {
 		res = &SQLiteResult{0, 0}
@@ -1948,6 +1952,7 @@ func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
 		// caller gets a stmt equivalent to a fresh Prepare.
 		s.closed = false
 		s.cls = false
+		s.metadata = nil
 		return s
 	}
 	return nil
@@ -1989,6 +1994,43 @@ func (c *SQLiteConn) closeCachedStmtsLocked() {
 		finalizeCachedStmt(s)
 	}
 	c.stmtCache = c.stmtCache[:0]
+}
+
+// dropStmtCacheIfSchemaChanged discards cached statements after DDL.
+// SQLite auto-reprepares an expired sqlite3_stmt on the next step, but
+// sqlite3_column_count and the names captured at Query time still describe
+// the old schema until that happens. Exec of ALTER/CREATE/DROP etc. does not
+// go through the cache, so without this a later cache hit returns stale
+// columns (see #1447).
+func (c *SQLiteConn) dropStmtCacheIfSchemaChanged(query string) {
+	if c == nil || !c.stmtCacheEnabled || !schemaChangingQuery(query) {
+		return
+	}
+	c.mu.Lock()
+	c.closeCachedStmtsLocked()
+	c.mu.Unlock()
+}
+
+func schemaChangingQuery(query string) bool {
+	q := strings.TrimSpace(query)
+	i := 0
+	for i < len(q) {
+		ch := q[i]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' {
+			i++
+			continue
+		}
+		break
+	}
+	if i == 0 {
+		return false
+	}
+	switch strings.ToUpper(q[:i]) {
+	case "ALTER", "CREATE", "DROP", "ATTACH", "DETACH", "REINDEX", "VACUUM":
+		return true
+	default:
+		return false
+	}
 }
 
 // finalizeCachedStmt tears down a stmt that was sitting in the connection's
