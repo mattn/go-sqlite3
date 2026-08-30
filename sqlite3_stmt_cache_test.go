@@ -10,6 +10,8 @@ package sqlite3
 
 import (
 	"context"
+	"database/sql/driver"
+	"reflect"
 	"testing"
 )
 
@@ -131,6 +133,94 @@ func TestStmtCacheReuseReturnsSameHandle(t *testing.T) {
 
 	if h1 != h2 {
 		t.Fatalf("expected cached prepare to reuse sqlite3_stmt handle, got %p vs %p", h1, h2)
+	}
+}
+
+// TestStmtCacheExpiredAfterAlter is the #1447 regression: SELECT * is cached,
+// ALTER TABLE adds a column via execNoArgs (which does not touch the cache),
+// and the next SELECT * must not return the pre-ALTER column list.
+func TestStmtCacheExpiredAfterAlter(t *testing.T) {
+	d := SQLiteDriver{}
+	conn, err := d.Open(":memory:?_stmt_cache_size=8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	c := conn.(*SQLiteConn)
+	if _, err := c.Exec("CREATE TABLE t (a TEXT)", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := c.Query("SELECT * FROM t", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := rows.Columns(), []string{"a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("before ALTER: Columns() = %v, want %v", got, want)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if cacheCount(c, "SELECT * FROM t") != 1 {
+		t.Fatalf("expected SELECT * to be cached after Close, cache=%#v", cacheKeys(c))
+	}
+
+	if _, err := c.Exec("ALTER TABLE t ADD COLUMN b TEXT", nil); err != nil {
+		t.Fatal(err)
+	}
+	if cacheCount(c, "SELECT * FROM t") != 0 {
+		t.Fatalf("ALTER should drop the cached SELECT *, cache=%#v", cacheKeys(c))
+	}
+
+	rows, err = c.Query("SELECT * FROM t", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	if got, want := rows.Columns(), []string{"a", "b"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("after ALTER: Columns() = %v, want %v", got, want)
+	}
+}
+
+// TestStmtCacheSurvivesInsert checks that DML does not discard the cache.
+func TestStmtCacheSurvivesInsert(t *testing.T) {
+	d := SQLiteDriver{}
+	conn, err := d.Open(":memory:?_stmt_cache_size=4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	c := conn.(*SQLiteConn)
+	if _, err := c.Exec("CREATE TABLE t (a TEXT)", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	const q = "SELECT * FROM t"
+	stmt1, err := c.prepareWithCache(context.Background(), q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h1 := stmt1.(*SQLiteStmt).s
+	if err := stmt1.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.Exec("INSERT INTO t (a) VALUES (?)", []driver.Value{"x"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stmt2, err := c.prepareWithCache(context.Background(), q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h2 := stmt2.(*SQLiteStmt).s
+	if err := stmt2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if h1 != h2 {
+		t.Fatalf("INSERT should not evict a cached SELECT, got %p vs %p", h1, h2)
 	}
 }
 
