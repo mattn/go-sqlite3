@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build cgo
-// +build cgo
 
 package sqlite3
 
@@ -24,11 +23,11 @@ func BenchmarkStmtCache(b *testing.B) {
 		cacheSize int
 		keyCount  int
 	}{
-		{"off", 0, 1},                 // baseline: no cache
-		{"size4_keys1_hit", 4, 1},     // trivial hit path
-		{"size4_keys4_hit", 4, 4},     // all queries fit, always hit
-		{"size4_keys8_evict", 4, 8},   // working set > cache: miss + eviction
-		{"size16_keys8_hit", 16, 8},   // all queries fit in larger cache
+		{"off", 0, 1},                   // baseline: no cache
+		{"size4_keys1_hit", 4, 1},       // trivial hit path
+		{"size4_keys4_hit", 4, 4},       // all queries fit, always hit
+		{"size4_keys8_evict", 4, 8},     // working set > cache: miss + eviction
+		{"size16_keys8_hit", 16, 8},     // all queries fit in larger cache
 		{"size16_keys32_evict", 16, 32}, // working set >> cache
 	}
 	for _, tc := range cases {
