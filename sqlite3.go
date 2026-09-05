@@ -2505,20 +2505,6 @@ func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (drive
 		return nil, err
 	}
 	rows.pendingStep = rv
-	if rows.nc > 0 {
-		if rows.nc > s.colvalsCap {
-			if s.colvals != nil {
-				C.free(unsafe.Pointer(s.colvals))
-			}
-			s.colvals = (*C.sqlite3_go_col)(C.malloc(C.size_t(rows.nc) * C.size_t(unsafe.Sizeof(C.sqlite3_go_col{}))))
-			if s.colvals == nil {
-				s.colvalsCap = 0
-				return nil, errors.New("sqlite3: failed to allocate row buffer")
-			}
-			s.colvalsCap = rows.nc
-		}
-		rows.colvals = s.colvals
-	}
 
 	return rows, nil
 }
@@ -2961,6 +2947,23 @@ func (rc *SQLiteRows) bindAndFirstStepLocked(args []driver.NamedValue) (C.int, e
 	if repreps != s.repreps {
 		s.repreps = repreps
 		s.metadata = nil
+	}
+	if rc.nc > 0 {
+		// s.mu is still held here; the statement-owned row buffer must
+		// only be touched under it.
+		if rc.nc > s.colvalsCap {
+			if s.colvals != nil {
+				C.free(unsafe.Pointer(s.colvals))
+			}
+			s.colvals = (*C.sqlite3_go_col)(C.malloc(C.size_t(rc.nc) * C.size_t(unsafe.Sizeof(C.sqlite3_go_col{}))))
+			if s.colvals == nil {
+				s.colvalsCap = 0
+				C._sqlite3_reset_clear(s.s)
+				return 0, errors.New("sqlite3: failed to allocate row buffer")
+			}
+			s.colvalsCap = rc.nc
+		}
+		rc.colvals = s.colvals
 	}
 	return rv, nil
 }

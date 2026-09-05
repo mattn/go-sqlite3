@@ -307,12 +307,16 @@ func TestDatabaseSQLRowsContextCancelAndReuse(t *testing.T) {
 			nextDone <- err
 			return
 		}
-		defer rows.Close()
 		if rows.Next() {
+			rows.Close()
 			nextDone <- errors.New("Next returned a row after cancellation")
 			return
 		}
-		nextDone <- rows.Err()
+		err = rows.Err()
+		if closeErr := rows.Close(); err == nil {
+			err = closeErr
+		}
+		nextDone <- err
 	}()
 	select {
 	case <-started:
