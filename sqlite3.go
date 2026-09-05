@@ -135,6 +135,28 @@ _sqlite3_reset_clear(sqlite3_stmt* stmt)
   return rv;
 }
 
+// Steps the pre-prepared schema probe statement and returns its
+// cumulative re-prepare count, in a single CGO crossing. The probe
+// references the schema, so stepping it makes SQLite verify the schema
+// cookie and reload the connection's schema after a change by another
+// connection; the re-prepare count then reflects that change.
+// Returns -1 on error or when sqlite3_stmt_status is too old to
+// report re-prepares.
+static sqlite3_int64
+_sqlite3_schema_generation(sqlite3_stmt* stmt)
+{
+#ifdef SQLITE_STMTSTATUS_REPREPARE
+  int rc = sqlite3_step(stmt);
+  sqlite3_reset(stmt);
+  if (rc != SQLITE_ROW && rc != SQLITE_DONE) {
+    return -1;
+  }
+  return sqlite3_stmt_status(stmt, SQLITE_STMTSTATUS_REPREPARE, 0);
+#else
+  return -1;
+#endif
+}
+
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
 extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
 extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
@@ -459,6 +481,13 @@ type SQLiteConn struct {
 	// only field safe to read without the lock.
 	stmtCache        []*SQLiteStmt
 	stmtCacheEnabled bool
+	// schemaProbeStmt is a pre-prepared statement referencing the
+	// schema, used to detect (and make SQLite pick up) schema changes
+	// that expire cached statements; it is only set when the statement
+	// cache is enabled. schemaGen holds the probe's re-prepare count
+	// observed at the last cache lookup.
+	schemaProbeStmt *C.sqlite3_stmt
+	schemaGen       C.sqlite3_int64
 }
 
 // SQLiteTx implements driver.Tx.
@@ -1609,6 +1638,28 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, err
 	}
 
+	if conn.stmtCacheEnabled {
+		// Used to detect schema changes that expire cached statements;
+		// see takeCachedStmt.
+		const probe = "SELECT 1 FROM sqlite_master LIMIT 0"
+		cp := C.CString(probe)
+		rv := C._sqlite3_prepare_v2_internal(db, cp, C.int(len(probe)), &conn.schemaProbeStmt, nil)
+		C.free(unsafe.Pointer(cp))
+		if rv != C.SQLITE_OK {
+			return fail(lastError(db))
+		}
+		conn.schemaGen = C._sqlite3_schema_generation(conn.schemaProbeStmt)
+		if conn.schemaGen < 0 {
+			// The runtime SQLite cannot report re-prepare counts
+			// (pre-3.20 system library); run without the cache
+			// rather than risk serving expired statements.
+			C.sqlite3_finalize(conn.schemaProbeStmt)
+			conn.schemaProbeStmt = nil
+			conn.stmtCache = nil
+			conn.stmtCacheEnabled = false
+		}
+	}
+
 	exec := func(s string) error {
 		cs := C.CString(s)
 		rv := C.sqlite3_exec(db, cs, nil, nil, nil)
@@ -1903,6 +1954,10 @@ func (c *SQLiteConn) Close() error {
 	}
 	runtime.SetFinalizer(c, nil)
 	c.closeCachedStmtsLocked()
+	if c.schemaProbeStmt != nil {
+		C.sqlite3_finalize(c.schemaProbeStmt)
+		c.schemaProbeStmt = nil
+	}
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
 		return lastError(c.db)
@@ -1930,6 +1985,21 @@ func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
 	defer c.mu.Unlock()
 
 	if c.db == nil {
+		return nil
+	}
+	if c.schemaProbeStmt == nil {
+		return nil
+	}
+	// A schema change expires every cached statement. SQLite would
+	// re-prepare them transparently at step time, but the column count
+	// and metadata are captured before stepping and would silently
+	// describe the old schema. Stepping the probe forces SQLite to
+	// notice a schema change and reload the connection's schema, and
+	// bumps the probe's re-prepare count when that happens; flush the
+	// cache then (and when the probe fails: fail safe).
+	if g := C._sqlite3_schema_generation(c.schemaProbeStmt); g < 0 || g != c.schemaGen {
+		c.schemaGen = g
+		c.closeCachedStmtsLocked()
 		return nil
 	}
 	// Scan from the MRU end (tail) so that a stmt put just before is
