@@ -496,6 +496,7 @@ type SQLiteStmt struct {
 	t           string
 	closed      bool
 	cls         bool // True if the statement was created by SQLiteConn.Query
+	numInput    int32
 	namedParams map[string][3]int
 	cacheKey    string
 	metadata    *sqliteStmtMetadata
@@ -2068,6 +2069,9 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 		t = strings.TrimSpace(C.GoString(tail))
 	}
 	ss := &SQLiteStmt{c: c, s: s, t: t}
+	if s != nil {
+		ss.numInput = int32(C.sqlite3_bind_parameter_count(s))
+	}
 	runtime.SetFinalizer(ss, (*SQLiteStmt).Close)
 	return ss, nil
 }
@@ -2226,7 +2230,7 @@ func (s *SQLiteStmt) Close() error {
 
 // NumInput return a number of parameters.
 func (s *SQLiteStmt) NumInput() int {
-	return int(C.sqlite3_bind_parameter_count(s.s))
+	return int(s.numInput)
 }
 
 var placeHolder = []byte{0}
