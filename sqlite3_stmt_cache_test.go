@@ -9,6 +9,9 @@ package sqlite3
 
 import (
 	"context"
+	"database/sql"
+	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -107,6 +110,9 @@ func TestStmtCacheReuseReturnsSameHandle(t *testing.T) {
 	defer conn.Close()
 
 	c := conn.(*SQLiteConn)
+	if !c.stmtCacheEnabled {
+		t.Skip("statement cache disabled on this SQLite runtime")
+	}
 	ctx := context.Background()
 
 	const q = "SELECT 42"
@@ -130,6 +136,171 @@ func TestStmtCacheReuseReturnsSameHandle(t *testing.T) {
 
 	if h1 != h2 {
 		t.Fatalf("expected cached prepare to reuse sqlite3_stmt handle, got %p vs %p", h1, h2)
+	}
+}
+
+// TestStmtCacheSchemaChange verifies that a schema change does not let the
+// cache hand back an expired statement whose captured column metadata still
+// describes the old schema (issue #1447). Both same-connection DDL and DDL
+// issued through a second database handle must invalidate the cache.
+func TestStmtCacheSchemaChange(t *testing.T) {
+	fn := filepath.Join(t.TempDir(), "schemachange.db")
+	db, err := sql.Open("sqlite3", "file:"+fn+"?_stmt_cache_size=8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.Exec("CREATE TABLE t (a TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO t VALUES ('x')"); err != nil {
+		t.Fatal(err)
+	}
+
+	queryCols := func() []string {
+		rows, err := db.Query("SELECT * FROM t")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		cols, err := rows.Columns()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cols
+	}
+
+	// Populate the cache.
+	if cols := queryCols(); !reflect.DeepEqual(cols, []string{"a"}) {
+		t.Fatalf("initial columns: got %v, want [a]", cols)
+	}
+
+	// Same-connection DDL.
+	if _, err := db.Exec("ALTER TABLE t ADD COLUMN b TEXT"); err != nil {
+		t.Fatal(err)
+	}
+	if cols := queryCols(); !reflect.DeepEqual(cols, []string{"a", "b"}) {
+		t.Fatalf("columns after same-connection ALTER: got %v, want [a b]", cols)
+	}
+
+	// DDL through a second database handle (different connection).
+	db2, err := sql.Open("sqlite3", "file:"+fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db2.Exec("ALTER TABLE t ADD COLUMN c TEXT"); err != nil {
+		db2.Close()
+		t.Fatal(err)
+	}
+	db2.Close()
+	if cols := queryCols(); !reflect.DeepEqual(cols, []string{"a", "b", "c"}) {
+		t.Fatalf("columns after cross-connection ALTER: got %v, want [a b c]", cols)
+	}
+
+	// The row data must scan consistently with the new column set.
+	var a string
+	var b, c any
+	if err := db.QueryRow("SELECT * FROM t").Scan(&a, &b, &c); err != nil {
+		t.Fatal(err)
+	}
+	if a != "x" || b != nil || c != nil {
+		t.Fatalf("row after ALTERs: got (%q, %v, %v), want (\"x\", <nil>, <nil>)", a, b, c)
+	}
+}
+
+// TestStmtCacheTempSchemaChange verifies that DDL on the temp schema also
+// invalidates cached statements referencing it.
+func TestStmtCacheTempSchemaChange(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:?_stmt_cache_size=8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.Exec("CREATE TEMP TABLE tt (a TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query("SELECT * FROM tt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows.Close() // cached
+
+	if _, err := db.Exec("ALTER TABLE tt ADD COLUMN b TEXT"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = db.Query("SELECT * FROM tt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a", "b"}; !reflect.DeepEqual(cols, want) {
+		t.Fatalf("columns after temp ALTER: got %v, want %v", cols, want)
+	}
+}
+
+// TestStmtCacheInTransaction verifies that DDL inside an explicit
+// transaction is honored by queries later in the same transaction (the
+// cache reports a miss there instead of probing the schema).
+func TestStmtCacheInTransaction(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:?_stmt_cache_size=8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.Exec("CREATE TABLE t (a TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query("SELECT * FROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows.Close() // cached
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec("ALTER TABLE t ADD COLUMN b TEXT"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = tx.Query("SELECT * FROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cols, err := rows.Columns()
+	rows.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a", "b"}; !reflect.DeepEqual(cols, want) {
+		t.Fatalf("columns inside transaction after ALTER: got %v, want %v", cols, want)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	// After commit the next lookup probes again and must see the change.
+	rows, err = db.Query("SELECT * FROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	cols, err = rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a", "b"}; !reflect.DeepEqual(cols, want) {
+		t.Fatalf("columns after commit: got %v, want %v", cols, want)
 	}
 }
 
