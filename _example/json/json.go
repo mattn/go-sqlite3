@@ -16,7 +16,17 @@ type Tag struct {
 }
 
 func (t *Tag) Scan(value interface{}) error {
-	return json.Unmarshal([]byte(value.(string)), t)
+	switch v := value.(type) {
+	case nil:
+		*t = Tag{}
+		return nil
+	case string:
+		return json.Unmarshal([]byte(v), t)
+	case []byte:
+		return json.Unmarshal(v, t)
+	default:
+		return fmt.Errorf("unsupported type %T for Tag", value)
+	}
 }
 
 func (t *Tag) Value() (driver.Value, error) {

@@ -26,6 +26,9 @@ func download(prefix string) (url string, content []byte, err error) {
 		return "", nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", nil, fmt.Errorf("downloading download.html: %s", resp.Status)
+	}
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -60,10 +63,13 @@ func download(prefix string) (url string, content []byte, err error) {
 	if err != nil {
 		return "", nil, err
 	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", nil, fmt.Errorf("downloading %s: %s", url, resp.Status)
+	}
 
 	// Ready Body Content
 	content, err = ioutil.ReadAll(resp.Body)
-	defer resp.Body.Close()
 	if err != nil {
 		return "", nil, err
 	}
@@ -72,41 +78,40 @@ func download(prefix string) (url string, content []byte, err error) {
 }
 
 func mergeFile(src string, dst string) error {
-	defer func() error {
-		fmt.Printf("Removing: %s\n", src)
-		err := os.Remove(src)
-
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}()
-
 	// Open destination
 	fdst, err := os.OpenFile(dst, os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		return err
 	}
-	defer fdst.Close()
 
 	// Read source content
 	content, err := ioutil.ReadFile(src)
 	if err != nil {
+		fdst.Close()
 		return err
 	}
 
 	// Add Additional newline
 	if _, err := fdst.WriteString("\n"); err != nil {
+		fdst.Close()
 		return err
 	}
 
 	fmt.Printf("Merging: %s into %s\n", src, dst)
 	if _, err = fdst.Write(content); err != nil {
+		fdst.Close()
 		return err
 	}
 
-	return nil
+	// Close may surface deferred write errors; the source must survive
+	// unless the merge fully reached the destination.
+	if err := fdst.Close(); err != nil {
+		return err
+	}
+
+	// Only remove the source once it has been merged successfully.
+	fmt.Printf("Removing: %s\n", src)
+	return os.Remove(src)
 }
 
 func main() {
@@ -170,6 +175,7 @@ func main() {
 			log.Fatal(err)
 		}
 		scanner := bufio.NewScanner(zr)
+		var werr error
 		for scanner.Scan() {
 			text := scanner.Text()
 			if text == `#include "sqlite3.h"` {
@@ -179,10 +185,18 @@ func main() {
 #endif
 `
 			}
-			_, err = fmt.Fprintln(f, text)
-			if err != nil {
+			_, werr = fmt.Fprintln(f, text)
+			if werr != nil {
 				break
 			}
+		}
+		// A write failure must not be masked by scanner.Err(), which
+		// reports nil in that case; either way a truncated output file
+		// must never be reported as successfully extracted.
+		if werr != nil {
+			zr.Close()
+			f.Close()
+			log.Fatal(werr)
 		}
 		err = scanner.Err()
 		if err != nil {
@@ -197,7 +211,9 @@ func main() {
 			log.Fatal(err)
 		}
 		zr.Close()
-		f.Close()
+		if err := f.Close(); err != nil {
+			log.Fatal(err)
+		}
 		fmt.Printf("Extracted: %v\n", filepath.Base(f.Name()))
 	}
 
