@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build cgo
-// +build cgo
 
 package sqlite3
 
@@ -95,7 +94,7 @@ func initDatabase(t *testing.T, db *sql.DB, rowCount int64) {
 			(key1, key_id, key2, key3, key4, key5, key6, data)
 			VALUES
 			(?, ?, ?, ?, ?, ?, ?, ?);`
-		args := []interface{}{
+		args := []any{
 			randStringBytes(50),
 			fmt.Sprint(i),
 			randStringBytes(50),

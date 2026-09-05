@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build sqlite_unlock_notify
-// +build sqlite_unlock_notify
 
 package sqlite3
 
