@@ -1324,6 +1324,50 @@ func TestDateTimeNow(t *testing.T) {
 	}
 }
 
+func TestBindErrorPaths(t *testing.T) {
+	d := &SQLiteDriver{}
+	conn, err := d.Open(":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer conn.Close()
+	c := conn.(*SQLiteConn)
+
+	if _, err := c.Exec("CREATE TABLE t (v)", nil); err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	// An unsupported Go type must report an explicit error instead of
+	// silently binding NULL: positional parameter.
+	_, err = c.Exec("INSERT INTO t VALUES (?)", []driver.Value{int32(1)})
+	if err == nil || !strings.Contains(err.Error(), "unsupported bind type int32") {
+		t.Errorf("positional bind of unsupported type: got %v, want unsupported bind type error", err)
+	}
+
+	// The same for a named parameter.
+	stmt, err := c.Prepare("INSERT INTO t VALUES (:x)")
+	if err != nil {
+		t.Fatal("Failed to prepare:", err)
+	}
+	err = stmt.(*SQLiteStmt).bind([]driver.NamedValue{{Name: "x", Ordinal: 1, Value: int32(1)}})
+	if err == nil || !strings.Contains(err.Error(), "unsupported bind type int32") {
+		t.Errorf("named bind of unsupported type: got %v, want unsupported bind type error", err)
+	}
+	stmt.Close()
+
+	// A genuine SQLite bind failure must preserve the recorded error.
+	stmt, err = c.Prepare("INSERT INTO t VALUES (?)")
+	if err != nil {
+		t.Fatal("Failed to prepare:", err)
+	}
+	err = stmt.(*SQLiteStmt).bind([]driver.NamedValue{{Ordinal: 2, Value: int64(1)}})
+	var serr Error
+	if !errors.As(err, &serr) || serr.Code != ErrRange {
+		t.Errorf("out-of-range bind: got %v, want SQLITE_RANGE error", err)
+	}
+	stmt.Close()
+}
+
 func TestFunctionRegistration(t *testing.T) {
 	addi8_16_32 := func(a int8, b int16) int32 { return int32(a) + int32(b) }
 	addi64 := func(a, b int64) int64 { return a + b }
@@ -1436,6 +1480,107 @@ func TestFunctionRegistration(t *testing.T) {
 		} else if !reflect.DeepEqual(ret.Elem().Interface(), op.expected) {
 			t.Errorf("Query %q returned wrong value: got %v (%T), want %v (%T)", op.query, ret.Elem().Interface(), ret.Elem().Interface(), op.expected, op.expected)
 		}
+	}
+}
+
+func TestFunctionRegistrationNamedTypes(t *testing.T) {
+	type NInt int64
+	type NFloat float64
+	type NString string
+	type NBlob []byte
+	type NBool bool
+
+	dur := func(n int64) time.Duration { return time.Duration(n) }
+	nint := func(a, b NInt) NInt { return a + b }
+	nfloat := func(a, b NFloat) NFloat { return a + b }
+	nstring := func(s NString) NString { return s + "!" }
+	nblob := func(s string) NBlob { return NBlob(s) }
+	nbool := func(b NBool) NBool { return !b }
+
+	sql.Register("sqlite3_FunctionRegistrationNamedTypes", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			if err := conn.RegisterFunc("dur", dur, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nint", nint, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nfloat", nfloat, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nstring", nstring, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("nblob", nblob, true); err != nil {
+				return err
+			}
+			return conn.RegisterFunc("nbool", nbool, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_FunctionRegistrationNamedTypes", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	ops := []struct {
+		query    string
+		expected any
+	}{
+		{"SELECT dur(42)", int64(42)},
+		{"SELECT nint(1,2)", int64(3)},
+		{"SELECT nfloat(1.5,1.5)", float64(3)},
+		{`SELECT nstring('foo')`, "foo!"},
+		{`SELECT nblob('xy')`, []byte("xy")},
+		// An empty blob result is mapped to SQL NULL.
+		{`SELECT nblob('') IS NULL`, true},
+		{"SELECT nbool(0)", true},
+	}
+
+	for _, op := range ops {
+		ret := reflect.New(reflect.TypeOf(op.expected))
+		err = db.QueryRow(op.query).Scan(ret.Interface())
+		if err != nil {
+			t.Errorf("Query %q failed: %s", op.query, err)
+		} else if !reflect.DeepEqual(ret.Elem().Interface(), op.expected) {
+			t.Errorf("Query %q returned wrong value: got %v (%T), want %v (%T)", op.query, ret.Elem().Interface(), ret.Elem().Interface(), op.expected, op.expected)
+		}
+	}
+}
+
+func TestFunctionArgStringContainingZero(t *testing.T) {
+	sql.Register("sqlite3_FunctionArgZero", &SQLiteDriver{
+		ConnectHook: func(conn *SQLiteConn) error {
+			// arglen reports how many bytes of the text argument reached the
+			// Go side; echo returns the string result verbatim.
+			if err := conn.RegisterFunc("arglen", func(s string) int64 { return int64(len(s)) }, true); err != nil {
+				return err
+			}
+			return conn.RegisterFunc("echo", func(s string) string { return s }, true)
+		},
+	})
+	db, err := sql.Open("sqlite3_FunctionArgZero", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	const text = "foo\x00bar"
+
+	var n int64
+	if err := db.QueryRow("SELECT arglen(?)", text).Scan(&n); err != nil {
+		t.Fatal("Failed to call db.QueryRow:", err)
+	}
+	if n != int64(len(text)) {
+		t.Errorf("text argument truncated at embedded NUL: got len %d, want %d", n, len(text))
+	}
+
+	var got string
+	if err := db.QueryRow("SELECT echo(?)", text).Scan(&got); err != nil {
+		t.Fatal("Failed to call db.QueryRow:", err)
+	}
+	if got != text {
+		t.Errorf("text result truncated at embedded NUL: got %q (len %d), want %q (len %d)", got, len(got), text, len(text))
 	}
 }
 
@@ -2020,6 +2165,82 @@ func TestNamedParam(t *testing.T) {
 	rows.Scan(&id, &name, &amount)
 	if id != 2 || name != "grault" || amount != 123 {
 		t.Errorf("Expected %d, %q, %d for fetched result, but got %d, %q, %d:", 2, "grault", 123, id, name, amount)
+	}
+}
+
+func TestNamedParamClearBindings(t *testing.T) {
+	tempFilename := TempFilename(t)
+	defer os.Remove(tempFilename)
+	db, err := sql.Open("sqlite3", tempFilename)
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("create table foo (x integer, y integer, z text)")
+	if err != nil {
+		t.Fatal("Failed to create table:", err)
+	}
+
+	// First insert with all named params specified
+	_, err = db.Exec("insert into foo(x, y, z) values($x, $y, $z)",
+		sql.Named("x", 1), sql.Named("y", 2), sql.Named("z", "three"))
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	// Second insert: $y should be NULL since we pass nil explicitly
+	_, err = db.Exec("insert into foo(x, y, z) values($x, $y, $z)",
+		sql.Named("x", 10), sql.Named("y", nil), sql.Named("z", nil))
+	if err != nil {
+		t.Fatal("Failed to insert:", err)
+	}
+
+	var x int
+	var y, z sql.NullInt64
+	err = db.QueryRow("select x, y, z from foo where x = 10").Scan(&x, &y, &z)
+	if err != nil {
+		t.Fatal("Failed to query:", err)
+	}
+	if y.Valid {
+		t.Errorf("Expected y to be NULL, got %d", y.Int64)
+	}
+	if z.Valid {
+		t.Errorf("Expected z to be NULL, got %d", z.Int64)
+	}
+}
+
+// https://github.com/mattn/go-sqlite3/issues/1390
+// sqlite3_prepare_v2 returns SQLITE_OK with a NULL statement handle when the
+// input contains no SQL (only whitespace or comments). Querying such input
+// must not panic.
+func TestQueryCommentOnly(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	cases := []string{"", "   ", "-- comment", "---- comment\n", "/* block */"}
+	for _, q := range cases {
+		var x int
+		if err := db.QueryRow(q).Scan(&x); err != sql.ErrNoRows {
+			t.Errorf("QueryRow(%q): expected ErrNoRows, got %v", q, err)
+		}
+
+		rows, err := db.Query(q)
+		if err != nil {
+			t.Errorf("Query(%q): unexpected error: %v", q, err)
+			continue
+		}
+		if rows.Next() {
+			t.Errorf("Query(%q): expected no rows", q)
+		}
+		rows.Close()
+
+		if _, err := db.Exec(q); err != nil {
+			t.Errorf("Exec(%q): unexpected error: %v", q, err)
+		}
 	}
 }
 

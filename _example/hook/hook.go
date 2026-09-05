@@ -45,10 +45,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = srcDb.Query("select * from foo")
+	rows, err := srcDb.Query("select * from foo")
 	if err != nil {
 		log.Fatal(err)
 	}
+	rows.Close()
 	destDb, err := sql.Open("sqlite3_with_hook_example", "./bar.db")
 	if err != nil {
 		log.Fatal(err)
@@ -65,14 +66,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = destDb.Query("select * from foo")
+	rows, err = destDb.Query("select * from foo")
 	if err != nil {
 		log.Fatal(err)
 	}
+	rows.Close()
 	_, err = destDb.Exec("insert into foo values(3, 'bar')")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	bk.Finish()
+	if err := bk.Finish(); err != nil {
+		log.Fatal(err)
+	}
 }
