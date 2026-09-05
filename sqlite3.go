@@ -135,34 +135,6 @@ _sqlite3_reset_clear(sqlite3_stmt* stmt)
   return rv;
 }
 
-// Steps the pre-prepared schema probe statement and returns its
-// cumulative re-prepare count, in a single CGO crossing. The probe
-// references the main and temp schemas, so stepping it makes SQLite
-// verify their schema cookies and reload the connection's schema after
-// a change by another connection; the re-prepare count then reflects
-// that change. Returns -1 on error or when sqlite3_stmt_status is too
-// old to report re-prepares, and -2 inside an explicit transaction,
-// where the probe must not run: its read would widen the transaction's
-// snapshot, and the schema cannot change under an open snapshot anyway.
-static sqlite3_int64
-_sqlite3_schema_generation(sqlite3_stmt* stmt)
-{
-#ifdef SQLITE_STMTSTATUS_REPREPARE
-  int rc;
-  if (!sqlite3_get_autocommit(sqlite3_db_handle(stmt))) {
-    return -2;
-  }
-  rc = sqlite3_step(stmt);
-  sqlite3_reset(stmt);
-  if (rc != SQLITE_ROW && rc != SQLITE_DONE) {
-    return -1;
-  }
-  return sqlite3_stmt_status(stmt, SQLITE_STMTSTATUS_REPREPARE, 0);
-#else
-  return -1;
-#endif
-}
-
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
 extern int _sqlite3_step_blocking(sqlite3_stmt *stmt);
 extern int _sqlite3_step_row_blocking(sqlite3_stmt* stmt, long long* rowid, long long* changes);
@@ -247,6 +219,25 @@ _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_
   return sqlite3_prepare_v2(db, zSql, nBytes, ppStmt, pzTail);
 }
 #endif
+
+// Steps a statement once and reports the post-step column count and the
+// cumulative re-prepare count, in a single CGO crossing. Used for the
+// eager first step of cached statements: only after the first step is an
+// expired statement guaranteed to have been re-prepared following a
+// schema change, so only then do the column count and metadata describe
+// the current schema.
+static int
+_sqlite3_step_columns(sqlite3_stmt* stmt, int* ncol, int* repreps)
+{
+  int rv = _sqlite3_step_internal(stmt);
+  *ncol = sqlite3_column_count(stmt);
+#ifdef SQLITE_STMTSTATUS_REPREPARE
+  *repreps = sqlite3_stmt_status(stmt, SQLITE_STMTSTATUS_REPREPARE, 0);
+#else
+  *repreps = -1;
+#endif
+  return rv;
+}
 
 void _sqlite3_result_text(sqlite3_context* ctx, const char* s, int n) {
   sqlite3_result_text(ctx, s, n, &free);
@@ -490,13 +481,6 @@ type SQLiteConn struct {
 	// only field safe to read without the lock.
 	stmtCache        []*SQLiteStmt
 	stmtCacheEnabled bool
-	// schemaProbeStmt is a pre-prepared statement referencing the
-	// schema, used to detect (and make SQLite pick up) schema changes
-	// that expire cached statements; it is only set when the statement
-	// cache is enabled. schemaGen holds the probe's re-prepare count
-	// observed at the last cache lookup.
-	schemaProbeStmt *C.sqlite3_stmt
-	schemaGen       C.sqlite3_int64
 }
 
 // SQLiteTx implements driver.Tx.
@@ -515,6 +499,10 @@ type SQLiteStmt struct {
 	namedParams map[string][3]int
 	cacheKey    string
 	metadata    *sqliteStmtMetadata
+	// repreps is the statement's cumulative re-prepare count observed
+	// at the last eager first step; a change means SQLite re-prepared
+	// the statement after a schema change and metadata must be rebuilt.
+	repreps C.int
 }
 
 type sqliteStmtMetadata struct {
@@ -538,7 +526,10 @@ type SQLiteRows struct {
 	colvals          *C.sqlite3_go_col
 	ctx              context.Context // no better alternative to pass context into Next() method
 	stopCancellation func() bool
-	closemu          sync.Mutex
+	// pendingStep buffers the result of the eager first step taken for
+	// cached statements in query(); -1 when no step is buffered.
+	pendingStep C.int
+	closemu     sync.Mutex
 }
 
 type functionInfo struct {
@@ -1649,38 +1640,15 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	if conn.stmtCacheEnabled && int(C.sqlite3_libversion_number()) < 3020000 {
-		// The runtime library predates SQLITE_STMTSTATUS_REPREPARE
-		// (3.20.0); without it cached statements expired by schema
-		// changes cannot be detected, so run without the cache. The
-		// compile-time check in _sqlite3_schema_generation is not
-		// enough: with USE_LIBSQLITE3 the header and the runtime
-		// library can differ.
+		// Schema-change detection for cached statements relies on
+		// SQLITE_STMTSTATUS_REPREPARE (3.20.0); with an older runtime
+		// library run without the cache rather than risk serving
+		// statements whose metadata a schema change has expired. The
+		// compile-time check in _sqlite3_step_columns is not enough:
+		// with USE_LIBSQLITE3 the header and the runtime library can
+		// differ.
 		conn.stmtCache = nil
 		conn.stmtCacheEnabled = false
-	}
-	if conn.stmtCacheEnabled {
-		// Used to detect schema changes that expire cached statements;
-		// see takeCachedStmt. Statements referencing ATTACHed schemas
-		// are not covered: their schema changes go undetected, which
-		// mirrors the pre-cache limitation that column metadata is
-		// captured before the first step.
-		const probe = "SELECT 1 FROM sqlite_master, sqlite_temp_master LIMIT 0"
-		cp := C.CString(probe)
-		rv := C._sqlite3_prepare_v2_internal(db, cp, C.int(len(probe)), &conn.schemaProbeStmt, nil)
-		C.free(unsafe.Pointer(cp))
-		if rv != C.SQLITE_OK {
-			return fail(lastError(db))
-		}
-		conn.schemaGen = C._sqlite3_schema_generation(conn.schemaProbeStmt)
-		if conn.schemaGen < 0 {
-			// The runtime SQLite cannot report re-prepare counts
-			// (pre-3.20 system library); run without the cache
-			// rather than risk serving expired statements.
-			C.sqlite3_finalize(conn.schemaProbeStmt)
-			conn.schemaProbeStmt = nil
-			conn.stmtCache = nil
-			conn.stmtCacheEnabled = false
-		}
 	}
 
 	exec := func(s string) error {
@@ -1977,10 +1945,6 @@ func (c *SQLiteConn) Close() error {
 	}
 	runtime.SetFinalizer(c, nil)
 	c.closeCachedStmtsLocked()
-	if c.schemaProbeStmt != nil {
-		C.sqlite3_finalize(c.schemaProbeStmt)
-		c.schemaProbeStmt = nil
-	}
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
 		return lastError(c.db)
@@ -2008,27 +1972,6 @@ func (c *SQLiteConn) takeCachedStmt(query string) *SQLiteStmt {
 	defer c.mu.Unlock()
 
 	if c.db == nil {
-		return nil
-	}
-	if c.schemaProbeStmt == nil {
-		return nil
-	}
-	// A schema change expires every cached statement. SQLite would
-	// re-prepare them transparently at step time, but the column count
-	// and metadata are captured before stepping and would silently
-	// describe the old schema. Stepping the probe forces SQLite to
-	// notice a schema change and reload the connection's schema, and
-	// bumps the probe's re-prepare count when that happens; flush the
-	// cache then (and when the probe fails: fail safe). Inside an
-	// explicit transaction the probe must not run; report a miss so
-	// the statement is prepared against the transaction's schema.
-	g := C._sqlite3_schema_generation(c.schemaProbeStmt)
-	if g == -2 {
-		return nil
-	}
-	if g < 0 || g != c.schemaGen {
-		c.schemaGen = g
-		c.closeCachedStmtsLocked()
 		return nil
 	}
 	// Scan from the MRU end (tail) so that a stmt put just before is
@@ -2453,13 +2396,24 @@ func (s *SQLiteStmt) query(ctx context.Context, args []driver.NamedValue) (drive
 	}
 
 	rows := &SQLiteRows{
-		s:        s,
-		nc:       int32(C.sqlite3_column_count(s.s)),
-		cls:      s.cls,
-		cols:     nil,
-		decltype: nil,
-		colvals:  nil,
-		ctx:      ctx,
+		s:           s,
+		cls:         s.cls,
+		ctx:         ctx,
+		pendingStep: -1,
+	}
+	if s.cacheKey != "" {
+		// A schema change expires cached statements and SQLite only
+		// re-prepares them on their next step, so the column count and
+		// metadata read before stepping could describe the old schema.
+		// Take the query's first step eagerly (it was going to run at
+		// the first Next anyway) and read them afterwards.
+		rv, err := rows.eagerFirstStepLocked()
+		if err != nil {
+			return nil, err
+		}
+		rows.pendingStep = rv
+	} else {
+		rows.nc = int32(C.sqlite3_column_count(s.s))
 	}
 	if rows.nc > 0 {
 		rows.colvals = (*C.sqlite3_go_col)(C.malloc(C.size_t(rows.nc) * C.size_t(unsafe.Sizeof(C.sqlite3_go_col{}))))
@@ -2717,6 +2671,11 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 
+	if rv := rc.pendingStep; rv >= 0 {
+		rc.pendingStep = -1
+		return rc.readStepResultLocked(dest, rv)
+	}
+
 	if rc.stopCancellation == nil {
 		if rc.ctx.Done() == nil {
 			rv := C._sqlite3_step_internal(rc.s.s)
@@ -2736,6 +2695,55 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 		return ctxErr
 	}
 	return err
+}
+
+// eagerFirstStepLocked performs the first step of a cached statement
+// under the same cancellation rules as Next, records the post-step
+// column count, and drops the statement's cached metadata when SQLite
+// re-prepared it after a schema change. Note that this runs the first
+// step at query time, so a data-modifying statement issued through
+// Query executes even if Next is never called.
+func (rc *SQLiteRows) eagerFirstStepLocked() (C.int, error) {
+	s := rc.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if rc.ctx.Done() != nil && rc.stopCancellation == nil {
+		conn := s.c
+		rc.stopCancellation = context.AfterFunc(rc.ctx, func() {
+			conn.interruptActiveRows(rc)
+		})
+	}
+	if err := rc.ctx.Err(); err != nil {
+		rc.stopWatchingCancellation()
+		return 0, err
+	}
+	var ncol, repreps C.int
+	var rv C.int
+	if rc.ctx.Done() == nil {
+		rv = C._sqlite3_step_columns(s.s, &ncol, &repreps)
+	} else {
+		rc.startStepping()
+		rv = C._sqlite3_step_columns(s.s, &ncol, &repreps)
+		rc.finishStepping()
+	}
+	if err := rc.ctx.Err(); err != nil {
+		rc.stopWatchingCancellation()
+		C._sqlite3_reset_clear(s.s)
+		return 0, err
+	}
+	if rv != C.SQLITE_ROW && rv != C.SQLITE_DONE {
+		rc.stopWatchingCancellation()
+		err := s.c.lastError()
+		C._sqlite3_reset_clear(s.s)
+		return 0, err
+	}
+	rc.nc = int32(ncol)
+	if repreps != s.repreps {
+		s.repreps = repreps
+		s.metadata = nil
+	}
+	return rv, nil
 }
 
 func (rc *SQLiteRows) stepCancellableLocked() C.int {
