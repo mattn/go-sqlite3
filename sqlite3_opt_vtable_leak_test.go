@@ -11,6 +11,15 @@ import (
 
 var leakCheckDriverSeq int32
 
+func countHandles() int {
+	n := 0
+	handleVals.Range(func(_, _ any) bool {
+		n++
+		return true
+	})
+	return n
+}
+
 func TestVtabCursorHandleRelease(t *testing.T) {
 	// Use a unique driver name so repeated runs (e.g. -count=2) do not
 	// panic on duplicate registration.
@@ -35,10 +44,10 @@ func TestVtabCursorHandleRelease(t *testing.T) {
 			t.Fatal(err)
 		}
 		if i == 0 {
-			before = len(loadHandleVals())
+			before = countHandles()
 		}
 	}
-	after = len(loadHandleVals())
+	after = countHandles()
 	if after > before {
 		t.Fatalf("handle map grew from %d to %d over repeated cursor open/close", before, after)
 	}
