@@ -20,14 +20,26 @@ func main() {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("select * from series")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var value int
-		rows.Scan(&value)
-		fmt.Printf("value: %d\n", value)
+	for _, query := range []string{
+		"select value from series where value between 3 and 5",
+		"select value from series where start = 10 and stop = 20 and step = 5",
+		"select value from series where start = 3 and stop = -3 and step = -2",
+	} {
+		fmt.Println(query)
+		rows, err := db.Query(query)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for rows.Next() {
+			var value int
+			if err := rows.Scan(&value); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("value: %d\n", value)
+		}
+		if err := rows.Err(); err != nil {
+			log.Fatal(err)
+		}
+		rows.Close()
 	}
 }
