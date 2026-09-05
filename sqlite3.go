@@ -968,7 +968,7 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 			na := s.NumInput()
 			if len(args)-start < na {
 				s.Close()
-				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args))
+				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args)-start)
 			}
 			stmtArgs := stmtArgs(args, start, na)
 			res, err = s.(*SQLiteStmt).exec(ctx, stmtArgs)
