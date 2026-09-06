@@ -3067,3 +3067,31 @@ func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool)
 	}
 	return nil
 }
+
+// SQLiteConnector implements driver.Connector for custom connection handling.
+type SQLiteConnector struct {
+	DSN            string
+	DriverInstance *SQLiteDriver
+}
+
+// Connect implements driver.Connector.
+// If the provided context is already cancelled, returns its error immediately.
+func (c *SQLiteConnector) Connect(ctx context.Context) (driver.Conn, error) {
+    if err := ctx.Err(); err != nil {
+        return nil, err
+    }
+    return c.DriverInstance.Open(c.DSN)
+}
+
+// Driver returns the underlying driver.
+func (c *SQLiteConnector) Driver() driver.Driver {
+	return c.DriverInstance
+}
+
+// NewConnector returns a new SQLiteConnector.
+func NewConnector(dsn string) *SQLiteConnector {
+	return &SQLiteConnector{
+		DSN:            dsn,
+		DriverInstance: &SQLiteDriver{},
+	}
+}
