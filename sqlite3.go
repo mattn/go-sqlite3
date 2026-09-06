@@ -2690,6 +2690,23 @@ func (s *SQLiteStmt) Readonly() bool {
 	return C.sqlite3_stmt_readonly(s.s) == 1
 }
 
+// ColumnCount returns the number of columns in the result set returned by
+// the prepared statement, or 0 if it returns no data (e.g. plain INSERT).
+//
+// See: https://sqlite.org/c3ref/column_count.html
+func (s *SQLiteStmt) ColumnCount() int {
+	return int(C.sqlite3_column_count(s.s))
+}
+
+// Tail returns the unprepared remainder of the SQL string this statement was
+// prepared from — everything after the first complete statement, trimmed of
+// whitespace. It is empty when the string held a single statement.
+//
+// See: https://sqlite.org/c3ref/prepare.html (pzTail)
+func (s *SQLiteStmt) Tail() string {
+	return s.t
+}
+
 // Close the rows.
 func (rc *SQLiteRows) Close() error {
 	rc.closemu.Lock()
