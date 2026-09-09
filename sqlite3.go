@@ -28,6 +28,7 @@ package sqlite3
 #else
 #include <sqlite3.h>
 #endif
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -2219,11 +2220,16 @@ func (c *SQLiteConn) SetLimit(id int, newVal int) int {
 // This method is not thread-safe as the returned error code can be changed by
 // another call if invoked concurrently.
 //
+// The arg value must fit in a C int; otherwise an error is returned.
 // Use SetFileControlInt64 instead if the argument for the opcode is documented
 // as a pointer to a sqlite3_int64.
 //
 // See: sqlite3_file_control, https://www.sqlite.org/c3ref/file_control.html
 func (c *SQLiteConn) SetFileControlInt(dbName string, op int, arg int) error {
+	if int64(arg) < C.INT_MIN || int64(arg) > C.INT_MAX {
+		return fmt.Errorf("file control argument %d is outside the range of C int", arg)
+	}
+
 	if dbName == "" {
 		dbName = "main"
 	}

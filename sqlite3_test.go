@@ -14,9 +14,11 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -2008,6 +2010,51 @@ func TestSetFileControlInt(t *testing.T) {
 	})
 }
 
+func TestSetFileControlIntRange(t *testing.T) {
+	cases := []struct {
+		name   string
+		value  int64
+		reject bool
+	}{
+		{"minimum", math.MinInt32, false},
+		{"negative", -1, false},
+		{"zero", 0, false},
+		{"positive", 4096, false},
+		{"maximum", math.MaxInt32, false},
+		{"underflow", math.MinInt32 - 1, true},
+		{"overflow", math.MaxInt32 + 1, true},
+		{"positiveWrapToZero", 1 << 32, true},
+		{"negativeWrapToZero", -(1 << 32), true},
+		{"minimumInt64", math.MinInt64, true},
+		{"maximumInt64", math.MaxInt64, true},
+	}
+	for _, dbName := range []string{"", "main"} {
+		t.Run("database_"+dbName, func(t *testing.T) {
+			raw, err := (&SQLiteDriver{}).Open(filepath.Join(t.TempDir(), "test.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer raw.Close()
+			conn := raw.(*SQLiteConn)
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					if int64(int(tc.value)) != tc.value {
+						t.Skipf("argument is not representable by Go int%d", strconv.IntSize)
+					}
+					// Configure the chunk size without performing any database writes.
+					err := conn.SetFileControlInt(dbName, SQLITE_FCNTL_CHUNK_SIZE, int(tc.value))
+					if tc.reject && err == nil {
+						t.Fatalf("out-of-range argument %d was accepted", tc.value)
+					}
+					if !tc.reject && err != nil {
+						t.Fatalf("representable argument %d: %v", tc.value, err)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestSetFileControlInt64(t *testing.T) {
 	const GiB = 1024 * 1024 * 1024
 
@@ -2022,15 +2069,21 @@ func TestSetFileControlInt64(t *testing.T) {
 			},
 		})
 
-		db, err := sql.Open("sqlite3", "file:/dbname?vfs=memdb")
+		db, err := sql.Open("sqlite3_FCNTL_SIZE_LIMIT", "file:/dbname?vfs=memdb")
 		if err != nil {
 			t.Fatal("Failed to open database:", err)
 		}
-		err = db.Ping()
-		if err != nil {
-			t.Fatal("Failed to ping", err)
+		defer db.Close()
+		if _, err := db.Exec("CREATE TABLE t (x); INSERT INTO t VALUES (1)"); err != nil {
+			t.Fatal("Failed to write with a 4 GiB size limit", err)
 		}
-		db.Close()
+		var value int
+		if err := db.QueryRow("SELECT x FROM t").Scan(&value); err != nil {
+			t.Fatal("Failed to read with a 4 GiB size limit", err)
+		}
+		if value != 1 {
+			t.Fatalf("Unexpected stored value: %d", value)
+		}
 	})
 }
 
