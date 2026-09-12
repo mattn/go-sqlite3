@@ -1971,6 +1971,124 @@ func TestAuthorizer(t *testing.T) {
 	}
 }
 
+func TestAuthorizerHandleRelease(t *testing.T) {
+	openConn := func() *SQLiteConn {
+		t.Helper()
+		conn, err := (&SQLiteDriver{}).Open(":memory:")
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := conn.(*SQLiteConn)
+		t.Cleanup(func() {
+			if err := c.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+		return c
+	}
+	countHandles := func(c *SQLiteConn) int {
+		got := 0
+		handleVals.Range(func(_, value any) bool {
+			if value.(handleVal).db == c {
+				got++
+			}
+			return true
+		})
+		return got
+	}
+	checkHandles := func(c *SQLiteConn, want int) {
+		t.Helper()
+		got := countHandles(c)
+		if got != want {
+			t.Fatalf("connection has %d callback handles, want %d", got, want)
+		}
+	}
+
+	c, other := openConn(), openConn()
+	updates := 0
+	c.RegisterUpdateHook(func(int, string, string, int64) { updates++ })
+	if err := c.RegisterFunc("retained", func() int { return 42 }, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Exec("CREATE TABLE foo (value INTEGER)", nil); err != nil {
+		t.Fatal(err)
+	}
+	baseline := countHandles(c)
+	otherBaseline := countHandles(other)
+	otherCalls := 0
+	other.RegisterAuthorizer(func(int, string, string, string) int {
+		otherCalls++
+		return SQLITE_OK
+	})
+	checkHandles(other, otherBaseline+1)
+	c.RegisterAuthorizer(nil)
+	checkHandles(c, baseline)
+
+	calls := make([]int, 3)
+	for i := range calls {
+		i := i
+		previous := append([]int(nil), calls...)
+		c.RegisterAuthorizer(func(int, string, string, string) int {
+			calls[i]++
+			return SQLITE_OK
+		})
+		checkHandles(c, baseline+1)
+		if _, err := c.Exec("INSERT INTO foo VALUES (retained())", nil); err != nil {
+			t.Fatal(err)
+		}
+		if calls[i] == 0 {
+			t.Fatalf("authorizer %d was not called", i)
+		}
+		if !reflect.DeepEqual(calls[:i], previous[:i]) {
+			t.Fatal("a replaced authorizer was called")
+		}
+	}
+
+	previous := append([]int(nil), calls...)
+	c.RegisterAuthorizer(nil)
+	c.RegisterAuthorizer(nil)
+	checkHandles(c, baseline)
+	if _, err := c.Exec("INSERT INTO foo VALUES (retained())", nil); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(calls, previous) {
+		t.Fatal("a removed authorizer was called")
+	}
+	if updates != len(calls)+1 {
+		t.Fatalf("update hook called %d times, want %d", updates, len(calls)+1)
+	}
+	rows, err := c.Query("SELECT sum(value) FROM foo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := make([]driver.Value, 1)
+	if err := rows.Next(values); err != nil {
+		rows.Close()
+		t.Fatal(err)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if values[0] != int64(42*(len(calls)+1)) {
+		t.Fatalf("sum(value) = %v, want %d", values[0], 42*(len(calls)+1))
+	}
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	checkHandles(c, 0)
+	checkHandles(other, otherBaseline+1)
+	if _, err := other.Exec("SELECT 1", nil); err != nil {
+		t.Fatal(err)
+	}
+	if otherCalls == 0 {
+		t.Fatal("the other connection's authorizer was not called")
+	}
+	if err := other.Close(); err != nil {
+		t.Fatal(err)
+	}
+	checkHandles(other, 0)
+}
+
 func TestSetFileControlInt(t *testing.T) {
 	t.Run("PERSIST_WAL", func(t *testing.T) {
 		tempFilename := TempFilename(t)
