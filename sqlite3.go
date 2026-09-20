@@ -3026,8 +3026,7 @@ func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool)
 				// Assume a millisecond unix timestamp if it's 13 digits -- too
 				// large to be a reasonable timestamp in seconds.
 				if val > 1e12 || val < -1e12 {
-					val *= int64(time.Millisecond) // convert ms to nsec
-					t = time.Unix(0, val)
+					t = time.UnixMilli(val)
 				} else {
 					t = time.Unix(val, 0)
 				}
