@@ -29,40 +29,53 @@ const contextTestControlledQuery = `
 	SELECT sum(value) FROM numbers`
 
 func TestRowsContextCancelDuringStep(t *testing.T) {
-	conn := openContextTestConn(t)
-	started, stopQuery := registerContextTestQuery(t, conn)
+	for _, laterRow := range []bool{false, true} {
+		t.Run(fmt.Sprintf("laterRow=%t", laterRow), func(t *testing.T) {
+			query := contextTestControlledQuery
+			if laterRow {
+				query = "SELECT 1 UNION ALL SELECT (" + query + ")"
+			}
+			conn := openContextTestConn(t)
+			started, stopQuery := registerContextTestQuery(t, conn)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	// The first step runs inside QueryContext, so issue the query from a
-	// goroutine and cancel while it is stepping.
-	nextDone := make(chan error, 1)
-	go func() {
-		rows, err := conn.QueryContext(ctx, contextTestControlledQuery, contextTestQueryArgs(contextTestMaxRows))
-		if err != nil {
-			nextDone <- err
-			return
-		}
-		defer rows.Close()
-		nextDone <- rows.Next(make([]driver.Value, 1))
-	}()
+			ctx, cancel := context.WithCancel(context.Background())
+			// Run both the eager first step and a subsequent Next under cancellation.
+			nextDone := make(chan error, 1)
+			go func() {
+				rows, err := conn.QueryContext(ctx, query, contextTestQueryArgs(contextTestMaxRows))
+				if err != nil {
+					nextDone <- err
+					return
+				}
+				defer rows.Close()
+				if laterRow {
+					if err := rows.Next(make([]driver.Value, 1)); err != nil {
+						nextDone <- err
+						return
+					}
+				}
+				nextDone <- rows.Next(make([]driver.Value, 1))
+			}()
 
-	select {
-	case <-started:
-	case <-time.After(contextTestTimeout):
-		cancel()
-		_ = stopContextTestQuery(t, stopQuery, nextDone)
-		t.Fatal("query did not start")
-	}
-	cancel()
+			select {
+			case <-started:
+			case <-time.After(contextTestTimeout):
+				cancel()
+				_ = stopContextTestQuery(t, stopQuery, nextDone)
+				t.Fatal("query did not start")
+			}
+			cancel()
 
-	select {
-	case err := <-nextDone:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Next error = %v, want context.Canceled", err)
-		}
-	case <-time.After(contextTestTimeout):
-		_ = stopContextTestQuery(t, stopQuery, nextDone)
-		t.Fatal("Next did not return after cancellation")
+			select {
+			case err := <-nextDone:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("Next error = %v, want context.Canceled", err)
+				}
+			case <-time.After(contextTestTimeout):
+				_ = stopContextTestQuery(t, stopQuery, nextDone)
+				t.Fatal("Next did not return after cancellation")
+			}
+		})
 	}
 }
 

@@ -220,6 +220,18 @@ _sqlite3_prepare_v2_internal(sqlite3 *db, const char *zSql, int nBytes, sqlite3_
 }
 #endif
 
+// Step and fetch the current row in one CGO crossing. Column pointers
+// remain valid until the next step/reset and are copied by readStepResult.
+static int
+_sqlite3_step_values(sqlite3_stmt* stmt, int ncol, sqlite3_go_col* cols)
+{
+  int rv = _sqlite3_step_internal(stmt);
+  if (rv == SQLITE_ROW) {
+    _sqlite3_column_values(stmt, ncol, cols);
+  }
+  return rv;
+}
+
 // Resets a statement, binds positional arguments, takes the first step
 // and reports the post-step column count and cumulative re-prepare
 // count, all in a single CGO crossing. Arguments arrive as
@@ -578,6 +590,11 @@ type SQLiteStmt struct {
 	// per-query allocation; a statement has at most one query binding
 	// at a time.
 	cargs []C.sqlite3_go_col
+	// Reuse the C output parameters under mu instead of allocating
+	// escaping local variables on every query.
+	stepResult struct {
+		ncol, repreps, filled C.int
+	}
 }
 
 type sqliteStmtMetadata struct {
@@ -2849,8 +2866,8 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 
 	if rc.stopCancellation == nil {
 		if rc.ctx.Done() == nil {
-			rv := C._sqlite3_step_internal(rc.s.s)
-			return rc.readStepResult(dest, rv, false)
+			rv := C._sqlite3_step_values(rc.s.s, C.int(len(dest)), rc.colvals)
+			return rc.readStepResult(dest, rv, true)
 		}
 		conn := rc.s.c
 		rc.stopCancellation = context.AfterFunc(rc.ctx, func() {
@@ -2860,8 +2877,8 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	if err := rc.ctx.Err(); err != nil {
 		return err
 	}
-	rv := rc.stepCancellableLocked()
-	err := rc.readStepResult(dest, rv, false)
+	rv := rc.stepCancellableLocked(len(dest))
+	err := rc.readStepResult(dest, rv, true)
 	if ctxErr := rc.ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
@@ -2910,16 +2927,17 @@ func (rc *SQLiteRows) bindAndFirstStepLocked(args []driver.NamedValue) (C.int, e
 		rc.stopWatchingCancellation()
 		return 0, err
 	}
-	var ncol, repreps, filled C.int
+	result := &s.stepResult
+	result.filled = 0
 	step := func() C.int {
 		if fused {
 			var argp *C.sqlite3_go_col
 			if len(cargs) > 0 {
 				argp = &cargs[0]
 			}
-			return C._sqlite3_bind_step_columns(s.s, argp, C.int(len(cargs)), &ncol, &repreps, s.colvals, C.int(s.colvalsCap), &filled)
+			return C._sqlite3_bind_step_columns(s.s, argp, C.int(len(cargs)), &result.ncol, &result.repreps, s.colvals, C.int(s.colvalsCap), &result.filled)
 		}
-		return C._sqlite3_step_columns(s.s, &ncol, &repreps)
+		return C._sqlite3_step_columns(s.s, &result.ncol, &result.repreps)
 	}
 	var rv C.int
 	if rc.ctx.Done() == nil {
@@ -2942,10 +2960,10 @@ func (rc *SQLiteRows) bindAndFirstStepLocked(args []driver.NamedValue) (C.int, e
 		C._sqlite3_reset_clear(s.s)
 		return 0, err
 	}
-	rc.nc = int32(ncol)
-	rc.pendingFilled = filled != 0
-	if repreps != s.repreps {
-		s.repreps = repreps
+	rc.nc = int32(result.ncol)
+	rc.pendingFilled = result.filled != 0
+	if result.repreps != s.repreps {
+		s.repreps = result.repreps
 		s.metadata = nil
 	}
 	if rc.nc > 0 {
@@ -2968,10 +2986,10 @@ func (rc *SQLiteRows) bindAndFirstStepLocked(args []driver.NamedValue) (C.int, e
 	return rv, nil
 }
 
-func (rc *SQLiteRows) stepCancellableLocked() C.int {
+func (rc *SQLiteRows) stepCancellableLocked(ncol int) C.int {
 	rc.startStepping()
 	defer rc.finishStepping()
-	return C._sqlite3_step_internal(rc.s.s)
+	return C._sqlite3_step_values(rc.s.s, C.int(ncol), rc.colvals)
 }
 
 func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool) error {
