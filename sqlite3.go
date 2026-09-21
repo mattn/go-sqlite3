@@ -546,6 +546,8 @@ type SQLiteConn struct {
 	txlock      string
 	funcs       []*functionInfo
 	aggregators []*aggInfo
+	// authorizerHandle is the current authorizer callback, guarded by mu.
+	authorizerHandle unsafe.Pointer
 	// Prepared-statement cache. The slice is allocated at Open with a
 	// fixed capacity equal to the configured cache size; cap bounds the
 	// cache, len is the live count, and entries are ordered LRU-first
@@ -822,11 +824,22 @@ func (c *SQLiteConn) RegisterUpdateHook(callback func(int, string, string, int64
 // depending on operation. More details see:
 // https://www.sqlite.org/c3ref/c_alter_table.html
 func (c *SQLiteConn) RegisterAuthorizer(callback func(int, string, string, string) int) {
-	if callback == nil {
-		C.sqlite3_set_authorizer(c.db, nil, nil)
-	} else {
-		C.sqlite3_set_authorizer(c.db, (*[0]byte)(C.authorizerTrampoline), newHandle(c, callback))
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var handle unsafe.Pointer
+	var trampoline *[0]byte
+	if callback != nil {
+		handle = newHandle(c, callback)
+		trampoline = (*[0]byte)(C.authorizerTrampoline)
 	}
+	if C.sqlite3_set_authorizer(c.db, trampoline, handle) != C.SQLITE_OK {
+		deleteHandle(handle)
+		return
+	}
+	// SQLite no longer uses the previous callback after replacing it.
+	deleteHandle(c.authorizerHandle)
+	c.authorizerHandle = handle
 }
 
 // RegisterFunc makes a Go function available as a SQLite function.
@@ -2044,6 +2057,7 @@ func (c *SQLiteConn) Close() error {
 		return lastError(c.db)
 	}
 	deleteHandles(c)
+	c.authorizerHandle = nil
 	c.db = nil
 	return nil
 }
