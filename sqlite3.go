@@ -546,6 +546,11 @@ type SQLiteConn struct {
 	txlock      string
 	funcs       []*functionInfo
 	aggregators []*aggInfo
+	// authorizerMu guards authorizerHandle. It is deliberately not c.mu:
+	// sqlite3_set_authorizer takes db->mutex, while the cancellation path
+	// takes c.mu, so holding c.mu here would invert the lock order.
+	authorizerMu     sync.Mutex
+	authorizerHandle unsafe.Pointer
 	// Prepared-statement cache. The slice is allocated at Open with a
 	// fixed capacity equal to the configured cache size; cap bounds the
 	// cache, len is the live count, and entries are ordered LRU-first
@@ -822,11 +827,22 @@ func (c *SQLiteConn) RegisterUpdateHook(callback func(int, string, string, int64
 // depending on operation. More details see:
 // https://www.sqlite.org/c3ref/c_alter_table.html
 func (c *SQLiteConn) RegisterAuthorizer(callback func(int, string, string, string) int) {
-	if callback == nil {
-		C.sqlite3_set_authorizer(c.db, nil, nil)
-	} else {
-		C.sqlite3_set_authorizer(c.db, (*[0]byte)(C.authorizerTrampoline), newHandle(c, callback))
+	c.authorizerMu.Lock()
+	defer c.authorizerMu.Unlock()
+
+	var handle unsafe.Pointer
+	var trampoline *[0]byte
+	if callback != nil {
+		handle = newHandle(c, callback)
+		trampoline = (*[0]byte)(C.authorizerTrampoline)
 	}
+	if C.sqlite3_set_authorizer(c.db, trampoline, handle) != C.SQLITE_OK {
+		deleteHandle(handle)
+		return
+	}
+	// SQLite no longer uses the previous callback after replacing it.
+	deleteHandle(c.authorizerHandle)
+	c.authorizerHandle = handle
 }
 
 // RegisterFunc makes a Go function available as a SQLite function.
@@ -2044,6 +2060,10 @@ func (c *SQLiteConn) Close() error {
 		return lastError(c.db)
 	}
 	deleteHandles(c)
+	// Lock order is c.mu -> authorizerMu; RegisterAuthorizer never takes c.mu.
+	c.authorizerMu.Lock()
+	c.authorizerHandle = nil
+	c.authorizerMu.Unlock()
 	c.db = nil
 	return nil
 }
