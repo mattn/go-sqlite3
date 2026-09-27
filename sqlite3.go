@@ -546,7 +546,10 @@ type SQLiteConn struct {
 	txlock      string
 	funcs       []*functionInfo
 	aggregators []*aggInfo
-	// authorizerHandle is the current authorizer callback, guarded by mu.
+	// authorizerMu guards authorizerHandle. It is deliberately not c.mu:
+	// sqlite3_set_authorizer takes db->mutex, while the cancellation path
+	// takes c.mu, so holding c.mu here would invert the lock order.
+	authorizerMu     sync.Mutex
 	authorizerHandle unsafe.Pointer
 	// Prepared-statement cache. The slice is allocated at Open with a
 	// fixed capacity equal to the configured cache size; cap bounds the
@@ -824,8 +827,8 @@ func (c *SQLiteConn) RegisterUpdateHook(callback func(int, string, string, int64
 // depending on operation. More details see:
 // https://www.sqlite.org/c3ref/c_alter_table.html
 func (c *SQLiteConn) RegisterAuthorizer(callback func(int, string, string, string) int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.authorizerMu.Lock()
+	defer c.authorizerMu.Unlock()
 
 	var handle unsafe.Pointer
 	var trampoline *[0]byte
@@ -2057,7 +2060,10 @@ func (c *SQLiteConn) Close() error {
 		return lastError(c.db)
 	}
 	deleteHandles(c)
+	// Lock order is c.mu -> authorizerMu; RegisterAuthorizer never takes c.mu.
+	c.authorizerMu.Lock()
 	c.authorizerHandle = nil
+	c.authorizerMu.Unlock()
 	c.db = nil
 	return nil
 }
