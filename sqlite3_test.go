@@ -2980,3 +2980,88 @@ func benchmarkQueryParallel(b *testing.B) {
 		}
 	})
 }
+
+// TestConnMethodsAfterClose exercises the *SQLiteConn methods that reach
+// into SQLite with the connection handle. SQLite dereferences that handle
+// without checking it, so before these guards every one of them crashed
+// the process when called on a connection captured from a ConnectHook and
+// used after Close.
+func TestConnMethodsAfterClose(t *testing.T) {
+	driverName := fmt.Sprintf("sqlite3_after_close_%d", time.Now().UnixNano())
+	var conn *SQLiteConn
+	sql.Register(driverName, &SQLiteDriver{
+		ConnectHook: func(c *SQLiteConn) error {
+			conn = c
+			return nil
+		},
+	})
+	db, err := sql.Open(driverName, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if conn == nil {
+		t.Fatal("ConnectHook did not run")
+	}
+
+	t.Run("errors", func(t *testing.T) {
+		cases := []struct {
+			name string
+			call func() error
+		}{
+			{"RegisterCollation", func() error {
+				return conn.RegisterCollation("c", func(string, string) int { return 0 })
+			}},
+			{"RegisterFunc", func() error {
+				return conn.RegisterFunc("f", func() int64 { return 1 }, true)
+			}},
+			{"RegisterAggregator", func() error {
+				return conn.RegisterAggregator("a", func() *sumAggregator {
+					var ret sumAggregator
+					return &ret
+				}, true)
+			}},
+			{"SetFileControlInt", func() error {
+				return conn.SetFileControlInt("", SQLITE_FCNTL_CHUNK_SIZE, 4096)
+			}},
+			{"SetFileControlInt64", func() error {
+				return conn.SetFileControlInt64("", SQLITE_FCNTL_CHUNK_SIZE, 4096)
+			}},
+		}
+		for _, tc := range cases {
+			if err := tc.call(); !errors.Is(err, errConnClosed) {
+				t.Errorf("%s error = %v, want %v", tc.name, err, errConnClosed)
+			}
+		}
+	})
+
+	t.Run("noops", func(t *testing.T) {
+		// These have no error to report, so they must simply do nothing.
+		conn.RegisterCommitHook(func() int { return 0 })
+		conn.RegisterRollbackHook(func() {})
+		conn.RegisterUpdateHook(func(int, string, string, int64) {})
+		conn.RegisterAuthorizer(func(int, string, string, string) int { return SQLITE_OK })
+		conn.RegisterAuthorizer(nil)
+	})
+
+	t.Run("values", func(t *testing.T) {
+		if got := conn.AutoCommit(); got {
+			t.Errorf("AutoCommit() = %v, want false", got)
+		}
+		if got := conn.GetFilename("main"); got != "" {
+			t.Errorf("GetFilename() = %q, want empty", got)
+		}
+		if got := conn.GetLimit(SQLITE_LIMIT_LENGTH); got != -1 {
+			t.Errorf("GetLimit() = %d, want -1", got)
+		}
+		if got := conn.SetLimit(SQLITE_LIMIT_LENGTH, 1000); got != -1 {
+			t.Errorf("SetLimit() = %d, want -1", got)
+		}
+	})
+}
