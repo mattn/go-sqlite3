@@ -8,11 +8,70 @@
 package sqlite3
 
 import (
+	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"reflect"
 	"testing"
 )
+
+func TestErrorLogCodeDescriptions(t *testing.T) {
+	var capturedCode int
+	var capturedDescription, capturedMsg, formattedLog string
+	if err := SetErrorLog(func(code int, description, msg string) {
+		capturedCode = code
+		capturedDescription = description
+		capturedMsg = msg
+		formattedLog = fmt.Sprintf("%v: %v: %v", code, description, msg)
+	}); err != nil {
+		t.Fatal("Failed to set error logger:", err)
+	}
+	t.Cleanup(func() {
+		if err := SetErrorLog(nil); err != nil {
+			t.Error("Failed to clear error logger:", err)
+		}
+	})
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	for _, test := range []struct {
+		name        string
+		code        int
+		description string
+		message     string
+	}{
+		{"primary", int(ErrConstraint), "constraint failed", ""},
+		{"extended", int(ErrConstraintUnique), "constraint failed", ""},
+		{"rollback", int(ErrAbortRollback), "abort due to ROLLBACK", ""},
+		{"unknown extended", 0x7fffff00 | int(ErrConstraint), "constraint failed", ""},
+		{"unknown primary", 0x7fffffff, "unknown error", ""},
+		{"event message", int(ErrConstraintUnique), "constraint failed", "duplicate value"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// sqlite_log(code, message) is SQLite's SQL wrapper around sqlite3_log.
+			// See https://sqlite.org/src/file?name=src/func.c.
+			if _, err := db.Exec("SELECT sqlite_log(?, ?)", test.code, test.message); err != nil {
+				t.Fatal("Failed to emit log message:", err)
+			}
+			if capturedCode != test.code {
+				t.Errorf("Log code = %d, want %d", capturedCode, test.code)
+			}
+			if capturedMsg != test.message {
+				t.Errorf("Log message = %q, want %q", capturedMsg, test.message)
+			}
+			if capturedDescription != test.description {
+				t.Errorf("Cached description = %q, want %q", capturedDescription, test.description)
+			}
+			if want := fmt.Sprintf("%d: %s: %s", test.code, test.description, test.message); formattedLog != want {
+				t.Errorf("Formatted log = %q, want %q", formattedLog, want)
+			}
+		})
+	}
+}
 
 func TestCallbackArgCast(t *testing.T) {
 	intConv := callbackSyntheticForTests(reflect.ValueOf(int64(math.MaxInt64)), nil)

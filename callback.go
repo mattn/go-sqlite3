@@ -35,10 +35,52 @@ import (
 )
 
 var errorLogCallback atomic.Value
+var errorLogCodeMessages map[int]string
+var errorLogCodeMessagesOnce sync.Once
+
+// initErrorLogCodeMessages runs on registration, never from a log callback.
+func initErrorLogCodeMessages() {
+	errorLogCodeMessages = make(map[int]string)
+	cache := func(code C.int) {
+		msg := C.GoString(C.sqlite3_errstr(code))
+		if msg == "" {
+			msg = "unknown error"
+		}
+		errorLogCodeMessages[int(code)] = msg
+	}
+	for code := 0; code <= int(ErrNoMask); code++ {
+		cache(C.int(code))
+	}
+	// Query extended codes in full. For example, SQLITE_ABORT_ROLLBACK has
+	// the description "abort due to ROLLBACK" rather than "query aborted".
+	for _, code := range []C.int{
+		C.SQLITE_IOERR_READ, C.SQLITE_IOERR_SHORT_READ, C.SQLITE_IOERR_WRITE, C.SQLITE_IOERR_FSYNC,
+		C.SQLITE_IOERR_DIR_FSYNC, C.SQLITE_IOERR_TRUNCATE, C.SQLITE_IOERR_FSTAT, C.SQLITE_IOERR_UNLOCK,
+		C.SQLITE_IOERR_RDLOCK, C.SQLITE_IOERR_DELETE, C.SQLITE_IOERR_BLOCKED, C.SQLITE_IOERR_NOMEM,
+		C.SQLITE_IOERR_ACCESS, C.SQLITE_IOERR_CHECKRESERVEDLOCK, C.SQLITE_IOERR_LOCK, C.SQLITE_IOERR_CLOSE,
+		C.SQLITE_IOERR_DIR_CLOSE, C.SQLITE_IOERR_SHMOPEN, C.SQLITE_IOERR_SHMSIZE, C.SQLITE_IOERR_SHMLOCK,
+		C.SQLITE_IOERR_SHMMAP, C.SQLITE_IOERR_SEEK, C.SQLITE_IOERR_DELETE_NOENT, C.SQLITE_IOERR_MMAP,
+		C.SQLITE_IOERR_GETTEMPPATH, C.SQLITE_IOERR_CONVPATH,
+		C.SQLITE_LOCKED_SHAREDCACHE, C.SQLITE_BUSY_RECOVERY, C.SQLITE_BUSY_SNAPSHOT,
+		C.SQLITE_CANTOPEN_NOTEMPDIR, C.SQLITE_CANTOPEN_ISDIR, C.SQLITE_CANTOPEN_FULLPATH, C.SQLITE_CANTOPEN_CONVPATH,
+		C.SQLITE_CORRUPT_VTAB, C.SQLITE_READONLY_RECOVERY, C.SQLITE_READONLY_CANTLOCK,
+		C.SQLITE_READONLY_ROLLBACK, C.SQLITE_READONLY_DBMOVED, C.SQLITE_ABORT_ROLLBACK,
+		C.SQLITE_CONSTRAINT_CHECK, C.SQLITE_CONSTRAINT_COMMITHOOK, C.SQLITE_CONSTRAINT_FOREIGNKEY,
+		C.SQLITE_CONSTRAINT_FUNCTION, C.SQLITE_CONSTRAINT_NOTNULL, C.SQLITE_CONSTRAINT_PRIMARYKEY,
+		C.SQLITE_CONSTRAINT_TRIGGER, C.SQLITE_CONSTRAINT_UNIQUE, C.SQLITE_CONSTRAINT_VTAB, C.SQLITE_CONSTRAINT_ROWID,
+		C.SQLITE_NOTICE_RECOVER_WAL, C.SQLITE_NOTICE_RECOVER_ROLLBACK, C.SQLITE_WARNING_AUTOINDEX,
+	} {
+		cache(code)
+	}
+}
 
 //export errorLogTrampoline
 func errorLogTrampoline(_ C.uintptr_t, errCode C.int, msg *C.char) {
-	errorLogCallback.Load().(func(Error, string))(errorFromCode(errCode), C.GoString(msg))
+	description := errorLogCodeMessages[int(errCode)]
+	if description == "" {
+		description = errorLogCodeMessages[int(errCode&ErrNoMask)]
+	}
+	errorLogCallback.Load().(func(int, string, string))(int(errCode), description, C.GoString(msg))
 }
 
 //export callbackTrampoline
