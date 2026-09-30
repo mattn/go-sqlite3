@@ -59,6 +59,13 @@ package sqlite3
 # define USE_PWRITE64 1
 #endif
 
+void errorLogTrampoline(void *userPtr, int errCode, const char *msg);
+
+static int
+_sqlite3_config_log(int enabled) {
+  return sqlite3_config(SQLITE_CONFIG_LOG, enabled ? &errorLogTrampoline : NULL, NULL);
+}
+
 static int
 _sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs) {
 #ifdef SQLITE_OPEN_URI
@@ -437,6 +444,33 @@ func Version() (libVersion string, libVersionNumber int, sourceID string) {
 	libVersionNumber = int(C.sqlite3_libversion_number())
 	sourceID = C.GoString(C.sqlite3_sourceid())
 	return libVersion, libVersionNumber, sourceID
+}
+
+// SetErrorLog registers the given callback to be invoked with a message whenever SQLite detects an
+// anomaly. It is good practice to redirect such messages to the application log. See
+// https://sqlite.org/errlog.html.
+// The callback receives the full extended result code, its description, and a copy of SQLite's
+// log message.
+// It must not call any SQLite functions, directly or indirectly. SQLite recommends
+// treating the callback like a signal handler, minimizing the work done in it.
+// It must be safe to be invoked concurrently.
+// Passing nil for the callback unregisters any existing callback.
+// SetErrorLog must not be called while any other goroutine is running that might be calling into
+// the SQLite library.
+func SetErrorLog(callback func(code int, description, message string)) error {
+	enabled := C.int(0)
+	if callback != nil {
+		errorLogCodeMessagesOnce.Do(initErrorLogCodeMessages)
+		enabled = 1
+	}
+	if rc := C._sqlite3_config_log(enabled); rc != C.SQLITE_OK {
+		return Error{
+			Code:         ErrNo(rc & ErrNoMask),
+			ExtendedCode: ErrNoExtended(rc),
+		}
+	}
+	errorLogCallback.Store(callback)
+	return nil
 }
 
 const (

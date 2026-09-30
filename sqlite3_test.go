@@ -1247,6 +1247,61 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestErrorLog(t *testing.T) {
+	var errorLogged bool
+	var capturedCode int
+	var capturedMsg string
+	var formattedLog string
+	err := SetErrorLog(func(code int, description, msg string) {
+		errorLogged = true
+		capturedCode = code
+		capturedMsg = msg
+		formattedLog = fmt.Sprintf("%v: %v", description, msg)
+	})
+	if err != nil {
+		t.Fatal("Failed to set error logger:", err)
+	}
+	t.Cleanup(func() {
+		if err := SetErrorLog(nil); err != nil {
+			t.Error("Failed to clear error logger:", err)
+		}
+	})
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal("Failed to open database:", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec("CREATE TABLE foo (id INTEGER PRIMARY KEY); INSERT INTO foo VALUES (1)"); err != nil {
+		t.Fatal("Failed to create test table:", err)
+	}
+	errorLogged = false
+	if _, err := db.Exec("INSERT INTO foo VALUES (1)"); err == nil {
+		t.Fatal("Expected a primary key constraint error")
+	}
+	if !errorLogged {
+		t.Fatal("No constraint error was logged")
+	}
+	if capturedCode != int(ErrConstraintPrimaryKey) {
+		t.Errorf("Unexpected constraint error code: %d", capturedCode)
+	}
+	if want := "constraint failed: " + capturedMsg; capturedMsg == "" || formattedLog != want {
+		t.Errorf("Formatted constraint log = %q, want %q with nonempty message", formattedLog, want)
+	}
+
+	if err := SetErrorLog(nil); err != nil {
+		t.Fatal("Failed to clear error logger:", err)
+	}
+	errorLogged = false
+	if _, err := db.Exec("INSERT INTO foo VALUES (1)"); err == nil {
+		t.Fatal("Expected a primary key constraint error after clearing the logger")
+	}
+	if errorLogged {
+		t.Error("Error was logged after clearing the logger")
+	}
+}
+
 func TestStringContainingZero(t *testing.T) {
 	tempFilename := TempFilename(t)
 	defer os.Remove(tempFilename)
