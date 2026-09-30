@@ -376,36 +376,38 @@ func Version() (libVersion string, libVersionNumber int, sourceID string) {
 // SetErrorLog registers the given callback to be invoked with a message whenever SQLite detects an
 // anomaly. It is good practice to redirect such messages to the application log. See
 // https://sqlite.org/errlog.html.
-// The provided callback function receives an SQLite error object, denoting the broad category of
-// error, and a message string. It must not call any SQLite functions; in fact, the SQLite docs
-// recommend treating the callback function like a signal handler, minimizing the work done in it.
-// Passing nil unregisters the callback.
+// The callback receives the full extended result code, its description, and a copy of SQLite's
+// log message.
+// It must not call any SQLite functions, directly or indirectly. SQLite recommends
+// treating the callback like a signal handler, minimizing the work done in it.
+// It must be safe to be invoked concurrently.
+// Passing nil for the callback unregisters any existing callback.
 // SetErrorLog must not be called while any other goroutine is running that might be calling into
 // the SQLite library.
-func SetErrorLog(callback func(err Error, msg string)) error {
+func SetErrorLog(callback func(code int, description, message string)) error {
 	enabled := C.int(0)
 	if callback != nil {
+		errorLogCodeMessagesOnce.Do(initErrorLogCodeMessages)
 		enabled = 1
 	}
 	if rc := C._sqlite3_config_log(enabled); rc != C.SQLITE_OK {
-		return errorFromCode(rc)
+		return Error{
+			Code:         ErrNo(rc & ErrNoMask),
+			ExtendedCode: ErrNoExtended(rc),
+		}
 	}
 	errorLogCallback.Store(callback)
 	return nil
 }
 
 const (
-	// some common return codes
-	SQLITE_OK      = C.SQLITE_OK
-	SQLITE_NOTICE  = C.SQLITE_NOTICE
-	SQLITE_WARNING = C.SQLITE_WARNING
-
 	// used by authorizer and pre_update_hook
 	SQLITE_DELETE = C.SQLITE_DELETE
 	SQLITE_INSERT = C.SQLITE_INSERT
 	SQLITE_UPDATE = C.SQLITE_UPDATE
 
-	// used by authorizer as return value, in addition to SQLITE_OK
+	// used by authorzier - as return value
+	SQLITE_OK     = C.SQLITE_OK
 	SQLITE_IGNORE = C.SQLITE_IGNORE
 	SQLITE_DENY   = C.SQLITE_DENY
 
@@ -1005,13 +1007,6 @@ func lastError(db *C.sqlite3) error {
 		ExtendedCode: ErrNoExtended(extrv),
 		SystemErrno:  systemErrno,
 		err:          errStr,
-	}
-}
-
-func errorFromCode(rc C.int) Error {
-	return Error{
-		Code:         ErrNo(rc & ErrNoMask),
-		ExtendedCode: ErrNoExtended(rc),
 	}
 }
 
