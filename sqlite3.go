@@ -144,7 +144,7 @@ extern int _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nByte
 // Combined prepare+step+finalize for simple exec without parameters.
 // Reduces CGO crossings from ~6 to 1 for the common no-args exec case.
 static int
-_sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowid, long long* changes, const char** pzTail)
+_sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowid, long long* changes, const char** pzTail, int* numInput)
 {
   sqlite3_stmt *stmt = 0;
   const char *tail = 0;
@@ -161,6 +161,13 @@ _sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowi
     // Empty statement
     *rowid = 0;
     *changes = 0;
+    *pzTail = tail;
+    return SQLITE_OK;
+  }
+  *numInput = sqlite3_bind_parameter_count(stmt);
+  if (*numInput > 0) {
+    // Match the argument validation in exec before executing this statement.
+    sqlite3_finalize(stmt);
     *pzTail = tail;
     return SQLITE_OK;
   }
@@ -1174,20 +1181,26 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 func (c *SQLiteConn) execNoArgs(query string) (driver.Result, error) {
 	var res *SQLiteResult
 	for len(query) > 0 {
-		var rowid, changes C.longlong
+		var result struct {
+			rowid, changes C.longlong
+			numInput       C.int
+		}
 		var tail *C.char
 		pquery := C.CString(query)
-		rv := C._sqlite3_exec_no_args(c.db, pquery, C.int(len(query)), &rowid, &changes, &tail)
+		rv := C._sqlite3_exec_no_args(c.db, pquery, C.int(len(query)), &result.rowid, &result.changes, &tail, &result.numInput)
 		if tail != nil && *tail != '\000' {
 			query = strings.TrimSpace(C.GoString(tail))
 		} else {
 			query = ""
 		}
 		C.free(unsafe.Pointer(pquery))
+		if result.numInput > 0 {
+			return nil, fmt.Errorf("not enough args to execute query: want %d got 0", result.numInput)
+		}
 		if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 			return nil, c.lastError()
 		}
-		res = &SQLiteResult{id: int64(rowid), changes: int64(changes)}
+		res = &SQLiteResult{id: int64(result.rowid), changes: int64(result.changes)}
 	}
 	if res == nil {
 		res = &SQLiteResult{0, 0}
