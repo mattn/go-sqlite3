@@ -2774,6 +2774,13 @@ func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 		return nil, err
 	}
 
+	// Reset on the success path so an autocommit/implicit transaction is
+	// committed promptly. Without this, the statement stays active until the
+	// next bind/reset/finalize, delaying the commit (see #912).
+	if rv = C.sqlite3_reset(s.s); rv != C.SQLITE_OK {
+		return nil, s.c.lastError()
+	}
+
 	return &SQLiteResult{id: int64(rowid), changes: int64(changes)}, nil
 }
 

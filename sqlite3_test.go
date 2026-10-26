@@ -2981,6 +2981,55 @@ func benchmarkQueryParallel(b *testing.B) {
 	})
 }
 
+// TestExecSyncResetsStatement verifies that a successful Stmt.Exec resets the
+// statement so SQLite's autocommit/implicit transaction is committed promptly
+// (#912). Without a success-path reset the statement stays active and
+// AutoCommit remains false until the next bind/reset/finalize.
+func TestExecSyncResetsStatement(t *testing.T) {
+	driverName := fmt.Sprintf("sqlite3_exec_reset_%d", time.Now().UnixNano())
+	var conn *SQLiteConn
+	sql.Register(driverName, &SQLiteDriver{
+		ConnectHook: func(c *SQLiteConn) error {
+			conn = c
+			return nil
+		},
+	})
+
+	db, err := sql.Open(driverName, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.Exec("CREATE TABLE t (id INTEGER)"); err != nil {
+		t.Fatal(err)
+	}
+	stmt, err := db.Prepare("INSERT INTO t (id) VALUES (?)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stmt.Close()
+
+	if _, err := stmt.Exec(1); err != nil {
+		t.Fatal(err)
+	}
+	if conn == nil {
+		t.Fatal("ConnectHook did not run")
+	}
+	if !conn.AutoCommit() {
+		t.Fatal("AutoCommit() = false after Exec, want true (statement should be reset)")
+	}
+
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM t").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("COUNT(*) = %d, want 1", n)
+	}
+}
+
 // TestConnMethodsAfterClose exercises the *SQLiteConn methods that reach
 // into SQLite with the connection handle. SQLite dereferences that handle
 // without checking it, so before these guards every one of them crashed
