@@ -9,9 +9,11 @@ package sqlite3
 
 import (
 	"database/sql"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path"
+	"syscall"
 	"testing"
 )
 
@@ -274,5 +276,110 @@ func TestError_SystemErrno(t *testing.T) {
 
 	if !os.IsNotExist(serr.SystemErrno) {
 		t.Errorf("expected SystemErrno to be a not exists error, but got %v", serr.SystemErrno)
+	}
+
+	if !errors.Is(err, serr.SystemErrno) {
+		t.Errorf("errors.Is(err, SystemErrno) = false, want true")
+	}
+	if !errors.Is(err, ErrCantOpen) && !errors.Is(err, ErrIoErr) {
+		t.Errorf("errors.Is(err, ErrCantOpen|ErrIoErr) = false for %v (code=%v)", err, serr.Code)
+	}
+}
+
+func TestError_Is(t *testing.T) {
+	err := Error{
+		Code:         ErrConstraint,
+		ExtendedCode: ErrConstraintUnique,
+	}
+
+	if !errors.Is(err, ErrConstraint) {
+		t.Error("errors.Is(err, ErrConstraint) = false, want true")
+	}
+	if !errors.Is(err, ErrConstraintUnique) {
+		t.Error("errors.Is(err, ErrConstraintUnique) = false, want true")
+	}
+	if errors.Is(err, ErrBusy) {
+		t.Error("errors.Is(err, ErrBusy) = true, want false")
+	}
+	if errors.Is(err, ErrConstraintForeignKey) {
+		t.Error("errors.Is(err, ErrConstraintForeignKey) = true, want false")
+	}
+	if errors.Is(err, syscall.ENOENT) {
+		t.Error("errors.Is(err, ENOENT) = true, want false when SystemErrno is unset")
+	}
+
+	err.SystemErrno = syscall.ENOENT
+	if !errors.Is(err, syscall.ENOENT) {
+		t.Error("errors.Is(err, ENOENT) = false, want true")
+	}
+	if errors.Is(err, syscall.EACCES) {
+		t.Error("errors.Is(err, EACCES) = true, want false")
+	}
+}
+
+func TestError_As(t *testing.T) {
+	err := Error{
+		Code:         ErrConstraint,
+		ExtendedCode: ErrConstraintUnique,
+		SystemErrno:  syscall.ENOENT,
+	}
+
+	var code ErrNo
+	if !errors.As(err, &code) {
+		t.Fatal("errors.As(err, *ErrNo) = false, want true")
+	}
+	if code != ErrConstraint {
+		t.Errorf("ErrNo = %v, want %v", code, ErrConstraint)
+	}
+
+	var extended ErrNoExtended
+	if !errors.As(err, &extended) {
+		t.Fatal("errors.As(err, *ErrNoExtended) = false, want true")
+	}
+	if extended != ErrConstraintUnique {
+		t.Errorf("ErrNoExtended = %v, want %v", extended, ErrConstraintUnique)
+	}
+
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		t.Fatal("errors.As(err, *syscall.Errno) = false, want true")
+	}
+	if errno != syscall.ENOENT {
+		t.Errorf("syscall.Errno = %v, want %v", errno, syscall.ENOENT)
+	}
+
+	errNoSys := Error{Code: ErrBusy}
+	if errors.As(errNoSys, &errno) {
+		t.Error("errors.As(err, *syscall.Errno) = true, want false when SystemErrno is unset")
+	}
+}
+
+func TestError_Is_FromDB(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`CREATE TABLE Foo (
+		id INTEGER PRIMARY KEY,
+		value INTEGER NOT NULL UNIQUE
+	)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec("INSERT INTO Foo (value) VALUES (1)"); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = db.Exec("INSERT INTO Foo (value) VALUES (1)")
+	if err == nil {
+		t.Fatal("expected unique constraint error")
+	}
+	if !errors.Is(err, ErrConstraint) {
+		t.Errorf("errors.Is(err, ErrConstraint) = false, want true; err=%v", err)
+	}
+	if !errors.Is(err, ErrConstraintUnique) {
+		t.Errorf("errors.Is(err, ErrConstraintUnique) = false, want true; err=%v", err)
 	}
 }

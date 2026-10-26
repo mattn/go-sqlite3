@@ -93,6 +93,39 @@ func (err Error) Error() string {
 	return str
 }
 
+// Is implements errors.Is for ErrNo, ErrNoExtended and syscall.Errno targets,
+// so that errors.Is(err, ErrConstraint) and similar checks work.
+func (err Error) Is(target error) bool {
+	switch v := target.(type) {
+	case ErrNo:
+		return err.Code == v
+	case ErrNoExtended:
+		return err.ExtendedCode == v
+	case syscall.Errno:
+		return err.SystemErrno != 0 && err.SystemErrno == v
+	}
+	return false
+}
+
+// As implements errors.As for *ErrNo, *ErrNoExtended and *syscall.Errno targets.
+func (err Error) As(target any) bool {
+	switch v := target.(type) {
+	case *ErrNo:
+		*v = err.Code
+		return true
+	case *ErrNoExtended:
+		*v = err.ExtendedCode
+		return true
+	case *syscall.Errno:
+		if err.SystemErrno == 0 {
+			return false
+		}
+		*v = err.SystemErrno
+		return true
+	}
+	return false
+}
+
 // result codes from http://www.sqlite.org/c3ref/c_abort_rollback.html
 var (
 	ErrIoErrRead              = ErrIoErr.Extend(1)
