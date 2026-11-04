@@ -144,10 +144,11 @@ extern int _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nByte
 // Combined prepare+step+finalize for simple exec without parameters.
 // Reduces CGO crossings from ~6 to 1 for the common no-args exec case.
 static int
-_sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowid, long long* changes, const char** pzTail)
+_sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowid, long long* changes, const char** pzTail, int* nParams)
 {
   sqlite3_stmt *stmt = 0;
   const char *tail = 0;
+  *nParams = 0;
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
   int rv = _sqlite3_prepare_v2_blocking(db, zSql, nBytes, &stmt, &tail);
 #else
@@ -162,6 +163,14 @@ _sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowi
     *rowid = 0;
     *changes = 0;
     *pzTail = tail;
+    return SQLITE_OK;
+  }
+  // Leave a statement with parameters unexecuted, the caller reports the
+  // missing arguments.
+  *nParams = sqlite3_bind_parameter_count(stmt);
+  if (*nParams > 0) {
+    sqlite3_finalize(stmt);
+    *pzTail = 0;
     return SQLITE_OK;
   }
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
@@ -1176,8 +1185,13 @@ func (c *SQLiteConn) execNoArgs(query string) (driver.Result, error) {
 	for len(query) > 0 {
 		var rowid, changes C.longlong
 		var tail *C.char
+		var nParams C.int
 		pquery := C.CString(query)
-		rv := C._sqlite3_exec_no_args(c.db, pquery, C.int(len(query)), &rowid, &changes, &tail)
+		rv := C._sqlite3_exec_no_args(c.db, pquery, C.int(len(query)), &rowid, &changes, &tail, &nParams)
+		if nParams > 0 {
+			C.free(unsafe.Pointer(pquery))
+			return nil, fmt.Errorf("not enough args to execute query: want %d got 0", nParams)
+		}
 		if tail != nil && *tail != '\000' {
 			query = strings.TrimSpace(C.GoString(tail))
 		} else {
