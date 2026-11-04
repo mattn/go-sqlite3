@@ -2346,6 +2346,16 @@ func TestNotEnoughArgsErrorMessage(t *testing.T) {
 		}
 	})
 
+	t.Run("exec without args", func(t *testing.T) {
+		_, err := db.Exec("SELECT ?")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if err.Error() != want {
+			t.Errorf("got %q, want %q", err.Error(), want)
+		}
+	})
+
 	t.Run("query", func(t *testing.T) {
 		_, err := db.Query("SELECT ?; SELECT ?", "hello")
 		if err == nil {
@@ -2355,6 +2365,33 @@ func TestNotEnoughArgsErrorMessage(t *testing.T) {
 			t.Errorf("got %q, want %q", err.Error(), want)
 		}
 	})
+}
+
+// Exec without arguments must not run a statement whose arguments are
+// missing, nor the statements after it.
+func TestExecWithoutArgsStopsAtMissingArgs(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// Every connection to :memory: has its own database.
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.Exec("CREATE TABLE t (x INTEGER)"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec("INSERT INTO t VALUES (7); INSERT INTO t VALUES (?); INSERT INTO t VALUES (9)")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	var rows string
+	if err := db.QueryRow("SELECT group_concat(coalesce(x, 'NULL')) FROM t").Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != "7" {
+		t.Errorf("got rows %q, want only the statement before the missing argument: \"7\"", rows)
+	}
 }
 
 // https://github.com/mattn/go-sqlite3/issues/1390
