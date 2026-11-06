@@ -1102,8 +1102,11 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl any, pure bool) error 
 }
 
 // AutoCommit return which currently auto commit or not.
-// It reports false once the connection has been closed.
+// It reports false once Close has started.
 func (c *SQLiteConn) AutoCommit() bool {
+	if c.closing.Load() {
+		return false
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
