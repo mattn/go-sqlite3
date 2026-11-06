@@ -549,9 +549,11 @@ type SQLiteDriver struct {
 type SQLiteConn struct {
 	mu sync.Mutex
 	db *C.sqlite3
-	// closing is set once Close starts closing the connection, with mu
-	// held. SQLite runs callbacks such as the rollback hook while it
-	// closes the connection, so dbConnOpen reads closing without mu.
+	// closing is set, with mu held, once Close starts closing the
+	// connection. SQLite runs callbacks such as the rollback hook or the
+	// Disconnect method of a virtual table while Close finalizes cached
+	// statements and closes the connection, so dbConnOpen reads closing
+	// without mu.
 	closing atomic.Bool
 	// activeRows identifies the cancellable Rows currently calling sqlite3_step.
 	// It is guarded by mu so a stale cancellation cannot interrupt later work.
@@ -2112,8 +2114,8 @@ func (c *SQLiteConn) Close() error {
 		return nil
 	}
 	runtime.SetFinalizer(c, nil)
-	c.closeCachedStmtsLocked()
 	c.closing.Store(true)
+	c.closeCachedStmtsLocked()
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
 		c.closing.Store(false)
