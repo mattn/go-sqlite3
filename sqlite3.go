@@ -3111,8 +3111,8 @@ func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool)
 		switch col.typ {
 		case C.SQLITE_INTEGER:
 			val := int64(col.i64)
-			switch decltype[i] {
-			case columnTimestamp, columnDatetime, columnDate:
+			switch {
+			case isTimeDeclType(decltype[i]):
 				var t time.Time
 				// Assume a millisecond unix timestamp if it's 13 digits -- too
 				// large to be a reasonable timestamp in seconds.
@@ -3127,7 +3127,7 @@ func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool)
 					t = t.In(rc.s.c.loc)
 				}
 				dest[i] = t
-			case "boolean":
+			case decltype[i] == "boolean":
 				dest[i] = val > 0
 			default:
 				dest[i] = val
@@ -3151,8 +3151,8 @@ func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool)
 			n := int(col.n)
 			s := C.GoStringN((*C.char)(unsafe.Pointer(col.ptr)), C.int(n))
 
-			switch decltype[i] {
-			case columnTimestamp, columnDatetime, columnDate:
+			switch {
+			case isTimeDeclType(decltype[i]):
 				var t time.Time
 				s = strings.TrimSuffix(s, "Z")
 				for _, format := range SQLiteTimestampFormats {
