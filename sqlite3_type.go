@@ -16,6 +16,7 @@ import (
 	"database/sql"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
 // ColumnTypeDatabaseTypeName implement RowsColumnTypeDatabaseTypeName.
@@ -77,6 +78,29 @@ func scanType(cdt string) reflect.Type {
 	return reflect.TypeOf(new(any))
 }
 
+// isTimeDeclType recognizes the timestamp declarations understood by the
+// driver's existing time conversion, without matching unrelated type names.
+func isTimeDeclType(t string) bool {
+	switch t {
+	case columnDate, columnDatetime, columnTimestamp, "DATE", "DATETIME", "TIMESTAMP":
+		return true
+	}
+	t = strings.TrimSpace(t)
+	const withTimeZone = "timestamp with time zone"
+	if len(t) < len(withTimeZone) || !strings.EqualFold(t[:len(columnTimestamp)], columnTimestamp) {
+		return false
+	}
+	t = t[len(columnTimestamp):]
+	for _, word := range []string{"with", "time", "zone"} {
+		rest := strings.TrimLeftFunc(t, unicode.IsSpace)
+		if len(rest) == len(t) || len(rest) < len(word) || !strings.EqualFold(rest[:len(word)], word) {
+			return false
+		}
+		t = rest[len(word):]
+	}
+	return t == ""
+}
+
 func databaseTypeConvSqlite(t string) int {
 	if strings.Contains(t, "INT") {
 		return SQLITE_INTEGER
@@ -92,8 +116,7 @@ func databaseTypeConvSqlite(t string) int {
 		strings.Contains(t, "DOUBLE") {
 		return SQLITE_REAL
 	}
-	if t == "DATE" || t == "DATETIME" ||
-		t == "TIMESTAMP" {
+	if isTimeDeclType(t) {
 		return SQLITE_TIME
 	}
 	if t == "NUMERIC" ||
