@@ -551,7 +551,14 @@ type SQLiteConn struct {
 	// activeRows identifies the cancellable Rows currently calling sqlite3_step.
 	// It is guarded by mu so a stale cancellation cannot interrupt later work.
 	activeRows  *SQLiteRows
-	loc         *time.Location
+	// callbackPanic holds a panic recovered inside a SQLite C callback
+	// (RegisterFunc/aggregators). The trampoline converts it to an SQL
+	// error so SQLite can release the connection mutex, then the Go
+	// caller re-raises it after sqlite3_step returns. Guarded by
+	// callbackPanicMu so it never nests under c.mu.
+	callbackPanicMu sync.Mutex
+	callbackPanic   any
+	loc             *time.Location
 	txlock      string
 	funcs       []*functionInfo
 	aggregators []*aggInfo
@@ -2782,6 +2789,7 @@ func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {
 
 	var rowid, changes C.longlong
 	rv := C._sqlite3_step_row_internal(s.s, &rowid, &changes)
+	s.c.raiseCallbackPanic()
 	if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 		err := s.c.lastError()
 		C._sqlite3_reset_clear(s.s)
@@ -2833,6 +2841,25 @@ func (c *SQLiteConn) interruptActiveRows(rows *SQLiteRows) {
 	defer c.mu.Unlock()
 	if c.activeRows == rows && c.db != nil {
 		C.sqlite3_interrupt(c.db)
+	}
+}
+
+// noteCallbackPanic records a panic recovered in a SQLite callback trampoline.
+func (c *SQLiteConn) noteCallbackPanic(v any) {
+	c.callbackPanicMu.Lock()
+	c.callbackPanic = v
+	c.callbackPanicMu.Unlock()
+}
+
+// raiseCallbackPanic re-raises a panic recovered during the last callback
+// after sqlite3_step has returned and released SQLite's connection mutex.
+func (c *SQLiteConn) raiseCallbackPanic() {
+	c.callbackPanicMu.Lock()
+	p := c.callbackPanic
+	c.callbackPanic = nil
+	c.callbackPanicMu.Unlock()
+	if p != nil {
+		panic(p)
 	}
 }
 
@@ -2958,6 +2985,7 @@ func (rc *SQLiteRows) Next(dest []driver.Value) error {
 	if rc.stopCancellation == nil {
 		if rc.ctx.Done() == nil {
 			rv := C._sqlite3_step_values(rc.s.s, C.int(len(dest)), rc.colvals)
+			rc.s.c.raiseCallbackPanic()
 			return rc.readStepResult(dest, rv, true)
 		}
 		conn := rc.s.c
@@ -3040,6 +3068,7 @@ func (rc *SQLiteRows) bindAndFirstStepLocked(args []driver.NamedValue) (C.int, e
 			return step()
 		}()
 	}
+	s.c.raiseCallbackPanic()
 	if err := rc.ctx.Err(); err != nil {
 		rc.stopWatchingCancellation()
 		C._sqlite3_reset_clear(s.s)
@@ -3080,7 +3109,9 @@ func (rc *SQLiteRows) bindAndFirstStepLocked(args []driver.NamedValue) (C.int, e
 func (rc *SQLiteRows) stepCancellableLocked(ncol int) C.int {
 	rc.startStepping()
 	defer rc.finishStepping()
-	return C._sqlite3_step_values(rc.s.s, C.int(ncol), rc.colvals)
+	rv := C._sqlite3_step_values(rc.s.s, C.int(ncol), rc.colvals)
+	rc.s.c.raiseCallbackPanic()
+	return rv
 }
 
 func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool) error {
