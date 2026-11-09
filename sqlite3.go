@@ -1145,28 +1145,29 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 		return c.execNoArgs(query)
 	}
 
-	start := 0
+	precedingCount := 0
 	for {
 		s, err := c.prepareWithCache(ctx, query)
 		if err != nil {
 			return nil, err
 		}
 		var res driver.Result
-		if s.(*SQLiteStmt).s != nil {
-			na := s.NumInput()
-			if len(args)-start < na {
+		ss := s.(*SQLiteStmt)
+		if ss.s != nil {
+			na := ss.NumInput()
+			stmtArgs, err := ss.stmtArgsFromBind(args, precedingCount)
+			if err != nil {
 				s.Close()
-				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args)-start)
+				return nil, err
 			}
-			stmtArgs := stmtArgs(args, start, na)
-			res, err = s.(*SQLiteStmt).exec(ctx, stmtArgs)
+			res, err = ss.exec(ctx, stmtArgs)
 			if err != nil && err != driver.ErrSkip {
 				s.Close()
 				return nil, err
 			}
-			start += na
+			precedingCount += na
 		}
-		tail := s.(*SQLiteStmt).t
+		tail := ss.t
 		s.Close()
 		if tail == "" {
 			if res == nil {
@@ -1215,7 +1216,7 @@ func (c *SQLiteConn) Query(query string, args []driver.Value) (driver.Rows, erro
 }
 
 func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	start := 0
+	precedingCount := 0
 	for {
 		s, err := c.prepareWithCache(ctx, query)
 		if err != nil {
@@ -1234,18 +1235,18 @@ func (c *SQLiteConn) query(ctx context.Context, query string, args []driver.Name
 			query = tail
 			continue
 		}
-		na := s.NumInput()
-		if len(args)-start < na {
+		na := ss.NumInput()
+		stmtArgs, err := ss.stmtArgsFromBind(args, precedingCount)
+		if err != nil {
 			ss.Close()
-			return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, len(args)-start)
+			return nil, err
 		}
-		stmtArgs := stmtArgs(args, start, na)
 		rows, err := ss.query(ctx, stmtArgs)
 		if err != nil && err != driver.ErrSkip {
 			ss.Close()
 			return rows, err
 		}
-		start += na
+		precedingCount += na
 		tail := ss.t
 		if tail == "" {
 			return rows, nil
@@ -2501,34 +2502,79 @@ func (s *SQLiteStmt) bindNamedIndices(name string) [3]int {
 	return indices
 }
 
-func stmtArgs(args []driver.NamedValue, start, na int) []driver.NamedValue {
+// stmtArgsFromBind maps Go driver args onto one SQLite statement's bind
+// parameters without "consuming" a prefix of the Go list.
+//
+// Anonymous "?" parameters use Go args at (precedingCount + sqliteIndex),
+// where precedingCount is the sum of sqlite3_bind_parameter_count for all
+// earlier statements in the same Exec/Query string.
+//
+// Numbered ("?NNN") and named (":n", "@n", "$n") parameters bind from the
+// full Go list by their own index or name, so the same Go args can be reused
+// across statements (see https://github.com/mattn/go-sqlite3/issues/584).
+//
+// Mixing anonymous "?" with numbered/named forms across statements in one
+// Exec/Query string is not supported; the anonymous offset still advances by
+// each statement's bind_parameter_count.
+func (s *SQLiteStmt) stmtArgsFromBind(args []driver.NamedValue, precedingCount int) ([]driver.NamedValue, error) {
+	na := s.NumInput()
 	if na == 0 {
-		return nil
+		return nil, nil
 	}
 
-	end := start + na
-	hasNamedOutside := false
-	for i := range args {
-		if args[i].Name != "" && (i < start || i >= end) {
-			hasNamedOutside = true
-			break
+	out := make([]driver.NamedValue, 0, na)
+	for i := 1; i <= na; i++ {
+		cname := C.sqlite3_bind_parameter_name(s.s, C.int(i))
+		if cname == nil {
+			// Anonymous "?".
+			goOrdinal := precedingCount + i
+			if goOrdinal > len(args) {
+				got := len(args) - precedingCount
+				if got < 0 {
+					got = 0
+				}
+				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, got)
+			}
+			out = append(out, driver.NamedValue{Ordinal: i, Value: args[goOrdinal-1].Value})
+			continue
 		}
-	}
-	if start == 0 && !hasNamedOutside {
-		return args[start:end]
-	}
 
-	stmtArgs := make([]driver.NamedValue, 0, len(args))
-	stmtArgs = append(stmtArgs, args[start:end]...)
+		name := C.GoString(cname)
+		if len(name) > 0 && name[0] == '?' {
+			// Numbered "?NNN" — SQLite index equals NNN.
+			if i > len(args) {
+				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", i, len(args))
+			}
+			out = append(out, driver.NamedValue{Ordinal: i, Value: args[i-1].Value})
+			continue
+		}
+
+		// Named ":name" / "@name" / "$name".
+		paramName := name[1:]
+		nv, ok := findNamedArg(args, paramName)
+		if !ok {
+			// Fall back to positional by SQLite index (matches single-statement
+			// behavior when database/sql still assigned Ordinals densely).
+			if i > len(args) {
+				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", i, len(args))
+			}
+			nv = args[i-1]
+			if nv.Name == "" {
+				nv.Name = paramName
+			}
+		}
+		out = append(out, driver.NamedValue{Name: nv.Name, Ordinal: i, Value: nv.Value})
+	}
+	return out, nil
+}
+
+func findNamedArg(args []driver.NamedValue, name string) (driver.NamedValue, bool) {
 	for i := range args {
-		if args[i].Name != "" && (i < start || i >= end) {
-			stmtArgs = append(stmtArgs, args[i])
+		if args[i].Name == name {
+			return args[i], true
 		}
 	}
-	for i := range stmtArgs {
-		stmtArgs[i].Ordinal = i + 1
-	}
-	return stmtArgs
+	return driver.NamedValue{}, false
 }
 
 // bindError converts a non-OK return code from bindValue into an error.
