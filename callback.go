@@ -35,21 +35,42 @@ import (
 //export callbackTrampoline
 func callbackTrampoline(ctx *C.sqlite3_context, argc C.int, argv **C.sqlite3_value) {
 	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:int(argc):int(argc)]
-	fi := lookupHandle(C.sqlite3_user_data(ctx)).(*functionInfo)
+	hval := lookupHandleVal(C.sqlite3_user_data(ctx))
+	fi := hval.val.(*functionInfo)
+	defer recoverCallback(ctx, hval.db)
 	fi.Call(ctx, args)
 }
 
 //export stepTrampoline
 func stepTrampoline(ctx *C.sqlite3_context, argc C.int, argv **C.sqlite3_value) {
 	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:int(argc):int(argc)]
-	ai := lookupHandle(C.sqlite3_user_data(ctx)).(*aggInfo)
+	hval := lookupHandleVal(C.sqlite3_user_data(ctx))
+	ai := hval.val.(*aggInfo)
+	defer recoverCallback(ctx, hval.db)
 	ai.Step(ctx, args)
 }
 
 //export doneTrampoline
 func doneTrampoline(ctx *C.sqlite3_context) {
-	ai := lookupHandle(C.sqlite3_user_data(ctx)).(*aggInfo)
+	hval := lookupHandleVal(C.sqlite3_user_data(ctx))
+	ai := hval.val.(*aggInfo)
+	defer recoverCallback(ctx, hval.db)
 	ai.Done(ctx)
+}
+
+// recoverCallback turns a panic inside a SQLite C callback into an SQL
+// error so sqlite3_step can return and release the connection mutex.
+// The original panic value is stashed on the connection for the Go
+// caller to re-raise after the C call returns.
+func recoverCallback(ctx *C.sqlite3_context, db *SQLiteConn) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	if db != nil {
+		db.noteCallbackPanic(r)
+	}
+	callbackError(ctx, fmt.Errorf("%v", r))
 }
 
 //export compareTrampoline
