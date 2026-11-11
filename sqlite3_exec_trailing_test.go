@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Yasuhiro Matsumoto <mattn.jp@gmail.com>.
+// Copyright (C) 2026 Yasuhiro Matsumoto <mattn.jp@gmail.com>.
 //
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
@@ -66,8 +66,14 @@ func TestExecTrailingCommentOrSemicolonKeepsResult(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if tc.want.hasID && id == 0 {
-					t.Fatalf("LastInsertId=0, want a new rowid")
+				if tc.want.hasID {
+					var maxID int64
+					if err := db.QueryRow(`SELECT max(id) FROM t`).Scan(&maxID); err != nil {
+						t.Fatal(err)
+					}
+					if id != maxID {
+						t.Fatalf("LastInsertId=%d, want %d", id, maxID)
+					}
 				}
 			})
 		}
