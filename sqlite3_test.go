@@ -633,6 +633,8 @@ func TestTimestamp(t *testing.T) {
 		{timestamp1, timestamp1},
 		{timestamp2.Unix(), timestamp2.Truncate(time.Second)},
 		{timestamp2.UnixNano() / int64(time.Millisecond), timestamp2.Truncate(time.Millisecond)},
+		{int64(-9466923354877), time.Date(1670, time.January, 2, 3, 4, 5, 123000000, time.UTC)},
+		{int64(9467204645123), time.Date(2270, time.January, 2, 3, 4, 5, 123000000, time.UTC)},
 		{timestamp1.In(tzTest), timestamp1.In(tzTest)},
 		{timestamp1.Format("2006-01-02 15:04:05.000"), timestamp1},
 		{timestamp1.Format("2006-01-02T15:04:05.000"), timestamp1},
