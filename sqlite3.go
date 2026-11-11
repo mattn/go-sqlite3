@@ -159,9 +159,9 @@ _sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowi
     return rv;
   }
   if (stmt == 0) {
-    // Empty statement
-    *rowid = 0;
-    *changes = 0;
+    // Empty statement (whitespace, comment, or a trailing ';').
+    // Leave *rowid and *changes unchanged so the caller can keep
+    // the previous statement's result.
     *pzTail = tail;
     return SQLITE_OK;
   }
@@ -1146,12 +1146,12 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 	}
 
 	precedingCount := 0
+	var res driver.Result
 	for {
 		s, err := c.prepareWithCache(ctx, query)
 		if err != nil {
 			return nil, err
 		}
-		var res driver.Result
 		ss := s.(*SQLiteStmt)
 		if ss.s != nil {
 			na := ss.NumInput()
@@ -1183,8 +1183,10 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 // execNoArgs executes a query with no parameters in a single CGO call per statement.
 func (c *SQLiteConn) execNoArgs(query string) (driver.Result, error) {
 	var res *SQLiteResult
+	// Keep rowid/changes across iterations: an empty trailing statement
+	// (comment or extra ';') must not replace the previous result with 0.
+	var rowid, changes C.longlong
 	for len(query) > 0 {
-		var rowid, changes C.longlong
 		var tail *C.char
 		var nParams C.int
 		pquery := C.CString(query)
