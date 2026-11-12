@@ -585,8 +585,11 @@ type SQLiteStmt struct {
 	cls         bool // True if the statement was created by SQLiteConn.Query
 	numInput    int32
 	namedParams map[string][3]int
-	cacheKey    string
-	metadata    *sqliteStmtMetadata
+	// paramNames caches sqlite3_bind_parameter_name per bind index; see bindParamNames.
+	paramNames     []string
+	hasNamedParams bool
+	cacheKey       string
+	metadata       *sqliteStmtMetadata
 	// repreps is the statement's cumulative re-prepare count observed
 	// at the last eager first step; a change means SQLite re-prepared
 	// the statement after a schema change and metadata must be rebuilt.
@@ -2504,16 +2507,40 @@ func (s *SQLiteStmt) bindNamedIndices(name string) [3]int {
 	return indices
 }
 
+// bindParamNames returns sqlite3_bind_parameter_name for each bind index of
+// the statement ("" for anonymous "?" and unused indices). Names do not change
+// after prepare, so they are read once and cached on the statement.
+func (s *SQLiteStmt) bindParamNames() ([]string, bool) {
+	if s.paramNames == nil {
+		names := make([]string, s.NumInput())
+		for i := range names {
+			if cname := C.sqlite3_bind_parameter_name(s.s, C.int(i+1)); cname != nil {
+				names[i] = C.GoString(cname)
+				s.hasNamedParams = true
+			}
+		}
+		s.paramNames = names
+	}
+	return s.paramNames, s.hasNamedParams
+}
+
 // stmtArgsFromBind maps Go driver args onto one SQLite statement's bind
 // parameters without "consuming" a prefix of the Go list.
 //
-// Anonymous "?" parameters use Go args at (precedingCount + sqliteIndex),
-// where precedingCount is the sum of sqlite3_bind_parameter_count for all
-// earlier statements in the same Exec/Query string.
+// Anonymous "?" parameters, and named parameters given a positional Go arg,
+// use Go args at (precedingCount + sqliteIndex), where precedingCount is the
+// sum of sqlite3_bind_parameter_count for all earlier statements in the same
+// Exec/Query string.
 //
-// Numbered ("?NNN") and named (":n", "@n", "$n") parameters bind from the
-// full Go list by their own index or name, so the same Go args can be reused
-// across statements (see https://github.com/mattn/go-sqlite3/issues/584).
+// Numbered ("?NNN") parameters bind from the full Go list by their own index,
+// and named (":n", "@n", "$n") parameters by a matching sql.Named arg, so the
+// same Go args can be reused across statements
+// (see https://github.com/mattn/go-sqlite3/issues/584).
+//
+// SQLite reports no name for both anonymous "?" and the unused indices below a
+// numbered "?NNN". In a statement that has numbered or named parameters, such
+// an index binds the Go arg at its own index when there is one and is
+// otherwise left unbound, so reusing a sparse "?2" does not fail.
 //
 // Mixing anonymous "?" with numbered/named forms across statements in one
 // Exec/Query string is not supported; the anonymous offset still advances by
@@ -2524,59 +2551,69 @@ func (s *SQLiteStmt) stmtArgsFromBind(args []driver.NamedValue, precedingCount i
 		return nil, nil
 	}
 
+	names, hasNamed := s.bindParamNames()
+	var byName map[string]driver.NamedValue
+	if hasNamed {
+		for _, arg := range args {
+			if arg.Name != "" {
+				if byName == nil {
+					byName = make(map[string]driver.NamedValue)
+				}
+				byName[arg.Name] = arg // a later duplicate name wins
+			}
+		}
+	}
+
+	positional := func(i int) (driver.NamedValue, error) {
+		goOrdinal := precedingCount + i
+		if goOrdinal > len(args) {
+			got := len(args) - precedingCount
+			if got < 0 {
+				got = 0
+			}
+			return driver.NamedValue{}, fmt.Errorf("not enough args to execute query: want %d got %d", na, got)
+		}
+		return driver.NamedValue{Ordinal: i, Value: args[goOrdinal-1].Value}, nil
+	}
+
 	out := make([]driver.NamedValue, 0, na)
 	for i := 1; i <= na; i++ {
-		cname := C.sqlite3_bind_parameter_name(s.s, C.int(i))
-		if cname == nil {
-			// Anonymous "?".
-			goOrdinal := precedingCount + i
-			if goOrdinal > len(args) {
-				got := len(args) - precedingCount
-				if got < 0 {
-					got = 0
-				}
-				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", na, got)
+		name := names[i-1]
+		switch {
+		case name == "" && hasNamed:
+			// Anonymous "?" or an unused index next to numbered/named params.
+			if i <= len(args) {
+				out = append(out, driver.NamedValue{Ordinal: i, Value: args[i-1].Value})
 			}
-			out = append(out, driver.NamedValue{Ordinal: i, Value: args[goOrdinal-1].Value})
-			continue
-		}
-
-		name := C.GoString(cname)
-		if len(name) > 0 && name[0] == '?' {
+		case name == "":
+			// Anonymous "?".
+			nv, err := positional(i)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, nv)
+		case name[0] == '?':
 			// Numbered "?NNN" — SQLite index equals NNN.
 			if i > len(args) {
 				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", i, len(args))
 			}
 			out = append(out, driver.NamedValue{Ordinal: i, Value: args[i-1].Value})
-			continue
-		}
-
-		// Named ":name" / "@name" / "$name".
-		paramName := name[1:]
-		nv, ok := findNamedArg(args, paramName)
-		if !ok {
-			// Fall back to positional by SQLite index (matches single-statement
-			// behavior when database/sql still assigned Ordinals densely).
-			if i > len(args) {
-				return nil, fmt.Errorf("not enough args to execute query: want %d got %d", i, len(args))
+		default:
+			// Named ":name" / "@name" / "$name".
+			if nv, ok := byName[name[1:]]; ok {
+				out = append(out, driver.NamedValue{Name: nv.Name, Ordinal: i, Value: nv.Value})
+				continue
 			}
-			nv = args[i-1]
-			if nv.Name == "" {
-				nv.Name = paramName
+			// No matching sql.Named arg: take the next positional Go arg for
+			// this statement, unnamed so that ":x" and "@x" keep distinct values.
+			nv, err := positional(i)
+			if err != nil {
+				return nil, err
 			}
+			out = append(out, nv)
 		}
-		out = append(out, driver.NamedValue{Name: nv.Name, Ordinal: i, Value: nv.Value})
 	}
 	return out, nil
-}
-
-func findNamedArg(args []driver.NamedValue, name string) (driver.NamedValue, bool) {
-	for i := range args {
-		if args[i].Name == name {
-			return args[i], true
-		}
-	}
-	return driver.NamedValue{}, false
 }
 
 // bindError converts a non-OK return code from bindValue into an error.
