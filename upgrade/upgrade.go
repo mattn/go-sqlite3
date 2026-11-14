@@ -174,6 +174,17 @@ func main() {
 			f.Close()
 			log.Fatal(err)
 		}
+		if strings.HasSuffix(zf.Name, ".c") {
+			// SQLite's Windows mutex uses SRWLOCK, which <windows.h> only
+			// declares for Vista or later. Some toolchains (e.g. older 32-bit
+			// MinGW) still default to an older target, so raise it when needed.
+			_, err = io.WriteString(f, "#if defined(_WIN32) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600)\n#undef _WIN32_WINNT\n#define _WIN32_WINNT 0x0600\n#endif\n")
+			if err != nil {
+				zr.Close()
+				f.Close()
+				log.Fatal(err)
+			}
+		}
 		scanner := bufio.NewScanner(zr)
 		var werr error
 		for scanner.Scan() {
