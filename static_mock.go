@@ -8,16 +8,11 @@
 package sqlite3
 
 import (
-	"database/sql"
 	"database/sql/driver"
 	"errors"
 )
 
 var errorMsg = errors.New("Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub")
-
-func init() {
-	sql.Register("sqlite3", &SQLiteDriver{})
-}
 
 type (
 	SQLiteDriver struct {

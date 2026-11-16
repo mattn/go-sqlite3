@@ -389,7 +389,6 @@ static int sqlite3_system_errno(sqlite3 *db) {
 import "C"
 import (
 	"context"
-	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -429,16 +428,6 @@ const (
 	columnDatetime  string = "datetime"
 	columnTimestamp string = "timestamp"
 )
-
-// This variable can be replaced with -ldflags like below:
-// go build -ldflags="-X 'github.com/mattn/go-sqlite3.driverName=my-sqlite3'"
-var driverName = "sqlite3"
-
-func init() {
-	if driverName != "" {
-		sql.Register(driverName, &SQLiteDriver{})
-	}
-}
 
 // Version returns SQLite library version information.
 func Version() (libVersion string, libVersionNumber int, sourceID string) {
