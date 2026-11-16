@@ -36,8 +36,11 @@ import (
 func callbackTrampoline(ctx *C.sqlite3_context, argc C.int, argv **C.sqlite3_value) {
 	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:int(argc):int(argc)]
 	hval := lookupHandleVal(C.sqlite3_user_data(ctx))
-	fi := hval.val.(*functionInfo)
+	// Install the recovery before the type assertion: a handle removed by Close can
+	// leave hval.val nil or holding a different type, and that panic must become a
+	// callback error instead of unwinding through C.
 	defer recoverCallback(ctx, hval.db)
+	fi := hval.val.(*functionInfo)
 	fi.Call(ctx, args)
 }
 
@@ -45,16 +48,16 @@ func callbackTrampoline(ctx *C.sqlite3_context, argc C.int, argv **C.sqlite3_val
 func stepTrampoline(ctx *C.sqlite3_context, argc C.int, argv **C.sqlite3_value) {
 	args := (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.sqlite3_value)(nil))]*C.sqlite3_value)(unsafe.Pointer(argv))[:int(argc):int(argc)]
 	hval := lookupHandleVal(C.sqlite3_user_data(ctx))
-	ai := hval.val.(*aggInfo)
 	defer recoverCallback(ctx, hval.db)
+	ai := hval.val.(*aggInfo)
 	ai.Step(ctx, args)
 }
 
 //export doneTrampoline
 func doneTrampoline(ctx *C.sqlite3_context) {
 	hval := lookupHandleVal(C.sqlite3_user_data(ctx))
-	ai := hval.val.(*aggInfo)
 	defer recoverCallback(ctx, hval.db)
+	ai := hval.val.(*aggInfo)
 	ai.Done(ctx)
 }
 

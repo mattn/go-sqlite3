@@ -2758,27 +2758,36 @@ func (s *SQLiteStmt) exec(ctx context.Context, args []driver.NamedValue) (driver
 	sema := make(chan struct{})
 	var r driver.Result
 	var err error
+	// execSync re-raises a panic recovered inside a SQLite callback, and it runs on
+	// this goroutine: recover is impossible there, so carry the value back to the
+	// caller and panic again on its goroutine.
+	var callbackPanic any
 	go func() {
+		defer func() {
+			callbackPanic = recover()
+			close(sema)
+		}()
 		r, err = s.execSync(args)
-		close(sema)
 	}()
 	select {
 	case <-sema:
-		return r, err
 	case <-ctx.Done():
 		select {
 		case <-sema: // no need to interrupt, operation completed in db
-			return r, err
 		default:
 			// this is still racy and can be no-op if executed between sqlite3_* calls in execSync.
 			C.sqlite3_interrupt(s.c.db)
 			<-sema // wait for goroutine completed
 			if isInterruptErr(err) {
-				return nil, ctx.Err()
+				r = nil
+				err = ctx.Err()
 			}
-			return r, err
 		}
 	}
+	if callbackPanic != nil {
+		panic(callbackPanic)
+	}
+	return r, err
 }
 
 func (s *SQLiteStmt) execSync(args []driver.NamedValue) (driver.Result, error) {

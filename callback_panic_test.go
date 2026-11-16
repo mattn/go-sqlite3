@@ -1,8 +1,10 @@
 package sqlite3
 
 import (
+	"context"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"runtime"
 	"testing"
 	"time"
@@ -52,4 +54,75 @@ func TestRegisterFuncPanicReleasesConnectionMutex(t *testing.T) {
 
 func TestRegisterFuncErrorStillCloses(t *testing.T) {
 	closeAfterFuncFromOtherThread(t, func() (int64, error) { return 0, errors.New("boom") })
+}
+
+// ExecContext with a cancellable context runs the statement on a worker
+// goroutine. A callback panic used to be re-raised there, where recover is
+// impossible, killing the process instead of reaching the caller (see #1476).
+func TestRegisterFuncPanicPropagatesFromExecContext(t *testing.T) {
+	conn, err := (&SQLiteDriver{}).Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := conn.(*SQLiteConn)
+	defer func() {
+		if closeErr := c.Close(); closeErr != nil {
+			t.Fatal(closeErr)
+		}
+	}()
+	if err := c.RegisterFunc("boom", func() int64 { panic("boom") }, false); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("callback panic did not reach the caller goroutine")
+		}
+		if got := fmt.Sprint(r); got != "boom" {
+			t.Fatalf("unexpected panic value: %v", r)
+		}
+	}()
+	if _, execErr := c.ExecContext(ctx, "SELECT boom()", nil); execErr != nil {
+		t.Fatalf("ExecContext returned an error instead of the callback panic: %v", execErr)
+	}
+	t.Fatal("ExecContext returned without re-raising the callback panic")
+}
+
+// The interrupt path waits for the worker before returning, so it must also
+// re-raise a callback panic instead of returning the interrupt status.
+func TestRegisterFuncPanicAfterContextCancel(t *testing.T) {
+	conn, err := (&SQLiteDriver{}).Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := conn.(*SQLiteConn)
+	defer func() {
+		if closeErr := c.Close(); closeErr != nil {
+			t.Fatal(closeErr)
+		}
+	}()
+	if err := c.RegisterFunc("boom", func() int64 {
+		panic("boom after cancel")
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("callback panic did not reach the caller goroutine")
+		}
+		if got := fmt.Sprint(r); got != "boom after cancel" {
+			t.Fatalf("unexpected panic value: %v", r)
+		}
+	}()
+	if _, execErr := c.ExecContext(ctx, "SELECT boom()", nil); execErr != nil {
+		t.Fatalf("ExecContext returned an error instead of the callback panic: %v", execErr)
+	}
+	t.Fatal("ExecContext returned without re-raising the callback panic")
 }
