@@ -144,10 +144,11 @@ extern int _sqlite3_prepare_v2_blocking(sqlite3 *db, const char *zSql, int nByte
 // Combined prepare+step+finalize for simple exec without parameters.
 // Reduces CGO crossings from ~6 to 1 for the common no-args exec case.
 static int
-_sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowid, long long* changes, const char** pzTail)
+_sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowid, long long* changes, const char** pzTail, int* nParams)
 {
   sqlite3_stmt *stmt = 0;
   const char *tail = 0;
+  *nParams = 0;
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
   int rv = _sqlite3_prepare_v2_blocking(db, zSql, nBytes, &stmt, &tail);
 #else
@@ -158,10 +159,18 @@ _sqlite3_exec_no_args(sqlite3* db, const char* zSql, int nBytes, long long* rowi
     return rv;
   }
   if (stmt == 0) {
-    // Empty statement
-    *rowid = 0;
-    *changes = 0;
+    // Empty statement (whitespace, comment, or a trailing ';').
+    // Leave *rowid and *changes unchanged so the caller can keep
+    // the previous statement's result.
     *pzTail = tail;
+    return SQLITE_OK;
+  }
+  // Leave a statement with parameters unexecuted, the caller reports the
+  // missing arguments.
+  *nParams = sqlite3_bind_parameter_count(stmt);
+  if (*nParams > 0) {
+    sqlite3_finalize(stmt);
+    *pzTail = 0;
     return SQLITE_OK;
   }
 #ifdef SQLITE_ENABLE_UNLOCK_NOTIFY
@@ -380,7 +389,6 @@ static int sqlite3_system_errno(sqlite3 *db) {
 import "C"
 import (
 	"context"
-	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -392,6 +400,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -420,16 +429,6 @@ const (
 	columnDatetime  string = "datetime"
 	columnTimestamp string = "timestamp"
 )
-
-// This variable can be replaced with -ldflags like below:
-// go build -ldflags="-X 'github.com/mattn/go-sqlite3.driverName=my-sqlite3'"
-var driverName = "sqlite3"
-
-func init() {
-	if driverName != "" {
-		sql.Register(driverName, &SQLiteDriver{})
-	}
-}
 
 // Version returns SQLite library version information.
 func Version() (libVersion string, libVersionNumber int, sourceID string) {
@@ -539,6 +538,12 @@ type SQLiteDriver struct {
 type SQLiteConn struct {
 	mu sync.Mutex
 	db *C.sqlite3
+	// closing is set, with mu held, once Close starts closing the
+	// connection. SQLite runs callbacks such as the rollback hook or the
+	// Disconnect method of a virtual table while Close finalizes cached
+	// statements and closes the connection, so dbConnOpen reads closing
+	// without mu.
+	closing atomic.Bool
 	// activeRows identifies the cancellable Rows currently calling sqlite3_step.
 	// It is guarded by mu so a stale cancellation cannot interrupt later work.
 	activeRows  *SQLiteRows
@@ -1086,8 +1091,11 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl any, pure bool) error 
 }
 
 // AutoCommit return which currently auto commit or not.
-// It reports false once the connection has been closed.
+// It reports false once Close has started.
 func (c *SQLiteConn) AutoCommit() bool {
+	if c.closing.Load() {
+		return false
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
@@ -1137,12 +1145,12 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 	}
 
 	start := 0
+	var res driver.Result
 	for {
 		s, err := c.prepareWithCache(ctx, query)
 		if err != nil {
 			return nil, err
 		}
-		var res driver.Result
 		if s.(*SQLiteStmt).s != nil {
 			na := s.NumInput()
 			if len(args)-start < na {
@@ -1173,11 +1181,18 @@ func (c *SQLiteConn) exec(ctx context.Context, query string, args []driver.Named
 // execNoArgs executes a query with no parameters in a single CGO call per statement.
 func (c *SQLiteConn) execNoArgs(query string) (driver.Result, error) {
 	var res *SQLiteResult
+	// Keep rowid/changes across iterations: an empty trailing statement
+	// (comment or extra ';') must not replace the previous result with 0.
+	var rowid, changes C.longlong
 	for len(query) > 0 {
-		var rowid, changes C.longlong
 		var tail *C.char
+		var nParams C.int
 		pquery := C.CString(query)
-		rv := C._sqlite3_exec_no_args(c.db, pquery, C.int(len(query)), &rowid, &changes, &tail)
+		rv := C._sqlite3_exec_no_args(c.db, pquery, C.int(len(query)), &rowid, &changes, &tail, &nParams)
+		if nParams > 0 {
+			C.free(unsafe.Pointer(pquery))
+			return nil, fmt.Errorf("not enough args to execute query: want %d got 0", nParams)
+		}
 		if tail != nil && *tail != '\000' {
 			query = strings.TrimSpace(C.GoString(tail))
 		} else {
@@ -2093,9 +2108,11 @@ func (c *SQLiteConn) Close() error {
 		return nil
 	}
 	runtime.SetFinalizer(c, nil)
+	c.closing.Store(true)
 	c.closeCachedStmtsLocked()
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
+		c.closing.Store(false)
 		return lastError(c.db)
 	}
 	deleteHandles(c)
@@ -2108,7 +2125,7 @@ func (c *SQLiteConn) Close() error {
 }
 
 func (c *SQLiteConn) dbConnOpen() bool {
-	if c == nil {
+	if c == nil || c.closing.Load() {
 		return false
 	}
 	c.mu.Lock()
@@ -3104,8 +3121,8 @@ func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool)
 		switch col.typ {
 		case C.SQLITE_INTEGER:
 			val := int64(col.i64)
-			switch decltype[i] {
-			case columnTimestamp, columnDatetime, columnDate:
+			switch {
+			case isTimeDeclType(decltype[i]):
 				var t time.Time
 				// Assume a millisecond unix timestamp if it's 13 digits -- too
 				// large to be a reasonable timestamp in seconds.
@@ -3120,7 +3137,7 @@ func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool)
 					t = t.In(rc.s.c.loc)
 				}
 				dest[i] = t
-			case "boolean":
+			case decltype[i] == "boolean":
 				dest[i] = val > 0
 			default:
 				dest[i] = val
@@ -3144,8 +3161,8 @@ func (rc *SQLiteRows) readStepResult(dest []driver.Value, rv C.int, filled bool)
 			n := int(col.n)
 			s := C.GoStringN((*C.char)(unsafe.Pointer(col.ptr)), C.int(n))
 
-			switch decltype[i] {
-			case columnTimestamp, columnDatetime, columnDate:
+			switch {
+			case isTimeDeclType(decltype[i]):
 				var t time.Time
 				s = strings.TrimSuffix(s, "Z")
 				for _, format := range SQLiteTimestampFormats {

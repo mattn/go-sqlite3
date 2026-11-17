@@ -509,6 +509,12 @@ For an example, see [dinedal/go-sqlite3-extension-functions](https://github.com/
 
     Use `_loc=auto` in SQLite3 filename schema like `file:foo.db?_loc=auto`.
 
+- Which column declarations are converted to `time.Time`?
+
+    `DATE`, `DATETIME`, `TIMESTAMP`, and `TIMESTAMP WITH TIME ZONE` use the existing timestamp formats and `_loc` option. Declaration matching is case-insensitive, and whitespace between the words of `TIMESTAMP WITH TIME ZONE` is normalized. Other type names, including `TEXT`, retain their existing behavior.
+
+    Conversion requires SQLite's declared-column metadata. Expressions and `RETURNING` values for which SQLite supplies no declaration retain their native values. This does not add a new SQLite type or make timestamp declarations valid in `STRICT` tables.
+
 - Can I use this in multiple routines concurrently?
 
     Yes for readonly. But not for writable. See [#50](https://github.com/mattn/go-sqlite3/issues/50), [#51](https://github.com/mattn/go-sqlite3/issues/51), [#209](https://github.com/mattn/go-sqlite3/issues/209), [#274](https://github.com/mattn/go-sqlite3/issues/274).
