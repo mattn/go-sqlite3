@@ -17,6 +17,7 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -3016,6 +3017,48 @@ func benchmarkQueryParallel(b *testing.B) {
 			}
 		}
 	})
+}
+
+// TestExecSyncResetsStatement verifies that a successful Stmt.Exec resets the
+// statement (#912). INSERT ... RETURNING stops at its first row, so without
+// the reset the statement stays active and keeps the write transaction open:
+// another connection neither sees the row nor can write.
+func TestExecSyncResetsStatement(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	db1, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db1.Close()
+	db1.SetMaxOpenConns(1)
+	db2, err := sql.Open("sqlite3", path+"?_busy_timeout=0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db2.Close()
+
+	if _, err := db1.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	stmt, err := db1.Prepare("INSERT INTO t (id) VALUES (?) RETURNING id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stmt.Close()
+	if _, err := stmt.Exec(1); err != nil {
+		t.Fatal(err)
+	}
+
+	var n int
+	if err := db2.QueryRow("SELECT COUNT(*) FROM t").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("COUNT(*) from another connection = %d, want 1", n)
+	}
+	if _, err := db2.Exec("INSERT INTO t (id) VALUES (2)"); err != nil {
+		t.Fatalf("write from another connection: %v", err)
+	}
 }
 
 // TestConnMethodsAfterClose exercises the *SQLiteConn methods that reach
