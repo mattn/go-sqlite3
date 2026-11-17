@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type destroyErrModule struct{}
@@ -81,5 +82,85 @@ func TestVTabDestroyErrorThenClose(t *testing.T) {
 	// Must not panic.
 	if err := db.Close(); err != nil {
 		t.Logf("close err: %v", err)
+	}
+}
+
+type closeLimitModule struct{ limits chan int }
+
+type closeLimitVTab struct {
+	c      *SQLiteConn
+	limits chan int
+}
+
+func (m closeLimitModule) Create(c *SQLiteConn, args []string) (VTab, error) {
+	if err := c.DeclareVTab("CREATE TABLE x(test TEXT)"); err != nil {
+		return nil, err
+	}
+	return &closeLimitVTab{c: c, limits: m.limits}, nil
+}
+func (m closeLimitModule) Connect(c *SQLiteConn, args []string) (VTab, error) {
+	return m.Create(c, args)
+}
+func (m closeLimitModule) DestroyModule() {}
+
+func (v *closeLimitVTab) BestIndex(cst []InfoConstraint, ob []InfoOrderBy) (*IndexResult, error) {
+	return &IndexResult{Used: make([]bool, len(cst)), EstimatedCost: 100}, nil
+}
+func (v *closeLimitVTab) Disconnect() error {
+	select {
+	case v.limits <- v.c.GetLimit(SQLITE_LIMIT_LENGTH):
+	default:
+	}
+	return nil
+}
+func (v *closeLimitVTab) Destroy() error { return nil }
+func (v *closeLimitVTab) Open() (VTabCursor, error) {
+	return &destroyErrCursor{}, nil
+}
+
+// TestVTabDisconnectDuringClose: after PRAGMA writable_schema=RESET, a
+// cached statement holds the last reference to a virtual table, so Close
+// calls Disconnect when it finalizes the statement. Close holds c.mu
+// meanwhile, so a method that Disconnect calls must not wait for it.
+func TestVTabDisconnectDuringClose(t *testing.T) {
+	conn, err := (&SQLiteDriver{}).Open(":memory:?_stmt_cache_size=4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := conn.(*SQLiteConn)
+	limits := make(chan int, 1)
+	if err := c.CreateModule("closelimit", closeLimitModule{limits}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Exec("CREATE VIRTUAL TABLE vtab USING closelimit()", nil); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := c.Query("SELECT * FROM vtab", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Exec("PRAGMA writable_schema=RESET", nil); err != nil {
+		t.Fatal(err)
+	}
+	closed := make(chan error, 1)
+	go func() { closed <- c.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close did not return")
+	}
+	select {
+	case limit := <-limits:
+		if limit != -1 {
+			t.Errorf("GetLimit() = %d in Disconnect, want -1", limit)
+		}
+	default:
+		t.Error("Disconnect did not run")
 	}
 }

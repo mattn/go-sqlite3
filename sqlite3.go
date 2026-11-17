@@ -400,6 +400,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -537,6 +538,12 @@ type SQLiteDriver struct {
 type SQLiteConn struct {
 	mu sync.Mutex
 	db *C.sqlite3
+	// closing is set, with mu held, once Close starts closing the
+	// connection. SQLite runs callbacks such as the rollback hook or the
+	// Disconnect method of a virtual table while Close finalizes cached
+	// statements and closes the connection, so dbConnOpen reads closing
+	// without mu.
+	closing atomic.Bool
 	// activeRows identifies the cancellable Rows currently calling sqlite3_step.
 	// It is guarded by mu so a stale cancellation cannot interrupt later work.
 	activeRows  *SQLiteRows
@@ -1084,8 +1091,11 @@ func (c *SQLiteConn) RegisterAggregator(name string, impl any, pure bool) error 
 }
 
 // AutoCommit return which currently auto commit or not.
-// It reports false once the connection has been closed.
+// It reports false once Close has started.
 func (c *SQLiteConn) AutoCommit() bool {
+	if c.closing.Load() {
+		return false
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
@@ -2098,9 +2108,11 @@ func (c *SQLiteConn) Close() error {
 		return nil
 	}
 	runtime.SetFinalizer(c, nil)
+	c.closing.Store(true)
 	c.closeCachedStmtsLocked()
 	rv := C.sqlite3_close_v2(c.db)
 	if rv != C.SQLITE_OK {
+		c.closing.Store(false)
 		return lastError(c.db)
 	}
 	deleteHandles(c)
@@ -2113,7 +2125,7 @@ func (c *SQLiteConn) Close() error {
 }
 
 func (c *SQLiteConn) dbConnOpen() bool {
-	if c == nil {
+	if c == nil || c.closing.Load() {
 		return false
 	}
 	c.mu.Lock()
