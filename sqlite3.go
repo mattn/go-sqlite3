@@ -546,7 +546,7 @@ type SQLiteConn struct {
 	closing atomic.Bool
 	// activeRows identifies the cancellable Rows currently calling sqlite3_step.
 	// It is guarded by mu so a stale cancellation cannot interrupt later work.
-	activeRows  *SQLiteRows
+	activeRows *SQLiteRows
 	// callbackPanic holds a panic recovered inside a SQLite C callback
 	// (RegisterFunc/aggregators). The trampoline converts it to an SQL
 	// error so SQLite can release the connection mutex, then the Go
@@ -555,9 +555,9 @@ type SQLiteConn struct {
 	callbackPanicMu sync.Mutex
 	callbackPanic   any
 	loc             *time.Location
-	txlock      string
-	funcs       []*functionInfo
-	aggregators []*aggInfo
+	txlock          string
+	funcs           []*functionInfo
+	aggregators     []*aggInfo
 	// authorizerMu guards authorizerHandle. It is deliberately not c.mu:
 	// sqlite3_set_authorizer takes db->mutex, while the cancellation path
 	// takes c.mu, so holding c.mu here would invert the lock order.
@@ -1206,6 +1206,7 @@ func (c *SQLiteConn) execNoArgs(query string) (driver.Result, error) {
 			query = ""
 		}
 		C.free(unsafe.Pointer(pquery))
+		c.raiseCallbackPanic()
 		if rv != C.SQLITE_ROW && rv != C.SQLITE_OK && rv != C.SQLITE_DONE {
 			return nil, c.lastError()
 		}
@@ -2859,7 +2860,9 @@ func (c *SQLiteConn) interruptActiveRows(rows *SQLiteRows) {
 // noteCallbackPanic records a panic recovered in a SQLite callback trampoline.
 func (c *SQLiteConn) noteCallbackPanic(v any) {
 	c.callbackPanicMu.Lock()
-	c.callbackPanic = v
+	if c.callbackPanic == nil {
+		c.callbackPanic = v
+	}
 	c.callbackPanicMu.Unlock()
 }
 

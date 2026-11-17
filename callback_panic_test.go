@@ -128,3 +128,31 @@ func TestRegisterFuncPanicAfterContextCancel(t *testing.T) {
 	}
 	t.Fatal("ExecContext returned without re-raising the callback panic")
 }
+
+// Exec without args takes the execNoArgs fast path, which must re-raise a
+// callback panic itself instead of leaving it for the next statement.
+func TestRegisterFuncPanicPropagatesFromExecNoArgs(t *testing.T) {
+	conn, err := (&SQLiteDriver{}).Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := conn.(*SQLiteConn)
+	defer c.Close()
+	if err := c.RegisterFunc("boom", func() int64 { panic("boom") }, false); err != nil {
+		t.Fatal(err)
+	}
+
+	func() {
+		defer func() {
+			if r := recover(); fmt.Sprint(r) != "boom" {
+				t.Fatalf("unexpected panic value: %v", r)
+			}
+		}()
+		_, err := c.Exec("SELECT boom()", nil)
+		t.Fatalf("Exec returned without re-raising the callback panic: %v", err)
+	}()
+
+	if _, err := c.Exec("SELECT 1", nil); err != nil {
+		t.Fatal(err)
+	}
+}
