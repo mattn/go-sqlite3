@@ -21,6 +21,23 @@ func (c *SQLiteConn) Ping(ctx context.Context) error {
 	return nil
 }
 
+// ResetSession implements driver.SessionResetter.
+// SQLite statements and transactions are reset when they finish, so a healthy
+// connection needs no additional cleanup before reuse.
+func (c *SQLiteConn) ResetSession(ctx context.Context) error {
+	if !c.IsValid() {
+		return driver.ErrBadConn
+	}
+	return nil
+}
+
+// IsValid reports whether the connection can be reused.
+func (c *SQLiteConn) IsValid() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.db != nil && !c.rollbackFailed
+}
+
 // QueryContext implement QueryerContext.
 func (c *SQLiteConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	return c.query(ctx, query, args)

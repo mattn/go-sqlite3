@@ -544,6 +544,9 @@ type SQLiteConn struct {
 	// statements and closes the connection, so dbConnOpen reads closing
 	// without mu.
 	closing atomic.Bool
+	// rollbackFailed marks an unfinished transaction after a failed rollback.
+	// It is guarded by mu and prevents the connection from returning to the pool.
+	rollbackFailed bool
 	// activeRows identifies the cancellable Rows currently calling sqlite3_step.
 	// It is guarded by mu so a stale cancellation cannot interrupt later work.
 	activeRows *SQLiteRows
@@ -753,7 +756,9 @@ func (tx *SQLiteTx) Commit() error {
 		// return from Commit() - we must clean up to honour its semantics.
 		// We don't know if the ROLLBACK is strictly necessary, but according
 		// to sqlite's docs, there is no harm in calling ROLLBACK unnecessarily.
-		tx.c.exec(context.Background(), "ROLLBACK", nil)
+		if rollbackErr := tx.Rollback(); errors.Is(rollbackErr, driver.ErrBadConn) {
+			return errors.Join(err, driver.ErrBadConn)
+		}
 	}
 	return err
 }
@@ -761,6 +766,14 @@ func (tx *SQLiteTx) Commit() error {
 // Rollback transaction.
 func (tx *SQLiteTx) Rollback() error {
 	_, err := tx.c.exec(context.Background(), "ROLLBACK", nil)
+	if err != nil && !tx.c.AutoCommit() {
+		tx.c.mu.Lock()
+		tx.c.rollbackFailed = true
+		tx.c.mu.Unlock()
+		// A pinned sql.Conn is not returned to the pool yet, so IsValid
+		// alone cannot prevent it from reusing the unfinished transaction.
+		return errors.Join(err, driver.ErrBadConn)
+	}
 	return err
 }
 
