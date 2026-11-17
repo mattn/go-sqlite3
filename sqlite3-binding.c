@@ -1,4 +1,8 @@
 #ifndef USE_LIBSQLITE3
+#if defined(_WIN32) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600)
+#undef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600
+#endif
 /******************************************************************************
 ** This file is an amalgamation of many separate C source files from SQLite
 ** version 3.54.1.  By combining all the individual C code files into this
