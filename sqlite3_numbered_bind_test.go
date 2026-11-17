@@ -2,6 +2,7 @@ package sqlite3
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 )
 
@@ -217,4 +218,99 @@ func TestNumberedAndNamedBindReuseInQuery(t *testing.T) {
 		t.Fatalf("named Query got (%d, %d), want (4, 3)", a, b)
 	}
 	assertRows(t, db, [][2]int64{{1, 2}, {3, 4}})
+}
+
+// A plain "?" next to a named placeholder is still an anonymous parameter: it
+// needs its own Go arg and must not be dropped because the statement also has
+// named parameters.
+func TestAnonymousPlaceholderNextToNamedNeedsArg(t *testing.T) {
+	db := openBindReuseDB(t)
+	_, err := db.Exec(`INSERT INTO t(a, b) VALUES (:a, ?)`, sql.Named("a", int64(10)))
+	if err == nil || !strings.Contains(err.Error(), "not enough args") {
+		t.Fatalf("expected a not-enough-args error, got %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO t(a, b) VALUES (:a, ?)`, sql.Named("a", int64(10)), int64(20)); err != nil {
+		t.Fatal(err)
+	}
+	assertRows(t, db, [][2]int64{{10, 20}})
+}
+
+// A named placeholder without a matching sql.Named arg may take an unnamed Go
+// arg, but not one that is named for another placeholder.
+func TestNamedFallbackSkipsNamedArgs(t *testing.T) {
+	db := openBindReuseDB(t)
+	_, err := db.Exec(`INSERT INTO t(a, b) VALUES (:a, :b)`, sql.Named("a", int64(1)), sql.Named("c", int64(2)))
+	if err == nil || !strings.Contains(err.Error(), "not enough args") {
+		t.Fatalf("expected a not-enough-args error, got %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO t(a, b) VALUES (:a, :b)`, sql.Named("a", int64(1)), int64(2)); err != nil {
+		t.Fatal(err)
+	}
+	assertRows(t, db, [][2]int64{{1, 2}})
+}
+
+// Mixing a plain "?" with a numbered placeholder in one statement binds each to
+// its own Go arg, before and after the index that "?NNN" skipped.
+func TestAnonymousPlaceholderMixedWithNumbered(t *testing.T) {
+	for _, tc := range []struct {
+		query string
+		args  []any
+		want  [2]int64
+	}{
+		{"INSERT INTO t(a, b) VALUES (?, ?2)", []any{int64(1), int64(2)}, [2]int64{1, 2}},
+		{"INSERT INTO t(a, b) VALUES (?3, ?)", []any{int64(1), int64(2), int64(3), int64(4)}, [2]int64{3, 4}},
+	} {
+		db := openBindReuseDB(t)
+		if _, err := db.Exec(tc.query, tc.args...); err != nil {
+			t.Fatalf("%s: %v", tc.query, err)
+		}
+		assertRows(t, db, [][2]int64{tc.want})
+		db.Close()
+	}
+}
+
+// A "?" inside a string literal, a quoted identifier or a comment is not a
+// placeholder, so this statement takes exactly one Go argument.
+func TestAnonymousParamsIgnoreQuotedQuestionMarks(t *testing.T) {
+	db := openBindReuseDB(t)
+	_, err := db.Exec(`INSERT INTO t(a, b) VALUES (?, '?' || "?" || "?") -- trailing ?`, int64(7))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var a int64
+	var b sql.NullString
+	if err := db.QueryRow(`SELECT a, b FROM t`).Scan(&a, &b); err != nil {
+		t.Fatal(err)
+	}
+	if a != 7 || b.String != "???" {
+		t.Fatalf("got (%d, %q), want (7, \"???\")", a, b.String)
+	}
+}
+
+func TestStatementAnonymousParams(t *testing.T) {
+	for _, tc := range []struct {
+		sql  string
+		want []int
+	}{
+		{"INSERT INTO t(a) VALUES (?)", []int{1}},
+		{"INSERT INTO t(a, b) VALUES (:a, ?)", []int{2}},
+		{"INSERT INTO t(a, b) VALUES (?, ?2)", []int{1}},
+		{"INSERT INTO t(a, b) VALUES (?3, ?)", []int{4}},
+		{"INSERT INTO t(a, b) VALUES (?2)", nil},
+		{"SELECT '?', ? -- ?\n", []int{1}},
+		{"SELECT \"?\" AS [a?], /* ? */ ?", []int{1}},
+		{"SELECT :a, :a, ?", []int{2}},
+	} {
+		got := statementAnonymousParams(tc.sql)
+		if len(got) != len(tc.want) {
+			t.Fatalf("%q: got %v, want %v", tc.sql, got, tc.want)
+		}
+		for _, idx := range tc.want {
+			if !got[idx] {
+				t.Fatalf("%q: index %d is not marked anonymous, got %v", tc.sql, idx, got)
+			}
+		}
+	}
 }

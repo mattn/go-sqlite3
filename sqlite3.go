@@ -588,8 +588,13 @@ type SQLiteStmt struct {
 	// paramNames caches sqlite3_bind_parameter_name per bind index; see bindParamNames.
 	paramNames     []string
 	hasNamedParams bool
-	cacheKey       string
-	metadata       *sqliteStmtMetadata
+	// sqlText is this statement's SQL, without the statements that follow it in
+	// the same Exec/Query string. anonymousParams maps the bind indices SQLite
+	// gave to a plain "?" placeholder; see statementAnonymousParams.
+	sqlText         string
+	anonymousParams map[int]bool
+	cacheKey        string
+	metadata        *sqliteStmtMetadata
 	// repreps is the statement's cumulative re-prepare count observed
 	// at the last eager first step; a change means SQLite re-prepared
 	// the statement after a schema change and metadata must be rebuilt.
@@ -2238,10 +2243,13 @@ func (c *SQLiteConn) prepare(ctx context.Context, query string) (driver.Stmt, er
 		return nil, c.lastError()
 	}
 	var t string
+	stmtSQL := query
 	if tail != nil && *tail != '\000' {
-		t = strings.TrimSpace(C.GoString(tail))
+		rest := C.GoString(tail)
+		t = strings.TrimSpace(rest)
+		stmtSQL = query[:len(query)-len(rest)]
 	}
-	ss := &SQLiteStmt{c: c, s: s, t: t}
+	ss := &SQLiteStmt{c: c, s: s, t: t, sqlText: stmtSQL}
 	if s != nil {
 		ss.numInput = int32(C.sqlite3_bind_parameter_count(s))
 	}
@@ -2524,6 +2532,103 @@ func (s *SQLiteStmt) bindParamNames() ([]string, bool) {
 	return s.paramNames, s.hasNamedParams
 }
 
+// statementAnonymousParams reports the bind index of every plain "?" in one
+// statement. SQLite gives both a plain "?" and an index left unused by a
+// numbered "?NNN" the empty parameter name, so the bind parameter API cannot
+// tell them apart, yet they need different handling: a "?" consumes a Go
+// argument, an unused index does not.
+//
+// The numbering mirrors SQLite: a plain "?" takes the index after the highest
+// one used so far, "?NNN" takes NNN, and a repeated named parameter keeps its
+// first index. Quoted strings, quoted identifiers and comments are skipped, so
+// a "?" inside them is not counted.
+func statementAnonymousParams(sql string) map[int]bool {
+	anonymous := make(map[int]bool)
+	named := make(map[string]int)
+	next := 0
+	for i := 0; i < len(sql); i++ {
+		switch sql[i] {
+		case '\'', '"', '`':
+			// String literal or quoted identifier; a doubled quote escapes it.
+			quote := sql[i]
+			for i++; i < len(sql); i++ {
+				if sql[i] == quote {
+					if i+1 < len(sql) && sql[i+1] == quote {
+						i++
+						continue
+					}
+					break
+				}
+			}
+		case '[':
+			// Bracketed identifier, closed by the next ']'.
+			for i++; i < len(sql) && sql[i] != ']'; i++ {
+			}
+		case '-':
+			if i+1 < len(sql) && sql[i+1] == '-' {
+				for i++; i < len(sql) && sql[i] != '\n'; i++ {
+				}
+			}
+		case '/':
+			if i+1 < len(sql) && sql[i+1] == '*' {
+				for i += 2; i+1 < len(sql) && !(sql[i] == '*' && sql[i+1] == '/'); i++ {
+				}
+				i++
+			}
+		case '?':
+			j := i + 1
+			for j < len(sql) && sql[j] >= '0' && sql[j] <= '9' {
+				j++
+			}
+			if j > i+1 {
+				// Numbered "?NNN": the parameter index is NNN itself.
+				if nnn, err := strconv.Atoi(sql[i+1 : j]); err == nil {
+					if nnn > next {
+						next = nnn
+					}
+					i = j - 1
+					continue
+				}
+			}
+			next++
+			anonymous[next] = true
+		case ':', '@', '$':
+			j := i + 1
+			for j < len(sql) && isParamNameByte(sql[j]) {
+				j++
+			}
+			if j == i+1 {
+				continue
+			}
+			if name := sql[i:j]; named[name] == 0 {
+				next++
+				named[name] = next
+			}
+			i = j - 1
+		}
+	}
+	return anonymous
+}
+
+func isParamNameByte(c byte) bool {
+	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+// anonymousParamIndices returns the cached plain-"?" indices of the statement.
+func (s *SQLiteStmt) anonymousParamIndices() map[int]bool {
+	if s.anonymousParams == nil {
+		s.anonymousParams = statementAnonymousParams(s.sqlText)
+		if s.sqlText == "" {
+			// No statement text to inspect: treat every index as a "?", as the
+			// driver did before it told the two cases apart.
+			for i := 1; i <= int(s.numInput); i++ {
+				s.anonymousParams[i] = true
+			}
+		}
+	}
+	return s.anonymousParams
+}
+
 // stmtArgsFromBind maps Go driver args onto one SQLite statement's bind
 // parameters without "consuming" a prefix of the Go list.
 //
@@ -2537,10 +2642,12 @@ func (s *SQLiteStmt) bindParamNames() ([]string, bool) {
 // same Go args can be reused across statements
 // (see https://github.com/mattn/go-sqlite3/issues/584).
 //
-// SQLite reports no name for both anonymous "?" and the unused indices below a
-// numbered "?NNN". In a statement that has numbered or named parameters, such
-// an index binds the Go arg at its own index when there is one and is
-// otherwise left unbound, so reusing a sparse "?2" does not fail.
+// SQLite reports no name for both an anonymous "?" and an index left unused by
+// a numbered "?NNN". statementAnonymousParams tells the two apart: a "?" needs
+// the Go arg at its own index and fails when there is none, while a sparse
+// index is skipped so a reused "?2" still works. A named parameter without a
+// matching sql.Named arg only falls back to an unnamed Go arg; a named one
+// stays with its own placeholder.
 //
 // Mixing anonymous "?" with numbered/named forms across statements in one
 // Exec/Query string is not supported; the anonymous offset still advances by
@@ -2576,17 +2683,45 @@ func (s *SQLiteStmt) stmtArgsFromBind(args []driver.NamedValue, precedingCount i
 		return driver.NamedValue{Ordinal: i, Value: args[goOrdinal-1].Value}, nil
 	}
 
+	// A named parameter without a matching sql.Named arg may still take a
+	// positional Go arg, but never one that is itself named for another
+	// placeholder: that arg belongs to its own name.
+	positionalForNamed := func(i int) (driver.NamedValue, error) {
+		goOrdinal := precedingCount + i
+		unnamed := 0
+		for _, arg := range args {
+			if arg.Name == "" {
+				unnamed++
+			}
+		}
+		if goOrdinal > len(args) || args[goOrdinal-1].Name != "" {
+			return driver.NamedValue{}, fmt.Errorf("not enough args to execute query: want %d got %d", na, unnamed)
+		}
+		return driver.NamedValue{Ordinal: i, Value: args[goOrdinal-1].Value}, nil
+	}
+
+	// Only a statement that mixes unnamed indices with named or numbered
+	// parameters needs the statement text to tell a "?" from a sparse index;
+	// without such parameters every unnamed index is a plain "?".
+	var anonymous map[int]bool
+	if hasNamed {
+		for _, name := range names {
+			if name == "" {
+				anonymous = s.anonymousParamIndices()
+				break
+			}
+		}
+	}
 	out := make([]driver.NamedValue, 0, na)
 	for i := 1; i <= na; i++ {
 		name := names[i-1]
 		switch {
-		case name == "" && hasNamed:
-			// Anonymous "?" or an unused index next to numbered/named params.
-			if i <= len(args) {
-				out = append(out, driver.NamedValue{Ordinal: i, Value: args[i-1].Value})
-			}
 		case name == "":
-			// Anonymous "?".
+			if hasNamed && !anonymous[i] {
+				// An index left unused by a numbered "?NNN": it is not a "?",
+				// so it takes no Go argument.
+				continue
+			}
 			nv, err := positional(i)
 			if err != nil {
 				return nil, err
@@ -2606,7 +2741,7 @@ func (s *SQLiteStmt) stmtArgsFromBind(args []driver.NamedValue, precedingCount i
 			}
 			// No matching sql.Named arg: take the next positional Go arg for
 			// this statement, unnamed so that ":x" and "@x" keep distinct values.
-			nv, err := positional(i)
+			nv, err := positionalForNamed(i)
 			if err != nil {
 				return nil, err
 			}
