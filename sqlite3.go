@@ -756,7 +756,9 @@ func (tx *SQLiteTx) Commit() error {
 		// return from Commit() - we must clean up to honour its semantics.
 		// We don't know if the ROLLBACK is strictly necessary, but according
 		// to sqlite's docs, there is no harm in calling ROLLBACK unnecessarily.
-		tx.Rollback()
+		if rollbackErr := tx.Rollback(); errors.Is(rollbackErr, driver.ErrBadConn) {
+			return errors.Join(err, driver.ErrBadConn)
+		}
 	}
 	return err
 }
@@ -768,6 +770,9 @@ func (tx *SQLiteTx) Rollback() error {
 		tx.c.mu.Lock()
 		tx.c.rollbackFailed = true
 		tx.c.mu.Unlock()
+		// A pinned sql.Conn is not returned to the pool yet, so IsValid
+		// alone cannot prevent it from reusing the unfinished transaction.
+		return errors.Join(err, driver.ErrBadConn)
 	}
 	return err
 }
