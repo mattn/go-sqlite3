@@ -20,6 +20,10 @@ import (
 	"unsafe"
 )
 
+// sqliteMaxAllocationSize matches SQLite's SQLITE_MAX_ALLOCATION_SIZE.
+// See https://www.sqlite.org/security.html
+const sqliteMaxAllocationSize = 2147483391
+
 // Serialize returns a byte slice that is a serialization of the database.
 //
 // See https://www.sqlite.org/c3ref/serialize.html
@@ -49,26 +53,37 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 
 // Deserialize causes the connection to disconnect from the current database and
 // then re-open as an in-memory database based on the contents of the byte slice.
+// The slice is pinned until the connection is closed; callers must not modify b
+// while the connection is open.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	if schema == "" {
 		schema = "main"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.db == nil {
+		return fmt.Errorf("deserialize failed: connection closed")
+	}
+
 	var zSchema *C.char
 	zSchema = C.CString(schema)
 	defer C.free(unsafe.Pointer(zSchema))
 
-	tmpBuf := (*C.uchar)(C.sqlite3_malloc64(C.sqlite3_uint64(len(b))))
-	if tmpBuf == nil && len(b) > 0 {
-		return fmt.Errorf("deserialize failed: out of memory")
+	var pData *C.uchar
+	if len(b) > 0 {
+		pData = (*C.uchar)(unsafe.Pointer(unsafe.SliceData(b)))
 	}
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(tmpBuf)), len(b)), b)
 
-	rc := C.sqlite3_deserialize(c.db, zSchema, tmpBuf, C.sqlite3_int64(len(b)),
-		C.sqlite3_int64(len(b)), C.SQLITE_DESERIALIZE_FREEONCLOSE)
+	// Caller retains ownership of b; do not use SQLITE_DESERIALIZE_FREEONCLOSE,
+	// which would require a buffer from sqlite3_malloc64 (limited to ~2GiB).
+	rc := C.sqlite3_deserialize(c.db, zSchema, pData, C.sqlite3_int64(len(b)),
+		C.sqlite3_int64(len(b)), 0)
 	if rc != C.SQLITE_OK {
-		return fmt.Errorf("deserialize failed with return %v", rc)
+		return c.lastError()
 	}
+	c.deserializeBuf = b
 	return nil
 }
