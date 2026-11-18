@@ -60,35 +60,35 @@ func (c *SQLiteConn) clearDeserializeBufLocked() {
 	c.deserializeBuf = nil
 }
 
-func (c *SQLiteConn) beginDeserializeBufLocked(b []byte) error {
-	c.clearDeserializeBufLocked()
+func (c *SQLiteConn) checkDeserializeBufOwnershipLocked(b []byte) error {
 	if len(b) == 0 {
-		c.deserializeBuf = b
 		return nil
 	}
 	if ownerID, ok := deserializeBufOwnerID(b); ok && ownerID != connDeserializeID(c) {
 		return fmt.Errorf("deserialize failed: byte slice already active on another connection")
 	}
-	if c.deserializePinner == nil {
-		c.deserializePinner = &runtime.Pinner{}
-	} else {
-		c.deserializePinner.Unpin()
-	}
-	c.deserializePinner.Pin(unsafe.SliceData(b))
-	c.deserializeBuf = b
 	return nil
 }
 
-func (c *SQLiteConn) commitDeserializeBufLocked(b []byte) {
-	if len(b) > 0 {
-		deserializeBufOwners.Store(deserializeBufKey(b), connDeserializeID(c))
+func pinDeserializeSlice(pinner *runtime.Pinner, b []byte) {
+	if len(b) == 0 {
+		return
 	}
+	pinner.Pin(unsafe.SliceData(b))
 }
 
-func (c *SQLiteConn) rollbackDeserializeBufLocked() {
-	if c.deserializePinner != nil {
-		c.deserializePinner.Unpin()
-		c.deserializePinner = nil
+// installDeserializeBufLocked replaces any previously retained buffer after
+// sqlite3_deserialize succeeds.
+func (c *SQLiteConn) installDeserializeBufLocked(b []byte) {
+	c.clearDeserializeBufLocked()
+	if len(b) == 0 {
+		c.deserializeBuf = b
+		return
 	}
-	c.deserializeBuf = nil
+	if c.deserializePinner == nil {
+		c.deserializePinner = &runtime.Pinner{}
+	}
+	c.deserializePinner.Pin(unsafe.SliceData(b))
+	deserializeBufOwners.Store(deserializeBufKey(b), connDeserializeID(c))
+	c.deserializeBuf = b
 }

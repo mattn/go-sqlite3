@@ -60,6 +60,26 @@ func assertDeserializeBufUnset(t *testing.T, c *SQLiteConn) {
 	}
 }
 
+func assertDeserializeBufBacking(t *testing.T, c *SQLiteConn, want []byte) {
+	t.Helper()
+	c.mu.Lock()
+	got := c.deserializeBuf
+	hasPinner := c.deserializePinner != nil
+	c.mu.Unlock()
+	if len(want) == 0 {
+		if got == nil || len(got) != 0 {
+			t.Fatalf("deserializeBuf=%v, want empty", got)
+		}
+		return
+	}
+	if !bytesSameBacking(got, want) {
+		t.Fatal("deserializeBuf backing does not match expected slice")
+	}
+	if !hasPinner {
+		t.Fatal("deserializePinner should remain set for retained buffer")
+	}
+}
+
 func execSQLiteConn(t *testing.T, c *SQLiteConn, query string) {
 	t.Helper()
 	if _, err := c.Exec(query, nil); err != nil {
@@ -215,14 +235,22 @@ func TestDeserializeInvalidPayload(t *testing.T) {
 }
 
 func TestDeserializeFailsWithSQLiteError(t *testing.T) {
-	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
-		execSQLiteConn(t, c, `CREATE TABLE busy_target (id INTEGER PRIMARY KEY)`)
+	first := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE busy_target (id INTEGER PRIMARY KEY, tag TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO busy_target (tag) VALUES ('keep')`)
 	})
+	second := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE busy_target (id INTEGER PRIMARY KEY, tag TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO busy_target (tag) VALUES ('replace')`)
+	})
+
 	dst := openMemorySQLiteConn(t)
 	defer dst.Close()
+	firstBuf := append([]byte(nil), first...)
+	deserializeConn(t, dst, firstBuf, "")
 	execSQLiteConn(t, dst, `BEGIN IMMEDIATE`)
 
-	err := dst.Deserialize(data, "")
+	err := dst.Deserialize(second, "")
 	if err == nil {
 		execSQLiteConn(t, dst, `ROLLBACK`)
 		t.Fatal("expected error while deserializing during an open write transaction")
@@ -236,7 +264,15 @@ func TestDeserializeFailsWithSQLiteError(t *testing.T) {
 	if sqlErr.Code == 0 {
 		t.Fatalf("unexpected success code: %#v", sqlErr)
 	}
-	assertDeserializeBufUnset(t, dst)
+	assertDeserializeBufBacking(t, dst, firstBuf)
+
+	var tag string
+	if err := dst.queryString(t, `SELECT tag FROM busy_target LIMIT 1`, &tag); err != nil {
+		t.Fatal(err)
+	}
+	if tag != "keep" {
+		t.Fatalf("tag=%q, want keep", tag)
+	}
 }
 
 func TestDeserializeSchemaEmptyAndMain(t *testing.T) {
@@ -856,4 +892,67 @@ func TestDeserializeRollbackUnpinsAfterFailure(t *testing.T) {
 		t.Fatal("pinner should be cleared after failed Deserialize")
 	}
 	dst.mu.Unlock()
+}
+
+func TestDeserializePreservesBufferOnTempSchemaFailure(t *testing.T) {
+	first := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE keep_me (v TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO keep_me (v) VALUES ('original')`)
+	})
+	reject := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE reject (v TEXT)`)
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	firstBuf := append([]byte(nil), first...)
+	deserializeConn(t, dst, firstBuf, "")
+
+	if err := dst.Deserialize(reject, "temp"); err == nil {
+		t.Fatal("expected temp schema error")
+	}
+	assertDeserializeBufBacking(t, dst, firstBuf)
+
+	var v string
+	if err := dst.queryString(t, `SELECT v FROM keep_me`, &v); err != nil {
+		t.Fatal(err)
+	}
+	if v != "original" {
+		t.Fatalf("v=%q, want original", v)
+	}
+}
+
+func TestDeserializeForeignBufferRejectedPreservesLocal(t *testing.T) {
+	bufA := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE a_only (x INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO a_only (x) VALUES (1)`)
+	})
+	bufB := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE b_only (y INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO b_only (y) VALUES (2)`)
+	})
+
+	connA := openMemorySQLiteConn(t)
+	defer connA.Close()
+	sliceA := append([]byte(nil), bufA...)
+	deserializeConn(t, connA, sliceA, "")
+
+	connB := openMemorySQLiteConn(t)
+	defer connB.Close()
+	sliceB := append([]byte(nil), bufB...)
+	deserializeConn(t, connB, sliceB, "")
+
+	err := connB.Deserialize(sliceA, "")
+	if err == nil {
+		t.Fatal("expected foreign buffer rejection on connection B")
+	}
+	assertDeserializeBufBacking(t, connB, sliceB)
+
+	var y int
+	if err := connB.queryRowViaDriver(t, `SELECT y FROM b_only`, &y); err != nil {
+		t.Fatal(err)
+	}
+	if y != 2 {
+		t.Fatalf("y=%d, want 2", y)
+	}
 }

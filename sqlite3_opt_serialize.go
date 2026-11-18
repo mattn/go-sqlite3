@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"unsafe"
 )
 
@@ -56,9 +57,13 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 // then re-open as an in-memory database based on the contents of the byte slice.
 //
 // The slice is pinned until the connection is closed; callers must not modify b
-// while the connection is open. The same byte slice must not be passed to
-// Deserialize on more than one connection at a time. Each connection keeps a
-// single retained buffer; a later Deserialize replaces the previous one.
+// while the connection is open. SQLite may write into the provided buffer while
+// the database is open (for example when growing a deserialized in-memory
+// database). Pass a copy when the original bytes must be preserved. The same byte
+// slice must not be passed to Deserialize on more than one connection at a time.
+// Each connection keeps a single retained buffer; a successful later Deserialize
+// replaces the previous one. Failed Deserialize calls leave the prior buffer and
+// database state intact.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
@@ -75,8 +80,14 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	deserializeGlobalMu.Lock()
 	defer deserializeGlobalMu.Unlock()
 
-	if err := c.beginDeserializeBufLocked(b); err != nil {
+	if err := c.checkDeserializeBufOwnershipLocked(b); err != nil {
 		return err
+	}
+
+	var stage runtime.Pinner
+	if len(b) > 0 {
+		pinDeserializeSlice(&stage, b)
+		defer stage.Unpin()
 	}
 
 	var zSchema *C.char
@@ -93,10 +104,9 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	rc := C.sqlite3_deserialize(c.db, zSchema, pData, C.sqlite3_int64(len(b)),
 		C.sqlite3_int64(len(b)), 0)
 	if rc != C.SQLITE_OK {
-		c.rollbackDeserializeBufLocked()
 		return deserializeError(c, rc)
 	}
-	c.commitDeserializeBufLocked(b)
+	c.installDeserializeBufLocked(b)
 	return nil
 }
 
