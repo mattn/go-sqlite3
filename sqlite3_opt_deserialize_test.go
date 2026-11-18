@@ -1,0 +1,958 @@
+//go:build cgo && (!libsqlite3 || sqlite_serialize)
+
+package sqlite3
+
+import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"fmt"
+	"math"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"unsafe"
+)
+
+func openMemorySQLiteConn(t *testing.T) *SQLiteConn {
+	t.Helper()
+	conn, err := (&SQLiteDriver{}).Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return conn.(*SQLiteConn)
+}
+
+func serializeConnAfterSetup(t *testing.T, setup func(t *testing.T, c *SQLiteConn)) []byte {
+	t.Helper()
+	c := openMemorySQLiteConn(t)
+	defer c.Close()
+	if setup != nil {
+		setup(t, c)
+	}
+	data, err := c.Serialize("")
+	if err != nil {
+		t.Fatalf("Serialize: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("Serialize: empty result")
+	}
+	return append([]byte(nil), data...)
+}
+
+func deserializeConn(t *testing.T, c *SQLiteConn, data []byte, schema string) {
+	t.Helper()
+	if err := c.Deserialize(data, schema); err != nil {
+		t.Fatalf("Deserialize(%q): %v", schema, err)
+	}
+}
+
+func assertDeserializeBufUnset(t *testing.T, c *SQLiteConn) {
+	t.Helper()
+	c.mu.Lock()
+	unset := c.deserializeBuf == nil
+	c.mu.Unlock()
+	if !unset {
+		t.Fatal("deserializeBuf should stay unset on failure")
+	}
+}
+
+func assertDeserializeBufBacking(t *testing.T, c *SQLiteConn, want []byte) {
+	t.Helper()
+	c.mu.Lock()
+	got := c.deserializeBuf
+	hasPinner := c.deserializePinner != nil
+	c.mu.Unlock()
+	if len(want) == 0 {
+		if got == nil || len(got) != 0 {
+			t.Fatalf("deserializeBuf=%v, want empty", got)
+		}
+		return
+	}
+	if !bytesSameBacking(got, want) {
+		t.Fatal("deserializeBuf backing does not match expected slice")
+	}
+	if !hasPinner {
+		t.Fatal("deserializePinner should remain set for retained buffer")
+	}
+}
+
+func execSQLiteConn(t *testing.T, c *SQLiteConn, query string) {
+	t.Helper()
+	if _, err := c.Exec(query, nil); err != nil {
+		t.Fatalf("Exec(%q): %v", query, err)
+	}
+}
+
+func (c *SQLiteConn) queryRowViaDriver(t *testing.T, query string, dest *int) error {
+	t.Helper()
+	rows, err := c.Query(query, nil)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	vals := make([]driver.Value, 1)
+	if err := rows.Next(vals); err != nil {
+		return err
+	}
+	switch n := vals[0].(type) {
+	case int64:
+		*dest = int(n)
+	case int:
+		*dest = n
+	default:
+		return fmt.Errorf("unexpected type %T", vals[0])
+	}
+	return nil
+}
+
+func (c *SQLiteConn) queryString(t *testing.T, query string, dest *string) error {
+	t.Helper()
+	rows, err := c.Query(query, nil)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	vals := make([]driver.Value, 1)
+	if err := rows.Next(vals); err != nil {
+		return err
+	}
+	s, ok := vals[0].(string)
+	if !ok {
+		return fmt.Errorf("unexpected type %T", vals[0])
+	}
+	*dest = s
+	return nil
+}
+
+func (c *SQLiteConn) queryBytes(t *testing.T, query string, dest *[]byte) error {
+	t.Helper()
+	rows, err := c.Query(query, nil)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	vals := make([]driver.Value, 1)
+	if err := rows.Next(vals); err != nil {
+		return err
+	}
+	b, ok := vals[0].([]byte)
+	if !ok {
+		return fmt.Errorf("unexpected type %T", vals[0])
+	}
+	*dest = append((*dest)[:0], b...)
+	return nil
+}
+
+func TestDeserializeRoundTripSQLLayers(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT NOT NULL)`)
+		execSQLiteConn(t, c, `INSERT INTO items (label) VALUES ('alpha'), ('beta')`)
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	deserializeConn(t, dst, data, "")
+
+	var count int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM items`, &count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("count=%d, want 2", count)
+	}
+}
+
+func TestDeserializePinsCallerBuffer(t *testing.T) {
+	payload := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE pinned (v TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO pinned (v) VALUES ('held')`)
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+
+	loadAndQuery := func(buf []byte) int {
+		deserializeConn(t, dst, buf, "")
+		var count int
+		if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM pinned`, &count); err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+
+	count := func() int {
+		local := append([]byte(nil), payload...)
+		return loadAndQuery(local)
+	}()
+	if count != 1 {
+		t.Fatalf("count=%d, want 1", count)
+	}
+
+	dst.mu.Lock()
+	pinned := dst.deserializeBuf
+	dst.mu.Unlock()
+	if len(pinned) == 0 {
+		t.Fatal("deserializeBuf not set")
+	}
+	if string(pinned) != string(payload) {
+		t.Fatal("pinned buffer content diverged from serialized payload")
+	}
+}
+
+func TestDeserializeEmptySlice(t *testing.T) {
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	empty := []byte{}
+	if err := dst.Deserialize(empty, ""); err != nil {
+		t.Fatalf("Deserialize empty: %v", err)
+	}
+	dst.mu.Lock()
+	if dst.deserializeBuf == nil {
+		t.Fatal("expected empty but non-nil pinned slice")
+	}
+	if len(dst.deserializeBuf) != 0 {
+		t.Fatalf("pinned len=%d, want 0", len(dst.deserializeBuf))
+	}
+	dst.mu.Unlock()
+}
+
+func TestDeserializeInvalidPayload(t *testing.T) {
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	garbage := []byte("not-a-sqlite-database-file")
+	err := dst.Deserialize(garbage, "")
+	if err != nil {
+		assertDeserializeBufUnset(t, dst)
+		return
+	}
+	if _, qerr := dst.Exec(`SELECT 1`, nil); qerr == nil {
+		t.Fatal("expected query failure for invalid deserialized payload")
+	}
+}
+
+func TestDeserializeFailsWithSQLiteError(t *testing.T) {
+	first := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE busy_target (id INTEGER PRIMARY KEY, tag TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO busy_target (tag) VALUES ('keep')`)
+	})
+	second := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE busy_target (id INTEGER PRIMARY KEY, tag TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO busy_target (tag) VALUES ('replace')`)
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	firstBuf := append([]byte(nil), first...)
+	deserializeConn(t, dst, firstBuf, "")
+	execSQLiteConn(t, dst, `BEGIN IMMEDIATE`)
+
+	err := dst.Deserialize(second, "")
+	if err == nil {
+		execSQLiteConn(t, dst, `ROLLBACK`)
+		t.Fatal("expected error while deserializing during an open write transaction")
+	}
+	execSQLiteConn(t, dst, `ROLLBACK`)
+
+	var sqlErr Error
+	if !errors.As(err, &sqlErr) {
+		t.Fatalf("expected sqlite3.Error, got %T: %v", err, err)
+	}
+	if sqlErr.Code == 0 {
+		t.Fatalf("unexpected success code: %#v", sqlErr)
+	}
+	assertDeserializeBufBacking(t, dst, firstBuf)
+
+	var tag string
+	if err := dst.queryString(t, `SELECT tag FROM busy_target LIMIT 1`, &tag); err != nil {
+		t.Fatal(err)
+	}
+	if tag != "keep" {
+		t.Fatalf("tag=%q, want keep", tag)
+	}
+}
+
+func TestDeserializeSchemaEmptyAndMain(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE schema_probe (x INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO schema_probe (x) VALUES (7)`)
+	})
+
+	for _, schema := range []string{"", "main"} {
+		schema := schema
+		t.Run("schema="+strconv.Quote(schema), func(t *testing.T) {
+			dst := openMemorySQLiteConn(t)
+			defer dst.Close()
+			deserializeConn(t, dst, data, schema)
+			var v int
+			if err := dst.queryRowViaDriver(t, `SELECT x FROM schema_probe`, &v); err != nil {
+				t.Fatal(err)
+			}
+			if v != 7 {
+				t.Fatalf("x=%d, want 7", v)
+			}
+		})
+	}
+}
+
+func TestDeserializeReplacesPreviousDatabase(t *testing.T) {
+	first := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE gen (n INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO gen (n) VALUES (1)`)
+	})
+	second := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE gen (n INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO gen (n) VALUES (1), (2), (3)`)
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	deserializeConn(t, dst, first, "")
+	var count int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM gen`, &count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("after first load count=%d, want 1", count)
+	}
+
+	deserializeConn(t, dst, second, "")
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM gen`, &count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Fatalf("after second load count=%d, want 3", count)
+	}
+}
+
+func TestDeserializeInsertWithinBuffer(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE growable (id INTEGER PRIMARY KEY, payload BLOB)`)
+	})
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	deserializeConn(t, dst, data, "")
+	execSQLiteConn(t, dst, `INSERT INTO growable (payload) VALUES (zeroblob(1024))`)
+	var count int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM growable`, &count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("count=%d, want 1", count)
+	}
+}
+
+func TestDeserializeClosedConnection(t *testing.T) {
+	data := serializeConnAfterSetup(t, nil)
+	c := openMemorySQLiteConn(t)
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err := c.Deserialize(data, "")
+	if err == nil {
+		t.Fatal("expected error on closed connection")
+	}
+	if !strings.Contains(err.Error(), "connection closed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDeserializeViaDatabaseSQLConn(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE via_sql (title TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO via_sql (title) VALUES ('ok')`)
+	})
+
+	db, err := sql.Open(driverName, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	sqlConn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlConn.Close()
+
+	var title string
+	if err := sqlConn.Raw(func(raw any) error {
+		sc := raw.(*SQLiteConn)
+		if err := sc.Deserialize(data, ""); err != nil {
+			return err
+		}
+		return sc.queryString(t, `SELECT title FROM via_sql`, &title)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if title != "ok" {
+		t.Fatalf("title=%q, want ok", title)
+	}
+}
+
+func TestDeserializePinnedSliceReleasedOnClose(t *testing.T) {
+	data := serializeConnAfterSetup(t, nil)
+	c := openMemorySQLiteConn(t)
+	deserializeConn(t, c, data, "")
+	c.mu.Lock()
+	if len(c.deserializeBuf) == 0 {
+		t.Fatal("expected pinned buffer before close")
+	}
+	c.mu.Unlock()
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.deserializeBuf != nil {
+		t.Fatal("deserializeBuf should be cleared after Close")
+	}
+}
+
+func TestDeserializeHugeBufferInvalidNotMallocOOM(t *testing.T) {
+	if testing.Short() {
+		t.Skip("allocates more than 2GiB")
+	}
+	if os.Getenv("GO_SQLITE3_TEST_LARGE") == "" {
+		t.Skip("set GO_SQLITE3_TEST_LARGE=1 to run")
+	}
+
+	huge := int64(sqliteMaxAllocationSize) + 4096
+	if huge > int64(math.MaxInt) {
+		t.Skip("payload size exceeds platform int")
+	}
+
+	buf := make([]byte, int(huge))
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+
+	if err := dst.Deserialize(buf, ""); err != nil {
+		t.Fatalf("Deserialize huge buffer: %v", err)
+	}
+	var count int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM sqlite_schema`, &count); err == nil {
+		t.Fatal("expected query to reject invalid huge payload")
+	}
+}
+
+func TestDeserializeFileRoundTrip(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE file_rt (id INTEGER PRIMARY KEY, note TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO file_rt (note) VALUES ('from-file')`)
+	})
+
+	path := TempFilename(t)
+	defer os.Remove(path)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	fromFile, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := sql.Open(driverName, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	sqlConn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlConn.Close()
+
+	var note string
+	if err := sqlConn.Raw(func(raw any) error {
+		sc := raw.(*SQLiteConn)
+		if err := sc.Deserialize(fromFile, ""); err != nil {
+			return err
+		}
+		return sc.queryString(t, `SELECT note FROM file_rt WHERE id = 1`, &note)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if note != "from-file" {
+		t.Fatalf("note=%q, want from-file", note)
+	}
+}
+
+func TestDeserializeMultipleTablesAndIndexes(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE a (id INTEGER PRIMARY KEY, name TEXT)`)
+		execSQLiteConn(t, c, `CREATE TABLE b (a_id INTEGER REFERENCES a(id))`)
+		execSQLiteConn(t, c, `CREATE INDEX idx_a_name ON a(name)`)
+		execSQLiteConn(t, c, `INSERT INTO a (name) VALUES ('x'), ('y')`)
+		execSQLiteConn(t, c, `INSERT INTO b (a_id) SELECT id FROM a`)
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	deserializeConn(t, dst, data, "")
+
+	var tables int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM sqlite_master WHERE type='table'`, &tables); err != nil {
+		t.Fatal(err)
+	}
+	if tables != 2 {
+		t.Fatalf("tables=%d, want 2", tables)
+	}
+	var rows int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM b`, &rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 2 {
+		t.Fatalf("rows=%d, want 2", rows)
+	}
+}
+
+func TestDeserializeAfterDeserializeDifferentBackingArrays(t *testing.T) {
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+
+	a := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE pass (tag TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO pass (tag) VALUES ('first')`)
+	})
+	b := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE pass (tag TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO pass (tag) VALUES ('second')`)
+	})
+
+	deserializeConn(t, dst, a, "")
+	var tag string
+	if err := dst.queryString(t, `SELECT tag FROM pass`, &tag); err != nil {
+		t.Fatal(err)
+	}
+	if tag != "first" {
+		t.Fatalf("tag=%q, want first", tag)
+	}
+
+	deserializeConn(t, dst, b, "")
+	if err := dst.queryString(t, `SELECT tag FROM pass`, &tag); err != nil {
+		t.Fatal(err)
+	}
+	if tag != "second" {
+		t.Fatalf("tag=%q, want second", tag)
+	}
+}
+
+func TestDeserializeBinaryBlobRoundTrip(t *testing.T) {
+	want := []byte{0, 1, 2, 255, 0, 17}
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE blobs (payload BLOB)`)
+		if _, err := c.Exec(`INSERT INTO blobs (payload) VALUES (?)`, []driver.Value{want}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	deserializeConn(t, dst, data, "")
+
+	var got []byte
+	if err := dst.queryBytes(t, `SELECT payload FROM blobs`, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("byte[%d]: got %d, want %d", i, got[i], want[i])
+		}
+	}
+}
+
+func TestDeserializeUsesProvidedBufferPointer(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE ptr_probe (n INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO ptr_probe (n) VALUES (99)`)
+	})
+	buf := append([]byte(nil), data...)
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+
+	inPtr := unsafe.Pointer(unsafe.SliceData(buf))
+	deserializeConn(t, dst, buf, "")
+
+	dst.mu.Lock()
+	pinned := dst.deserializeBuf
+	dst.mu.Unlock()
+	if uintptr(unsafe.Pointer(unsafe.SliceData(pinned))) != uintptr(inPtr) {
+		t.Fatal("deserializeBuf should reference the caller-supplied backing array")
+	}
+}
+
+func TestDeserializeManyRowsRoundTrip(t *testing.T) {
+	const rows = 500
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE bulk (id INTEGER PRIMARY KEY, note TEXT)`)
+		for i := 0; i < rows; i++ {
+			_, err := c.Exec(`INSERT INTO bulk (note) VALUES (?)`, []driver.Value{fmt.Sprintf("row-%d", i)})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	deserializeConn(t, dst, data, "")
+
+	var count int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM bulk`, &count); err != nil {
+		t.Fatal(err)
+	}
+	if count != rows {
+		t.Fatalf("count=%d, want %d", count, rows)
+	}
+}
+
+func TestDeserializePreservesViews(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE base (value INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO base (value) VALUES (5)`)
+		execSQLiteConn(t, c, `CREATE VIEW base_view AS SELECT value * 2 AS doubled FROM base`)
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	deserializeConn(t, dst, data, "")
+
+	var doubled int
+	if err := dst.queryRowViaDriver(t, `SELECT doubled FROM base_view`, &doubled); err != nil {
+		t.Fatal(err)
+	}
+	if doubled != 10 {
+		t.Fatalf("doubled=%d, want 10", doubled)
+	}
+}
+
+func TestDeserializeDeleteAndInsert(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE mutate (id INTEGER PRIMARY KEY)`)
+		execSQLiteConn(t, c, `INSERT INTO mutate (id) VALUES (1),(2),(3)`)
+	})
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	deserializeConn(t, dst, data, "")
+	execSQLiteConn(t, dst, `DELETE FROM mutate WHERE id = 2`)
+	execSQLiteConn(t, dst, `INSERT INTO mutate (id) VALUES (4)`)
+
+	var count int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM mutate`, &count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Fatalf("count=%d, want 3", count)
+	}
+}
+
+func TestDeserializeCloseWithPreparedStatement(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE stmt_probe (n INTEGER NOT NULL)`)
+		execSQLiteConn(t, c, `INSERT INTO stmt_probe (n) VALUES (42)`)
+	})
+
+	c := openMemorySQLiteConn(t)
+	deserializeConn(t, c, data, "")
+
+	stmt, err := c.Prepare(`SELECT n FROM stmt_probe WHERE n = ?`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c.mu.Lock()
+	pinned := len(c.deserializeBuf) > 0
+	c.mu.Unlock()
+	if !pinned {
+		t.Fatal("deserializeBuf should remain pinned until Close")
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	bufReleased := c.deserializeBuf == nil
+	c.mu.Unlock()
+	if !bufReleased {
+		t.Fatal("deserializeBuf should be cleared after Close")
+	}
+	_ = stmt.Close()
+}
+
+func TestDeserializeCloseWithOpenRows(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE open_rows (k INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO open_rows (k) VALUES (1),(2)`)
+	})
+
+	c := openMemorySQLiteConn(t)
+	deserializeConn(t, c, data, "")
+
+	rows, err := c.Query(`SELECT k FROM open_rows ORDER BY k`, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vals := make([]driver.Value, 1)
+	if err := rows.Next(vals); err != nil {
+		rows.Close()
+		t.Fatal(err)
+	}
+
+	if err := c.Close(); err != nil {
+		rows.Close()
+		t.Fatal(err)
+	}
+
+	c.mu.Lock()
+	if c.deserializeBuf != nil {
+		c.mu.Unlock()
+		rows.Close()
+		t.Fatal("deserializeBuf should be cleared after Close")
+	}
+	c.mu.Unlock()
+	_ = rows.Close()
+}
+
+func TestDeserializeSecondCallReplacesPinnedBuffer(t *testing.T) {
+	first := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE pin_swap (tag TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO pin_swap (tag) VALUES ('first')`)
+	})
+	second := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE pin_swap (tag TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO pin_swap (tag) VALUES ('second')`)
+	})
+
+	c := openMemorySQLiteConn(t)
+	defer c.Close()
+
+	firstBuf := append([]byte(nil), first...)
+	deserializeConn(t, c, firstBuf, "")
+	c.mu.Lock()
+	if !bytesSameBacking(c.deserializeBuf, firstBuf) {
+		c.mu.Unlock()
+		t.Fatal("first deserializeBuf should reference first buffer")
+	}
+	c.mu.Unlock()
+
+	secondBuf := append([]byte(nil), second...)
+	deserializeConn(t, c, secondBuf, "")
+	c.mu.Lock()
+	if !bytesSameBacking(c.deserializeBuf, secondBuf) {
+		c.mu.Unlock()
+		t.Fatal("second deserializeBuf should reference second buffer")
+	}
+	c.mu.Unlock()
+
+	var tag string
+	if err := c.queryString(t, `SELECT tag FROM pin_swap`, &tag); err != nil {
+		t.Fatal(err)
+	}
+	if tag != "second" {
+		t.Fatalf("tag=%q, want second", tag)
+	}
+}
+
+func bytesSameBacking(a, b []byte) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == 0 && len(b) == 0
+	}
+	return unsafe.Pointer(unsafe.SliceData(a)) == unsafe.Pointer(unsafe.SliceData(b))
+}
+
+func TestDeserializeTempSchemaFails(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE temp_target (n INTEGER)`)
+	})
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	err := dst.Deserialize(data, "temp")
+	if err == nil {
+		t.Fatal("expected error deserializing into temp schema")
+	}
+	var sqlErr Error
+	if !errors.As(err, &sqlErr) {
+		t.Fatalf("expected sqlite3.Error, got %T: %v", err, err)
+	}
+	if sqlErr.Code == 0 {
+		t.Fatalf("unexpected success code: %#v", sqlErr)
+	}
+	assertDeserializeBufUnset(t, dst)
+}
+
+func TestDeserializeExclusiveBuffer(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE exclusive (id INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO exclusive (id) VALUES (1)`)
+	})
+	buf := append([]byte(nil), data...)
+
+	first := openMemorySQLiteConn(t)
+	defer first.Close()
+	deserializeConn(t, first, buf, "")
+
+	second := openMemorySQLiteConn(t)
+	defer second.Close()
+	err := second.Deserialize(buf, "")
+	if err == nil {
+		t.Fatal("expected error when reusing the same buffer on another connection")
+	}
+	if !strings.Contains(err.Error(), "another connection") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertDeserializeBufUnset(t, second)
+}
+
+func TestDeserializeExclusiveBufferRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs concurrent Deserialize with -race")
+	}
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE race (id INTEGER PRIMARY KEY)`)
+	})
+	buf := append([]byte(nil), data...)
+
+	conns := make([]*SQLiteConn, 2)
+	for i := range conns {
+		conns[i] = openMemorySQLiteConn(t)
+		defer conns[i].Close()
+	}
+
+	const bufOwnerErr = "byte slice already active on another connection"
+	type deserializeResult struct {
+		idx int
+		err error
+	}
+	results := make(chan deserializeResult, len(conns))
+	var gate sync.WaitGroup
+	gate.Add(1)
+	for i := range conns {
+		i := i
+		go func() {
+			gate.Wait()
+			results <- deserializeResult{idx: i, err: conns[i].Deserialize(buf, "")}
+		}()
+	}
+	gate.Done()
+
+	var success, denied int
+	var winner *SQLiteConn
+	for i := 0; i < len(conns); i++ {
+		r := <-results
+		err := r.err
+		if err == nil {
+			success++
+			if winner == nil {
+				winner = conns[r.idx]
+			}
+			continue
+		}
+		if strings.Contains(err.Error(), bufOwnerErr) {
+			denied++
+			assertDeserializeBufUnset(t, conns[r.idx])
+			continue
+		}
+		t.Fatalf("unexpected error from concurrent Deserialize: %v", err)
+	}
+	if success != 1 || denied != 1 {
+		t.Fatalf("success=%d denied=%d, want 1 and 1", success, denied)
+	}
+	if winner == nil {
+		t.Fatal("expected one successful connection")
+	}
+	var count int
+	if err := winner.queryRowViaDriver(t, `SELECT COUNT(*) FROM race`, &count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("count=%d, want 0", count)
+	}
+}
+
+func TestDeserializeRollbackUnpinsAfterFailure(t *testing.T) {
+	data := serializeConnAfterSetup(t, nil)
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+
+	if err := dst.Deserialize(data, "temp"); err == nil {
+		t.Fatal("expected temp schema error")
+	}
+	assertDeserializeBufUnset(t, dst)
+
+	dst.mu.Lock()
+	if dst.deserializePinner != nil {
+		dst.mu.Unlock()
+		t.Fatal("pinner should be cleared after failed Deserialize")
+	}
+	dst.mu.Unlock()
+}
+
+func TestDeserializePreservesBufferOnTempSchemaFailure(t *testing.T) {
+	first := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE keep_me (v TEXT)`)
+		execSQLiteConn(t, c, `INSERT INTO keep_me (v) VALUES ('original')`)
+	})
+	reject := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE reject (v TEXT)`)
+	})
+
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	firstBuf := append([]byte(nil), first...)
+	deserializeConn(t, dst, firstBuf, "")
+
+	if err := dst.Deserialize(reject, "temp"); err == nil {
+		t.Fatal("expected temp schema error")
+	}
+	assertDeserializeBufBacking(t, dst, firstBuf)
+
+	var v string
+	if err := dst.queryString(t, `SELECT v FROM keep_me`, &v); err != nil {
+		t.Fatal(err)
+	}
+	if v != "original" {
+		t.Fatalf("v=%q, want original", v)
+	}
+}
+
+func TestDeserializeForeignBufferRejectedPreservesLocal(t *testing.T) {
+	bufA := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE a_only (x INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO a_only (x) VALUES (1)`)
+	})
+	bufB := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE b_only (y INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO b_only (y) VALUES (2)`)
+	})
+
+	connA := openMemorySQLiteConn(t)
+	defer connA.Close()
+	sliceA := append([]byte(nil), bufA...)
+	deserializeConn(t, connA, sliceA, "")
+
+	connB := openMemorySQLiteConn(t)
+	defer connB.Close()
+	sliceB := append([]byte(nil), bufB...)
+	deserializeConn(t, connB, sliceB, "")
+
+	err := connB.Deserialize(sliceA, "")
+	if err == nil {
+		t.Fatal("expected foreign buffer rejection on connection B")
+	}
+	assertDeserializeBufBacking(t, connB, sliceB)
+
+	var y int
+	if err := connB.queryRowViaDriver(t, `SELECT y FROM b_only`, &y); err != nil {
+		t.Fatal(err)
+	}
+	if y != 2 {
+		t.Fatalf("y=%d, want 2", y)
+	}
+}
