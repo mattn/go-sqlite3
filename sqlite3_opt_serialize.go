@@ -57,7 +57,8 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 //
 // The slice is pinned until the connection is closed; callers must not modify b
 // while the connection is open. The same byte slice must not be passed to
-// Deserialize on more than one connection at a time.
+// Deserialize on more than one connection at a time. Each connection keeps a
+// single retained buffer; a later Deserialize replaces the previous one.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
@@ -71,10 +72,11 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 		return fmt.Errorf("deserialize failed: connection closed")
 	}
 
-	if len(b) > 0 {
-		if owner := deserializeBufOwner(b); owner != nil && owner != c {
-			return fmt.Errorf("deserialize failed: byte slice already active on another connection")
-		}
+	deserializeGlobalMu.Lock()
+	defer deserializeGlobalMu.Unlock()
+
+	if err := c.beginDeserializeBufLocked(b); err != nil {
+		return err
 	}
 
 	var zSchema *C.char
@@ -91,9 +93,11 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	rc := C.sqlite3_deserialize(c.db, zSchema, pData, C.sqlite3_int64(len(b)),
 		C.sqlite3_int64(len(b)), 0)
 	if rc != C.SQLITE_OK {
+		c.rollbackDeserializeBufLocked()
 		return deserializeError(c, rc)
 	}
-	return c.adoptDeserializeBufLocked(b)
+	c.commitDeserializeBufLocked(b)
+	return nil
 }
 
 func deserializeError(c *SQLiteConn, rc C.int) error {

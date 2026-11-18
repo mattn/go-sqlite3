@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"unsafe"
 )
@@ -771,4 +772,88 @@ func TestDeserializeExclusiveBuffer(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	assertDeserializeBufUnset(t, second)
+}
+
+func TestDeserializeExclusiveBufferRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs concurrent Deserialize with -race")
+	}
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE race (id INTEGER PRIMARY KEY)`)
+	})
+	buf := append([]byte(nil), data...)
+
+	conns := make([]*SQLiteConn, 2)
+	for i := range conns {
+		conns[i] = openMemorySQLiteConn(t)
+		defer conns[i].Close()
+	}
+
+	const bufOwnerErr = "byte slice already active on another connection"
+	type deserializeResult struct {
+		idx int
+		err error
+	}
+	results := make(chan deserializeResult, len(conns))
+	var gate sync.WaitGroup
+	gate.Add(1)
+	for i := range conns {
+		i := i
+		go func() {
+			gate.Wait()
+			results <- deserializeResult{idx: i, err: conns[i].Deserialize(buf, "")}
+		}()
+	}
+	gate.Done()
+
+	var success, denied int
+	var winner *SQLiteConn
+	for i := 0; i < len(conns); i++ {
+		r := <-results
+		err := r.err
+		if err == nil {
+			success++
+			if winner == nil {
+				winner = conns[r.idx]
+			}
+			continue
+		}
+		if strings.Contains(err.Error(), bufOwnerErr) {
+			denied++
+			assertDeserializeBufUnset(t, conns[r.idx])
+			continue
+		}
+		t.Fatalf("unexpected error from concurrent Deserialize: %v", err)
+	}
+	if success != 1 || denied != 1 {
+		t.Fatalf("success=%d denied=%d, want 1 and 1", success, denied)
+	}
+	if winner == nil {
+		t.Fatal("expected one successful connection")
+	}
+	var count int
+	if err := winner.queryRowViaDriver(t, `SELECT COUNT(*) FROM race`, &count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("count=%d, want 0", count)
+	}
+}
+
+func TestDeserializeRollbackUnpinsAfterFailure(t *testing.T) {
+	data := serializeConnAfterSetup(t, nil)
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+
+	if err := dst.Deserialize(data, "temp"); err == nil {
+		t.Fatal("expected temp schema error")
+	}
+	assertDeserializeBufUnset(t, dst)
+
+	dst.mu.Lock()
+	if dst.deserializePinner != nil {
+		dst.mu.Unlock()
+		t.Fatal("pinner should be cleared after failed Deserialize")
+	}
+	dst.mu.Unlock()
 }
