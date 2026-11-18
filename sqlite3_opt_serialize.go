@@ -15,6 +15,7 @@ package sqlite3
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"unsafe"
@@ -53,8 +54,10 @@ func (c *SQLiteConn) Serialize(schema string) ([]byte, error) {
 
 // Deserialize causes the connection to disconnect from the current database and
 // then re-open as an in-memory database based on the contents of the byte slice.
+//
 // The slice is pinned until the connection is closed; callers must not modify b
-// while the connection is open.
+// while the connection is open. The same byte slice must not be passed to
+// Deserialize on more than one connection at a time.
 //
 // See https://www.sqlite.org/c3ref/deserialize.html
 func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
@@ -66,6 +69,12 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	defer c.mu.Unlock()
 	if c.db == nil {
 		return fmt.Errorf("deserialize failed: connection closed")
+	}
+
+	if len(b) > 0 {
+		if owner := deserializeBufOwner(b); owner != nil && owner != c {
+			return fmt.Errorf("deserialize failed: byte slice already active on another connection")
+		}
 	}
 
 	var zSchema *C.char
@@ -82,8 +91,25 @@ func (c *SQLiteConn) Deserialize(b []byte, schema string) error {
 	rc := C.sqlite3_deserialize(c.db, zSchema, pData, C.sqlite3_int64(len(b)),
 		C.sqlite3_int64(len(b)), 0)
 	if rc != C.SQLITE_OK {
-		return c.lastError()
+		return deserializeError(c, rc)
 	}
-	c.deserializeBuf = b
-	return nil
+	return c.adoptDeserializeBufLocked(b)
+}
+
+func deserializeError(c *SQLiteConn, rc C.int) error {
+	if err := c.lastError(); err != nil {
+		var sqlErr Error
+		if errors.As(err, &sqlErr) && sqlErr.Code == ErrNo(rc) {
+			return err
+		}
+	}
+	msg := C.GoString(C.sqlite3_errmsg(c.db))
+	if msg == "" {
+		msg = fmt.Sprintf("deserialize failed with return %d", int(rc))
+	}
+	return Error{
+		Code:         ErrNo(rc),
+		ExtendedCode: ErrNoExtended(C.sqlite3_extended_errcode(c.db)),
+		err:          msg,
+	}
 }

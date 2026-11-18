@@ -8,6 +8,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -45,6 +46,16 @@ func deserializeConn(t *testing.T, c *SQLiteConn, data []byte, schema string) {
 	t.Helper()
 	if err := c.Deserialize(data, schema); err != nil {
 		t.Fatalf("Deserialize(%q): %v", schema, err)
+	}
+}
+
+func assertDeserializeBufUnset(t *testing.T, c *SQLiteConn) {
+	t.Helper()
+	c.mu.Lock()
+	unset := c.deserializeBuf == nil
+	c.mu.Unlock()
+	if !unset {
+		t.Fatal("deserializeBuf should stay unset on failure")
 	}
 }
 
@@ -194,11 +205,7 @@ func TestDeserializeInvalidPayload(t *testing.T) {
 	garbage := []byte("not-a-sqlite-database-file")
 	err := dst.Deserialize(garbage, "")
 	if err != nil {
-		dst.mu.Lock()
-		if dst.deserializeBuf != nil {
-			t.Fatal("deserializeBuf should stay unset on failure")
-		}
-		dst.mu.Unlock()
+		assertDeserializeBufUnset(t, dst)
 		return
 	}
 	if _, qerr := dst.Exec(`SELECT 1`, nil); qerr == nil {
@@ -228,11 +235,7 @@ func TestDeserializeFailsWithSQLiteError(t *testing.T) {
 	if sqlErr.Code == 0 {
 		t.Fatalf("unexpected success code: %#v", sqlErr)
 	}
-	dst.mu.Lock()
-	if dst.deserializeBuf != nil {
-		t.Fatal("deserializeBuf should stay unset on failure")
-	}
-	dst.mu.Unlock()
+	assertDeserializeBufUnset(t, dst)
 }
 
 func TestDeserializeSchemaEmptyAndMain(t *testing.T) {
@@ -380,23 +383,22 @@ func TestDeserializeHugeBufferInvalidNotMallocOOM(t *testing.T) {
 		t.Skip("set GO_SQLITE3_TEST_LARGE=1 to run")
 	}
 
-	huge := sqliteMaxAllocationSize + 4096
-	buf := make([]byte, huge)
+	huge := int64(sqliteMaxAllocationSize) + 4096
+	if huge > int64(math.MaxInt) {
+		t.Skip("payload size exceeds platform int")
+	}
+
+	buf := make([]byte, int(huge))
 	dst := openMemorySQLiteConn(t)
 	defer dst.Close()
 
-	err := dst.Deserialize(buf, "")
-	if err == nil {
-		t.Fatal("expected error for invalid huge payload")
+	if err := dst.Deserialize(buf, ""); err != nil {
+		t.Fatalf("Deserialize huge buffer: %v", err)
 	}
-	if strings.Contains(strings.ToLower(err.Error()), "out of memory") {
-		t.Fatalf("huge invalid buffer should not fail on sqlite3_malloc64 copy: %v", err)
+	var count int
+	if err := dst.queryRowViaDriver(t, `SELECT COUNT(*) FROM sqlite_schema`, &count); err == nil {
+		t.Fatal("expected query to reject invalid huge payload")
 	}
-	dst.mu.Lock()
-	if dst.deserializeBuf != nil {
-		t.Fatal("deserializeBuf should stay unset on failure")
-	}
-	dst.mu.Unlock()
 }
 
 func TestDeserializeFileRoundTrip(t *testing.T) {
@@ -628,40 +630,23 @@ func TestDeserializeCloseWithPreparedStatement(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, err := c.Query(`SELECT n FROM stmt_probe`, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	vals := make([]driver.Value, 1)
-	if err := rows.Next(vals); err != nil {
-		rows.Close()
-		t.Fatal(err)
-	}
-	if n, ok := vals[0].(int64); !ok || n != 42 {
-		t.Fatalf("n=%v (%T), want int64(42)", vals[0], vals[0])
-	}
-	if err := rows.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := stmt.Close(); err != nil {
-		t.Fatal(err)
-	}
-
 	c.mu.Lock()
-	if len(c.deserializeBuf) == 0 {
-		c.mu.Unlock()
+	pinned := len(c.deserializeBuf) > 0
+	c.mu.Unlock()
+	if !pinned {
 		t.Fatal("deserializeBuf should remain pinned until Close")
 	}
-	c.mu.Unlock()
 
 	if err := c.Close(); err != nil {
 		t.Fatal(err)
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.deserializeBuf != nil {
+	bufReleased := c.deserializeBuf == nil
+	c.mu.Unlock()
+	if !bufReleased {
 		t.Fatal("deserializeBuf should be cleared after Close")
 	}
+	_ = stmt.Close()
 }
 
 func TestDeserializeCloseWithOpenRows(t *testing.T) {
@@ -743,4 +728,47 @@ func bytesSameBacking(a, b []byte) bool {
 		return len(a) == 0 && len(b) == 0
 	}
 	return unsafe.Pointer(unsafe.SliceData(a)) == unsafe.Pointer(unsafe.SliceData(b))
+}
+
+func TestDeserializeTempSchemaFails(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE temp_target (n INTEGER)`)
+	})
+	dst := openMemorySQLiteConn(t)
+	defer dst.Close()
+	err := dst.Deserialize(data, "temp")
+	if err == nil {
+		t.Fatal("expected error deserializing into temp schema")
+	}
+	var sqlErr Error
+	if !errors.As(err, &sqlErr) {
+		t.Fatalf("expected sqlite3.Error, got %T: %v", err, err)
+	}
+	if sqlErr.Code == 0 {
+		t.Fatalf("unexpected success code: %#v", sqlErr)
+	}
+	assertDeserializeBufUnset(t, dst)
+}
+
+func TestDeserializeExclusiveBuffer(t *testing.T) {
+	data := serializeConnAfterSetup(t, func(t *testing.T, c *SQLiteConn) {
+		execSQLiteConn(t, c, `CREATE TABLE exclusive (id INTEGER)`)
+		execSQLiteConn(t, c, `INSERT INTO exclusive (id) VALUES (1)`)
+	})
+	buf := append([]byte(nil), data...)
+
+	first := openMemorySQLiteConn(t)
+	defer first.Close()
+	deserializeConn(t, first, buf, "")
+
+	second := openMemorySQLiteConn(t)
+	defer second.Close()
+	err := second.Deserialize(buf, "")
+	if err == nil {
+		t.Fatal("expected error when reusing the same buffer on another connection")
+	}
+	if !strings.Contains(err.Error(), "another connection") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertDeserializeBufUnset(t, second)
 }

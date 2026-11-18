@@ -573,7 +573,8 @@ type SQLiteConn struct {
 	stmtCacheEnabled bool
 	// deserializeBuf pins the caller-owned bytes passed to Deserialize for
 	// the lifetime of the connection. Guarded by mu.
-	deserializeBuf []byte
+	deserializeBuf    []byte
+	deserializePinner *runtime.Pinner
 }
 
 // SQLiteTx implements driver.Tx.
@@ -2131,7 +2132,7 @@ func (c *SQLiteConn) Close() error {
 	c.authorizerMu.Lock()
 	c.authorizerHandle = nil
 	c.authorizerMu.Unlock()
-	c.deserializeBuf = nil
+	c.clearDeserializeBufLocked()
 	c.db = nil
 	return nil
 }
