@@ -88,13 +88,13 @@ func testBackup(t *testing.T, testRowCount int, usePerPageSteps bool) {
 	if err != nil {
 		t.Fatal("Failed to begin a transaction when populating the source database:", err)
 	}
-	_, err = srcDb.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
+	_, err = tx.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
 	if err != nil {
 		tx.Rollback()
 		t.Fatal("Failed to create the source database \"test\" table:", err)
 	}
 	for id := 0; id < testRowCount; id++ {
-		_, err = srcDb.Exec("INSERT INTO test (id, value) VALUES (?, ?)", id, generateTestData(id))
+		_, err = tx.Exec("INSERT INTO test (id, value) VALUES (?, ?)", id, generateTestData(id))
 		if err != nil {
 			tx.Rollback()
 			t.Fatal("Failed to insert a row into the source database \"test\" table:", err)
