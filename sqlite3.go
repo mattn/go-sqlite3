@@ -2316,6 +2316,33 @@ func (c *SQLiteConn) GetFilename(schemaName string) string {
 	return C.GoString(C.sqlite3_db_filename(c.db, cSchema))
 }
 
+// Readonly reports whether the named database was opened read-only.
+// An empty dbName selects the default database, "main". It returns an error
+// if the database is not attached or the connection has been closed.
+// This does not report the connection's PRAGMA query_only setting.
+// See: sqlite3_db_readonly, https://www.sqlite.org/c3ref/db_readonly.html
+func (c *SQLiteConn) Readonly(dbName string) (bool, error) {
+	if c == nil || c.closing.Load() {
+		return false, errConnClosed
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.db == nil {
+		return false, errConnClosed
+	}
+	if dbName == "" {
+		dbName = "main"
+	}
+	cDBName := C.CString(dbName)
+	defer C.free(unsafe.Pointer(cDBName))
+
+	readonly := C.sqlite3_db_readonly(c.db, cDBName)
+	if readonly < 0 {
+		return false, fmt.Errorf("unknown database %q", dbName)
+	}
+	return readonly == 1, nil
+}
+
 // GetLimit returns the current value of a run-time limit.
 // It returns -1 once the connection has been closed.
 // See: sqlite3_limit, http://www.sqlite.org/c3ref/limit.html

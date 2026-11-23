@@ -219,6 +219,66 @@ func TestReadonly(t *testing.T) {
 	}
 }
 
+func TestConnReadonly(t *testing.T) {
+	filename := TempFilename(t)
+	defer os.Remove(filename)
+	d := &SQLiteDriver{}
+	conn, err := d.Open(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.(*SQLiteConn).Exec("CREATE TABLE test (n INTEGER)", nil); err != nil {
+		conn.Close()
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, mode := range []string{"rw", "ro"} {
+		t.Run(mode, func(t *testing.T) {
+			conn, err := d.Open("file:" + filename + "?mode=" + mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			c := conn.(*SQLiteConn)
+			for _, name := range []string{"", "main", "MAIN"} {
+				readonly, err := c.Readonly(name)
+				if err != nil || readonly != (mode == "ro") {
+					t.Errorf("Readonly(%q) = %v, %v; want %v, nil", name, readonly, err, mode == "ro")
+				}
+			}
+
+			memory, err := d.Open(":memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer memory.Close()
+			attached := memory.(*SQLiteConn)
+			if _, err := attached.Exec("ATTACH DATABASE ? AS aux", []driver.Value{"file:" + filename + "?mode=" + mode}); err != nil {
+				t.Fatal(err)
+			}
+			readonly, err := attached.Readonly("aux")
+			if err != nil || readonly != (mode == "ro") {
+				t.Errorf("Readonly(aux) = %v, %v; want %v, nil", readonly, err, mode == "ro")
+			}
+			if readonly, err := attached.Readonly("main"); err != nil || readonly {
+				t.Errorf("Readonly(main) = %v, %v; want false, nil", readonly, err)
+			}
+			if readonly, err := attached.Readonly("missing"); err == nil || readonly {
+				t.Errorf("Readonly(missing) = %v, %v; want false and an error", readonly, err)
+			}
+			if _, err := attached.Exec("PRAGMA query_only = ON", nil); err != nil {
+				t.Fatal(err)
+			}
+			if readonly, err := attached.Readonly("main"); err != nil || readonly {
+				t.Errorf("Readonly(main) with query_only = %v, %v; want false, nil", readonly, err)
+			}
+		})
+	}
+}
+
 func TestForeignKeys(t *testing.T) {
 	cases := map[string]bool{
 		"?_foreign_keys=1": true,
@@ -3113,6 +3173,10 @@ func TestConnMethodsAfterClose(t *testing.T) {
 			{"SetFileControlInt64", func() error {
 				return conn.SetFileControlInt64("", SQLITE_FCNTL_CHUNK_SIZE, 4096)
 			}},
+			{"Readonly", func() error {
+				_, err := conn.Readonly("main")
+				return err
+			}},
 		}
 		for _, tc := range cases {
 			if err := tc.call(); !errors.Is(err, errConnClosed) {
@@ -3158,13 +3222,15 @@ func TestConnMethodsDuringClose(t *testing.T) {
 	}
 	c := conn.(*SQLiteConn)
 	type values struct {
-		limit      int
-		autoCommit bool
+		limit       int
+		autoCommit  bool
+		readonlyErr error
 	}
 	got := make(chan values, 1)
 	c.RegisterRollbackHook(func() {
+		_, readonlyErr := c.Readonly("main")
 		select {
-		case got <- values{c.GetLimit(SQLITE_LIMIT_LENGTH), c.AutoCommit()}:
+		case got <- values{c.GetLimit(SQLITE_LIMIT_LENGTH), c.AutoCommit(), readonlyErr}:
 		default:
 		}
 	})
@@ -3188,6 +3254,9 @@ func TestConnMethodsDuringClose(t *testing.T) {
 		}
 		if v.autoCommit {
 			t.Error("AutoCommit() = true during Close, want false")
+		}
+		if !errors.Is(v.readonlyErr, errConnClosed) {
+			t.Errorf("Readonly() error = %v during Close, want %v", v.readonlyErr, errConnClosed)
 		}
 	default:
 		t.Error("the rollback hook did not run")
